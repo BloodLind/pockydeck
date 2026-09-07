@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F04 — Persistent shell and navigation](../features/F04-shell-navigation.md) |
-| Status | Planned |
+| Status | In progress |
 | Type | Feature |
 | Implementation agent | `gpt-5.6-terra` / `high` |
 

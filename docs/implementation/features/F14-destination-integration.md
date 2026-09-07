@@ -1,7 +1,7 @@
 # F14 — Destination integration gate
 
-- Status: **planned**.
-- User stories: [US-038](../user-stories/US-038-integrated-destination-journey-gate.md), [US-039](../user-stories/US-039-native-lifecycle-and-catalog-gate.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-038](../user-stories/US-038-integrated-destination-journey-gate.md), [US-039](../user-stories/US-039-native-lifecycle-and-catalog-gate.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-sol`, reasoning `high`; integration reviewer.
 - Outcome: the native-app launcher works as one product across six destinations, details, controller input, touch and the system keyboard before ROM work begins.
 - Prerequisites: F09, F10, F11, F12 and F13 integrated and individually accepted; F08 HOME loop still passes.

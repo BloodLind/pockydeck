@@ -1,7 +1,7 @@
 # F12 — Basic Settings
 
-- Status: **planned**.
-- User stories: [US-033](../user-stories/US-033-controller-mapping-settings.md), [US-034](../user-stories/US-034-default-home-settings.md), [US-035](../user-stories/US-035-readability-and-supported-system-settings.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-033](../user-stories/US-033-controller-mapping-settings.md), [US-034](../user-stories/US-034-default-home-settings.md), [US-035](../user-stories/US-035-readability-and-supported-system-settings.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-terra`, reasoning `high`.
 - Outcome: users can configure confirm/back mapping, reach default-HOME setup, and understand launcher readability and supported system options.
 - Prerequisites: F09, F10 and F11 accepted together. Runs independently beside F13; Settings must work with the shell's honest unavailable status fallback.

@@ -2,7 +2,9 @@
 
 An Android HOME launcher for the Retroid Pocket Flip 2, built in Kotlin and Jetpack Compose with MVVM.
 
-F01's four-module foundation, F02's shared theme/metrics/visual primitives, and F06's durable catalog/recency/preferences are accepted. The debug APK builds and opens as an ordinary Android Activity on Android 13; native focus/accessibility and Room/DataStore tests pass. Production controls, app discovery, HOME integration and feature screens follow in later stories. Physical Flip 2 validation remains pending.
+The native application base includes Home, Library, Apps, Favorites, Search, Settings and item details in one persistent shell. It discovers installed Android apps, opens them through one acknowledged launch path, stores successful-open order, favorites and category overrides, and offers user-controlled default-HOME setup. The Home proportions, colors, typography, carousel, dock and controller footer follow the supplied design with real device content.
+
+ROM folder scanning, emulator launch configuration and metadata/cover providers remain later work. Installed emulators can already be opened as Android apps. No running/session state or demonstration artwork is presented as real data.
 
 - [Implementation progress](docs/implementation/progress.md): current story status, ownership, evidence, and dependency gates.
 - [Foundation launch evidence](docs/implementation/evidence/F01/US-001-launch.md): Android 13 emulator smoke test and screenshot.
@@ -19,10 +21,27 @@ The latest user decisions take precedence over the attached [design source](docs
 
 ## Build locally
 
-Use JDK 17, Android SDK platform 34 and the checked-in Gradle 8.9 wrapper. Point Android Studio or the ignored `local.properties` at your SDK. The current application requires Android 13 or later; validation currently covers an Android 13 emulator.
+Use JDK 17, Android SDK platform 34 and the checked-in Gradle 8.9 wrapper. Point Android Studio or the ignored `local.properties` at your SDK. The application requires Android 13 or later.
 
 ```powershell
-.\gradlew.bat assembleDebug lintDebug :core:domain:test :app:testDebugUnitTest :core:designsystem:testDebugUnitTest
+.\gradlew.bat :app:assembleDebug :app:lintDebug :core:domain:test :core:data:testDebugUnitTest :app:testDebugUnitTest :core:designsystem:testDebugUnitTest
 ```
 
 The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. On macOS/Linux, use `./gradlew` with the same tasks. Host-specific commands and the Windows JBR socket workaround used in this session are recorded in [foundation evidence](docs/implementation/evidence/F01/US-003.md).
+
+## Install and use on a device
+
+Enable USB debugging, connect the device and accept its Android authorization prompt. Use `adb devices` to find its serial, then replace `SERIAL` below. `install -r` preserves the launcher's existing data.
+
+```powershell
+adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s SERIAL shell am start -n dev.handheld.launcher/.MainActivity
+```
+
+Use the D-pad or left stick to move, A to activate, B to go back, X to search, Y for item details, Start for the item/page menu, L1/R1 to switch destinations and L2/R2 to change supported filters. Settings → Controls swaps A/B and updates the footer. Touch uses the same controls. In Search, Android owns keyboard editing; Back closes the keyboard before leaving Search.
+
+To make this the Home screen, use Settings → Launcher → Set as Home launcher and choose it in Android. Declining leaves normal browsing available. To switch away later, use Android Settings → Apps → Default apps → Home app.
+
+The status strip uses actual local time, battery percentage, battery temperature, used/total RAM, available internal storage and Wi-Fi connectivity. Battery temperature is not CPU temperature.
+
+For the combined emulator checks, set `ANDROID_SERIAL` to an isolated emulator before running `:app:connectedDebugAndroidTest :core:designsystem:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest`. Detailed verification and remaining physical controller/lid checks are recorded in [implementation progress](docs/implementation/progress.md).

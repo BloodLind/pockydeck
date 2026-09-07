@@ -1,7 +1,7 @@
 # F08 — First working HOME loop
 
-- Status: **planned**.
-- User stories: [US-023](../user-stories/US-023-cached-home-carousel.md), [US-024](../user-stories/US-024-acknowledged-home-launch-and-return.md), [US-025](../user-stories/US-025-android-home-role-and-window-loop.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-023](../user-stories/US-023-cached-home-carousel.md), [US-024](../user-stories/US-024-acknowledged-home-launch-and-return.md), [US-025](../user-stories/US-025-android-home-role-and-window-loop.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: choose this launcher as HOME, select and open an installed app, then return with the same item selected and correct most-recently-opened order.
 - Prerequisites: F05 and F07 accepted; coordinator has integrated their shared hooks.

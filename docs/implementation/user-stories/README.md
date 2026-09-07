@@ -2,11 +2,11 @@
 
 **53 user stories under F01–F18.** This backlog defines scope and acceptance; [implementation progress](../progress.md) records current status and actual evidence.
 
-This is the implementation dispatch list. Each linked file contains one bounded story, a user/developer/tester statement, numbered Given/When/Then acceptance criteria, dependencies, exclusions, verification evidence, and a link to its parent feature's technical ownership.
+Each linked file contains a bounded story, acceptance criteria, dependencies, exclusions and a parent feature. The user's 8 September delivery instruction supersedes per-story dispatch and intermediate wave gates: implement the complete native application base, then verify a large integrated batch and reconcile these criteria. Historical unchecked criteria are not claims that the corresponding source is absent; use progress and batch evidence for current status.
 
 ## How to use this backlog
 
-1. Select one ready US. Its direct story dependencies and the prerequisite-feature/wave gates must be satisfied. The owning feature's final integration gate follows its children; it does not block starting those same stories.
+1. Select a coherent implementation batch. Use story dependencies to identify needed contracts and verify the result together.
 2. Assign the story's implementation model and effort. Send the US file, its parent packet, the relevant contracts, and the [agent workflow](../agent-workflow.md) to the worker.
 3. Use one active story writer per parent feature. The existing schedule permits up to three workers across ready features; smaller stories do not grant parallel write access to shared files.
 4. Review each acceptance criterion against actual evidence. Code integration alone does not mean acceptance if required device checks remain pending.
@@ -14,7 +14,7 @@ This is the implementation dispatch list. Each linked file contains one bounded 
 
 Story IDs are stable references, not execution order. For example, US-014 depends on US-019 because controller behavior consumes the persistence feature. After F01 is accepted, the visual branch (US-004 onward) and persistence branch (US-017 onward) can follow the existing parallel wave schedule.
 
-Begin with [US-001](US-001-installable-four-module-foundation.md). Use the [feature plan](../feature-plan.md) for wave order, shared-file ownership and integration gates. Use the [story standard](story-standard.md) for acceptance/evidence rules.
+F01–F03/F06/F07 have historical accepted checkpoints. Use [progress](../progress.md) for the current native application batch and the [feature plan](../feature-plan.md) for scope and shared-file ownership. Use the [story standard](story-standard.md) for acceptance/evidence rules.
 
 The [story map](story-map.json) records each story's scope, dependency IDs and coverage of the original feature steps. Astra Ultra produced the decomposition; the individual stories retain the lower-cost implementation assignments from their parent features.
 

@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="dev.handheld.launcher.core.designsystem.cards.LauncherCardsTest" tests="16" failures="0" errors="0" skipped="0" time="26.044" timestamp="2026-09-07T23:39:46" hostname="localhost">
+  <properties>
+    <property name="device" value="Handheld_Foundation_API_33(AVD) - 13" />
+    <property name="flavor" value="" />
+    <property name="project" value=":core:designsystem" />
+  </properties>
+  <testcase name="collectionCaptionKeepsItsHeightAndNativeAppAndSearchVariantsRender" classname="dev.handheld.launcher.core.designsystem.cards.LauncherCardsTest" time="2.803" />
+  <testcase name="coverCropsAndNativeIconFitsANonSquarePainterWithoutStretching" classname="dev.handheld.launcher.core.designsystem.cards.LauncherCardsTest" time="0.806" />
+  <testcase name="homeArtworkChangesInsideTheSameSquareAndFocusDoesNotActivate" classname="dev.handheld.launcher.core.designsystem.cards.LauncherCardsTest" time="0.887" />
+  <testcase name="buttonActivatesOnceAndFocusMovementDoesNotActivate" classname="dev.handheld.launcher.core.designsystem.controls.LauncherControlsTest" time="0.91" />
+  <testcase name="searchFieldUsesNativeTextInputAndReportsQueryChanges" classname="dev.handheld.launcher.core.designsystem.controls.LauncherControlsTest" time="0.988" />
+  <testcase name="disabledButtonCannotActivateAndSelectedChipIsIndependentOfFocus" classname="dev.handheld.launcher.core.designsystem.controls.LauncherControlsTest" time="0.788" />
+  <testcase name="decorationPreservesParentActionAndMeaningfulGlyphsAvoidDuplicateText" classname="dev.handheld.launcher.core.designsystem.foundation.LauncherPrimitivesTest" time="0.801" />
+  <testcase name="immediateFocusIsSeparateFromSelectionAndStaysInsideAllocation" classname="dev.handheld.launcher.core.designsystem.foundation.LauncherPrimitivesTest" time="0.941" />
+  <testcase name="largeFontWrapsWithoutOverflowAndAdjacentTargetsKeep48DpBounds" classname="dev.handheld.launcher.core.designsystem.foundation.LauncherPrimitivesTest" time="0.79" />
+  <testcase name="reducedMotionKeepsImmediateFrameWithoutDecorativeLift" classname="dev.handheld.launcher.core.designsystem.foundation.LauncherPrimitivesTest" time="0.862" />
+  <testcase name="filterSelectionAndRecoveryCallbacksFireOnceInVerticalLayout" classname="dev.handheld.launcher.core.designsystem.layout.LauncherLayoutsTest" time="0.87" />
+  <testcase name="filterStripScrollsLongChoiceSetAndHeadingBoundsCount" classname="dev.handheld.launcher.core.designsystem.layout.LauncherLayoutsTest" time="0.808" />
+  <testcase name="keyedCollectionContentPreservesCallerStateAfterReorder" classname="dev.handheld.launcher.core.designsystem.layout.LauncherLayoutsTest" time="0.879" />
+  <testcase name="emptyModalFocusesCloseAndLongActionsScrollWithoutHidingClose" classname="dev.handheld.launcher.core.designsystem.modal.LauncherModalTest" time="0.985" />
+  <testcase name="modalFocusAndTouchesStayInsideAndLifecycleDoesNotRestartOnCallbackChange" classname="dev.handheld.launcher.core.designsystem.modal.LauncherModalTest" time="0.962" />
+  <testcase name="settingAndSwitchUseOneNativeTargetAndLongValuesStayWithinRow" classname="dev.handheld.launcher.core.designsystem.settings.LauncherSettingsTest" time="0.963" />
+</testsuite>

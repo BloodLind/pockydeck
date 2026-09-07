@@ -1,95 +1,127 @@
 package dev.handheld.launcher
 
 import android.animation.ValueAnimator
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import dev.handheld.launcher.contract.ActivityRequestAcknowledgement
-import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
-import dev.handheld.launcher.di.FoundationUiState
+import dev.handheld.launcher.contract.SemanticInputAction
+import dev.handheld.launcher.core.domain.model.LauncherDestination
+import dev.handheld.launcher.di.LauncherAppViewModel
 import dev.handheld.launcher.di.LauncherApplication
-import dev.handheld.launcher.di.MainViewModel
+import dev.handheld.launcher.feature.home.HomeViewModel
+import dev.handheld.launcher.input.ControllerInputHandler
+import dev.handheld.launcher.platform.home.HomeRoleActivityRequestHandler
+import dev.handheld.launcher.platform.home.RequestHomeRoleSelection
+import dev.handheld.launcher.ui.LauncherApp
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private val container get() = (application as LauncherApplication).appContainer
+    private val appViewModel: LauncherAppViewModel by viewModels { container.launcherViewModelFactory() }
+    private val homeViewModel: HomeViewModel by viewModels { container.homeViewModelFactory() }
     private var reducedMotion by mutableStateOf(false)
-
-    private val appContainer
-        get() = (application as LauncherApplication).appContainer
-
-    private val viewModel: MainViewModel by viewModels {
-        appContainer.mainViewModelFactory()
+    private var homeRoleHeld by mutableStateOf(false)
+    private var dispatchSemantic: (SemanticInputAction) -> Boolean = { false }
+    private lateinit var roleHandler: HomeRoleActivityRequestHandler
+    private val controller by lazy {
+        ControllerInputHandler(lifecycleScope, { appViewModel.mapping.value }, {
+            ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        }, { dispatchSemantic(it) })
+    }
+    private val rolePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        roleHandler.completeCurrent(it.resultCode)
+        homeRoleHeld = roleHandler.isHomeRoleHeld()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        immersiveWindow()
+        roleHandler = HomeRoleActivityRequestHandler(this, container.activityRequestPort, container.homeRoleRequests)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.activityRequests.filterNotNull().collect { pending ->
-                    val claim = appContainer.activityRequestPort.claim(pending.id)
-                        ?: return@collect
-                    // Concrete launch and HOME-role effects arrive in F07/F08. Claim first so
-                    // lifecycle recollection or a competing observer cannot replay an effect.
-                    appContainer.activityRequestPort.complete(
-                        claim,
-                        ActivityRequestAcknowledgement.Unsupported,
-                    )
+                container.activityRequestPort.pending.filterNotNull().collect { pending ->
+                    if (pending.request === RequestHomeRoleSelection) {
+                        roleHandler.claim(pending)?.let { claim ->
+                            try { rolePicker.launch(claim.intent) }
+                            catch (_: RuntimeException) { roleHandler.fail(claim, "Android could not open Home selection.") }
+                        }
+                    } else {
+                        container.activityRequestPort.claim(pending.id)?.let { claim ->
+                            container.activityRequestPort.complete(claim, ActivityRequestAcknowledgement.Unsupported)
+                        }
+                    }
                 }
             }
         }
         setContent {
-            LauncherTheme(reducedMotion = reducedMotion) {
-                FoundationScreen(viewModel.state)
-            }
+            LauncherApp(container, appViewModel, homeViewModel, reducedMotion, homeRoleHeld,
+                bindInput = { dispatchSemantic = it }, nativeConfirm = ::activateNativeFocusedControl,
+                onImeVisibilityChanged = controller::onImeVisibilityChanged)
         }
     }
 
+    // This is the public Android Window.Callback hook. Core ComponentActivity's inherited
+    // library-group annotation is not an application-level restriction on overriding it.
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        if (controller.onKeyEvent(event)) true else super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        if (controller.onMotionEvent(event)) true else super.dispatchGenericMotionEvent(event)
+
+    @SuppressLint("RestrictedApi") // Continue through the same public Window.Callback path.
+    private fun activateNativeFocusedControl(): Boolean {
+        val down = super.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER))
+        val up = super.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER))
+        return down || up
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+            appViewModel.navigation.selectDestination(LauncherDestination.HOME)
+        }
+    }
+
+    override fun onStart() { super.onStart(); container.androidCatalog.start() }
     override fun onResume() {
         super.onResume()
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
+        homeRoleHeld = roleHandler.isHomeRoleHeld()
+        container.androidCatalog.onResume()
+        immersiveWindow()
     }
-}
+    override fun onPause() { controller.reset(); super.onPause() }
+    override fun onStop() { container.androidCatalog.stop(); super.onStop() }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) immersiveWindow() else controller.reset()
+    }
 
-@Composable
-private fun FoundationScreen(state: FoundationUiState) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(LauncherTheme.colors.backgroundGradient())
-            .padding(LauncherTheme.spacing.xxl),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        BasicText(
-            text = stringResource(R.string.app_name),
-            style = LauncherTheme.typography.homeTitle.copy(
-                color = LauncherTheme.colors.textPrimary,
-            ),
-        )
-        BasicText(
-            text = if (state.isReady) stringResource(R.string.foundation_ready) else "",
-            modifier = Modifier.padding(top = LauncherTheme.spacing.sm),
-            style = LauncherTheme.typography.body.copy(
-                color = LauncherTheme.colors.textSecondary,
-            ),
-        )
+    private fun immersiveWindow() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 }

@@ -1,0 +1,558 @@
+package dev.handheld.launcher.shell
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import dev.handheld.launcher.contract.ControllerActionFooter
+import dev.handheld.launcher.contract.LauncherActionDescriptor
+import dev.handheld.launcher.contract.SemanticActionPort
+import dev.handheld.launcher.contract.SemanticInputAction
+import dev.handheld.launcher.contract.StatusPresentation
+import dev.handheld.launcher.core.designsystem.controls.ControllerGlyph
+import dev.handheld.launcher.core.designsystem.controls.StatusIndicator
+import dev.handheld.launcher.core.designsystem.controls.StatusValue as DisplayStatusValue
+import dev.handheld.launcher.core.designsystem.foundation.LauncherText
+import dev.handheld.launcher.core.designsystem.foundation.ShellBounds
+import dev.handheld.launcher.core.designsystem.foundation.ShellMetrics
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
+import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
+import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.ControllerFaceButton
+import dev.handheld.launcher.core.domain.model.LauncherDestination
+import dev.handheld.launcher.core.domain.model.StatusValue
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+
+/** The stable, visual role of a status source. The caller never needs label parsing. */
+enum class ShellStatusGlyph {
+    Temperature,
+    Memory,
+    Storage,
+    Wifi,
+    Battery,
+}
+
+/** A status source and, when available, its stable visual role. */
+@Immutable
+data class ShellStatusReading(
+    val presentation: StatusPresentation,
+    val glyph: ShellStatusGlyph? = null,
+)
+
+/** Presentation inputs for the one persistent launcher status strip. */
+@Immutable
+data class LauncherShellStatus(
+    /** A caller-supplied local clock. Null uses the device's local time. */
+    val clock: String? = null,
+    /** Left-aligned readings, such as storage or temperature, in caller-defined order. */
+    val readings: List<ShellStatusReading> = emptyList(),
+    /** Right-aligned readings, such as wireless or battery, in caller-defined order. */
+    val rightReadings: List<ShellStatusReading> = emptyList(),
+)
+
+/** State for shell chrome. Destination selection and actual controller focus remain separate. */
+@Immutable
+data class LauncherShellState(
+    val selectedDestination: LauncherDestination = LauncherDestination.HOME,
+    val focusedDestination: LauncherDestination? = null,
+    val status: LauncherShellStatus = LauncherShellStatus(),
+    val footer: ControllerActionFooter = ControllerActionFooter(emptyList()),
+)
+
+/** Stable tags for shell-level tests and debug inspection. */
+object LauncherShellTags {
+    const val Root = "launcher-shell-root"
+    const val Status = "launcher-shell-status"
+    const val Content = "launcher-shell-content"
+    const val Dock = "launcher-shell-dock"
+    const val Footer = "launcher-shell-footer"
+    const val Overlay = "launcher-shell-overlay"
+
+    fun destination(destination: LauncherDestination): String =
+        "launcher-shell-destination-${destination.persistedKey}"
+
+    fun footerAction(input: SemanticInputAction): String =
+        "launcher-shell-footer-${input.name.lowercase(Locale.ROOT)}"
+}
+
+/**
+ * The only launcher chrome root. Normal pages receive [ShellMetrics.contentBounds] directly;
+ * overlay content is layered here so details and dialogs never create another shell.
+ */
+@Composable
+fun LauncherShell(
+    metrics: ShellMetrics,
+    state: LauncherShellState,
+    actionPort: SemanticActionPort,
+    confirmBackMapping: ConfirmBackMapping = ConfirmBackMapping.Default,
+    insets: LauncherShellInsets = LauncherShellInsets(),
+    modifier: Modifier = Modifier,
+    onDestinationSelected: (LauncherDestination) -> Unit,
+    onDestinationFocused: (LauncherDestination?) -> Unit = {},
+    content: @Composable (Modifier) -> Unit,
+    overlay: @Composable () -> Unit = {},
+) {
+    val layout = LauncherShellLayoutPolicy.calculate(metrics, insets)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(LauncherTheme.colors.backgroundGradient())
+            .testTag(LauncherShellTags.Root),
+    ) {
+        if (layout.statusBounds.height > 0.dp) StatusStrip(
+            status = state.status,
+            bounds = layout.statusBounds,
+            gutter = metrics.gutter,
+            modifier = Modifier.testTag(LauncherShellTags.Status),
+        )
+        content(
+            Modifier
+                .offset(layout.contentBounds.left, layout.contentBounds.top)
+                .size(layout.contentBounds.width, layout.contentBounds.height)
+                .testTag(LauncherShellTags.Content),
+        )
+        if (layout.dockBounds.height >= 48.dp) NavigationDock(
+            layout = layout,
+            selectedDestination = state.selectedDestination,
+            focusedDestination = state.focusedDestination,
+            onDestinationSelected = onDestinationSelected,
+            onDestinationFocused = onDestinationFocused,
+            modifier = Modifier.testTag(LauncherShellTags.Dock),
+        )
+        if (layout.footerBounds.height >= 48.dp) ShellFooter(
+            layout = layout,
+            gutter = metrics.gutter,
+            footer = state.footer,
+            actionPort = actionPort,
+            confirmBackMapping = confirmBackMapping,
+            modifier = Modifier.testTag(LauncherShellTags.Footer),
+        )
+        Box(Modifier.fillMaxSize().testTag(LauncherShellTags.Overlay)) { overlay() }
+    }
+}
+
+@Composable
+private fun StatusStrip(
+    status: LauncherShellStatus,
+    bounds: ShellBounds,
+    gutter: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val clock = status.clock ?: rememberLocalClock()
+    val scale = LauncherTheme.referenceScale
+    Row(
+        modifier = modifier
+            .offset(bounds.left, bounds.top + 16.dp * scale)
+            .size(bounds.width, 20.dp * scale * LocalDensity.current.fontScale)
+            .padding(horizontal = gutter),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LauncherText(
+            text = clock,
+            style = LauncherTheme.typography.clock,
+            color = LauncherTheme.colors.textPrimary,
+            maxLines = 1,
+        )
+        if (status.readings.isNotEmpty()) Spacer(Modifier.width(LauncherTheme.spacing.md))
+        StatusReadings(status.readings)
+        Spacer(Modifier.weight(1f))
+        StatusReadings(
+            readings = status.rightReadings,
+        )
+    }
+}
+
+@Composable
+private fun StatusReadings(
+    readings: List<ShellStatusReading>,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        readings.filter { it.presentation.shouldRender }.let { visible ->
+            visible.forEachIndexed { index, reading ->
+                if (index > 0) Spacer(Modifier.width(LauncherTheme.spacing.sm))
+                StatusReading(reading)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusReading(reading: ShellStatusReading) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
+        reading.glyph?.let { glyph -> ShellStatusGlyphIcon(glyph) }
+        StatusIndicator(reading.presentation.asDisplayStatus(), label = reading.presentation.label)
+    }
+}
+
+/** Small monochrome source-role drawings; semantic text stays with [StatusIndicator]. */
+@Composable
+private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph) {
+    val color = when (glyph) {
+        ShellStatusGlyph.Temperature -> LauncherTheme.colors.cancel
+        ShellStatusGlyph.Memory -> LauncherTheme.colors.focus
+        ShellStatusGlyph.Storage -> LauncherTheme.colors.textMuted
+        ShellStatusGlyph.Battery -> LauncherTheme.colors.confirm
+        ShellStatusGlyph.Wifi -> LauncherTheme.colors.textPrimary
+    }
+    val glyphSize = 16.dp * LauncherTheme.referenceScale
+    Canvas(Modifier.size(glyphSize).clearAndSetSemantics {}) {
+        val stroke = Stroke(width = size.minDimension * .11f, cap = StrokeCap.Round)
+        val center = Offset(size.width / 2f, size.height / 2f)
+        when (glyph) {
+            ShellStatusGlyph.Temperature -> {
+                drawLine(color, Offset(center.x, size.height * .25f), Offset(center.x, size.height * .66f), stroke.width, StrokeCap.Round)
+                drawCircle(color, size.minDimension * .2f, Offset(center.x, size.height * .74f))
+            }
+            ShellStatusGlyph.Memory -> {
+                drawRect(
+                    color = color,
+                    topLeft = Offset(size.width * .25f, size.height * .25f),
+                    size = Size(size.width * .5f, size.height * .5f),
+                    style = stroke,
+                )
+                repeat(4) { index ->
+                    val point = size.width * (.2f + index * .2f)
+                    drawLine(color, Offset(point, size.height * .14f), Offset(point, size.height * .25f), stroke.width, StrokeCap.Round)
+                    drawLine(color, Offset(point, size.height * .75f), Offset(point, size.height * .86f), stroke.width, StrokeCap.Round)
+                }
+            }
+            ShellStatusGlyph.Storage -> {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(size.width * .18f, size.height * .18f),
+                    size = Size(size.width * .64f, size.height * .64f),
+                    cornerRadius = CornerRadius(size.minDimension * .1f),
+                    style = stroke,
+                )
+                drawLine(color, Offset(size.width * .34f, size.height * .47f), Offset(size.width * .66f, size.height * .47f), stroke.width, StrokeCap.Round)
+            }
+            ShellStatusGlyph.Wifi -> {
+                drawArc(
+                    color = color,
+                    startAngle = 210f,
+                    sweepAngle = 120f,
+                    useCenter = false,
+                    topLeft = Offset(size.width * .1f, size.height * .1f),
+                    size = Size(size.width * .8f, size.height * .8f),
+                    style = stroke,
+                )
+                drawArc(
+                    color = color,
+                    startAngle = 215f,
+                    sweepAngle = 110f,
+                    useCenter = false,
+                    topLeft = Offset(size.width * .26f, size.height * .26f),
+                    size = Size(size.width * .48f, size.height * .48f),
+                    style = stroke,
+                )
+                drawCircle(color, size.minDimension * .08f, Offset(center.x, size.height * .76f))
+            }
+            ShellStatusGlyph.Battery -> {
+                drawRoundRect(
+                    color = color,
+                    topLeft = Offset(size.width * .12f, size.height * .28f),
+                    size = Size(size.width * .68f, size.height * .46f),
+                    cornerRadius = CornerRadius(size.minDimension * .08f),
+                    style = stroke,
+                )
+                drawLine(color, Offset(size.width * .8f, size.height * .43f), Offset(size.width * .9f, size.height * .43f), stroke.width, StrokeCap.Round)
+                drawRect(
+                    color = color,
+                    topLeft = Offset(size.width * .22f, size.height * .38f),
+                    size = Size(size.width * .36f, size.height * .26f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberLocalClock(): String {
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    fun currentClock() = android.text.format.DateFormat.getTimeFormat(context).format(Date())
+    var clock by remember { mutableStateOf(currentClock()) }
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                clock = currentClock()
+                val now = System.currentTimeMillis()
+                delay(60_000L - now % 60_000L)
+            }
+        }
+    }
+    return clock
+}
+
+private fun StatusPresentation.asDisplayStatus(): DisplayStatusValue = when (val source = value) {
+    is StatusValue.Available -> DisplayStatusValue.Available(source.value)
+    StatusValue.Unavailable -> DisplayStatusValue.Unavailable(contentDescription)
+    StatusValue.Unsupported -> DisplayStatusValue.Unsupported
+}
+
+@Composable
+private fun NavigationDock(
+    layout: LauncherShellLayout,
+    selectedDestination: LauncherDestination,
+    focusedDestination: LauncherDestination?,
+    onDestinationSelected: (LauncherDestination) -> Unit,
+    onDestinationFocused: (LauncherDestination?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var locallyFocusedDestination by remember { mutableStateOf<LauncherDestination?>(null) }
+    val renderedFocus = locallyFocusedDestination ?: focusedDestination
+    Box(
+        modifier = modifier
+            .offset(layout.dockBounds.left, layout.dockBounds.top)
+            .size(layout.dockBounds.width, layout.dockBounds.height),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        // A 48dp slot remains independently reachable even where the Home visual circle is 32dp.
+        Row(
+            modifier = Modifier.offset(y = layout.dockCenterY - layout.dockBounds.top - 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ControllerGlyph("L1", "Previous destination")
+            Row(
+                Modifier.background(LauncherTheme.colors.surfaceDock, CircleShape)
+                    .border(1.dp * LauncherTheme.referenceScale, LauncherTheme.colors.borderEmphasis, CircleShape),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+              LauncherDestination.dockOrder.forEach { destination ->
+                if (destination == LauncherDestination.SEARCH) {
+                    Spacer(Modifier.width(LauncherTheme.spacing.xxs))
+                    Spacer(
+                        Modifier
+                            .height(28.dp * LauncherTheme.referenceScale)
+                            .width(1.dp * LauncherTheme.referenceScale)
+                            .background(LauncherTheme.colors.borderEmphasis),
+                    )
+                    Spacer(Modifier.width(LauncherTheme.spacing.xxs))
+                }
+                DockDestination(
+                    destination = destination,
+                    selected = destination == selectedDestination,
+                    focused = destination == renderedFocus,
+                    onSelected = { onDestinationSelected(destination) },
+                    onFocused = { hasFocus ->
+                        locallyFocusedDestination = when {
+                            hasFocus -> destination
+                            locallyFocusedDestination == destination -> null
+                            else -> locallyFocusedDestination
+                        }
+                        onDestinationFocused(locallyFocusedDestination)
+                    },
+                )
+              }
+            }
+            ControllerGlyph("R1", "Next destination")
+        }
+    }
+}
+
+@Composable
+private fun DockDestination(
+    destination: LauncherDestination,
+    selected: Boolean,
+    focused: Boolean,
+    onSelected: () -> Unit,
+    onFocused: (Boolean) -> Unit,
+) {
+    val visualSize = 48.dp * LauncherTheme.referenceScale
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .testTag(LauncherShellTags.destination(destination))
+            .onFocusChanged { onFocused(it.isFocused) }
+            .clickable(role = Role.Tab, onClick = onSelected)
+            .semantics { this.selected = selected },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(visualSize)
+                .background(
+                    color = if (selected) LauncherTheme.colors.destinationSelected else LauncherTheme.colors.dockInactive,
+                    shape = CircleShape,
+                )
+                .then(
+                    if (focused) Modifier.border(2.dp * LauncherTheme.referenceScale, LauncherTheme.colors.focus, CircleShape)
+                    else Modifier,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            LauncherGlyphIcon(
+                glyph = destination.glyph(),
+                modifier = Modifier.size(26.dp * LauncherTheme.referenceScale),
+                contentDescription = destination.label(),
+                tint = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textPrimary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShellFooter(
+    layout: LauncherShellLayout,
+    gutter: Dp,
+    footer: ControllerActionFooter,
+    actionPort: SemanticActionPort,
+    confirmBackMapping: ConfirmBackMapping,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .offset(layout.footerBounds.left, layout.footerBounds.top)
+            .size(layout.footerBounds.width, layout.footerBounds.height),
+    ) {
+        Box(
+            Modifier
+                .offset(y = layout.footerDividerY - layout.footerBounds.top)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(LauncherTheme.colors.borderSubtle),
+        )
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(horizontal = gutter),
+            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.lg),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            footer.actions.forEach { descriptor ->
+                FooterAction(descriptor, actionPort, confirmBackMapping,
+                    visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FooterAction(
+    descriptor: LauncherActionDescriptor,
+    actionPort: SemanticActionPort,
+    confirmBackMapping: ConfirmBackMapping,
+    visualOffset: Dp,
+) {
+    Box(
+        modifier = Modifier
+            .height(48.dp)
+            .testTag(LauncherShellTags.footerAction(descriptor.input))
+            .semantics { if (!descriptor.enabled) disabled() }
+            .focusProperties { canFocus = false }
+            .clickable(enabled = descriptor.enabled) { actionPort.dispatch(descriptor) },
+        contentAlignment = Alignment.Center,
+    ) {
+      Row(
+        modifier = Modifier.offset(y = visualOffset),
+        horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ControllerGlyph(
+            glyph = descriptor.input.footerLegend(confirmBackMapping),
+            semanticLabel = descriptor.label,
+        )
+        LauncherText(
+            text = descriptor.label,
+            style = LauncherTheme.typography.actionLabel,
+            color = if (descriptor.enabled) LauncherTheme.colors.textPrimary else LauncherTheme.colors.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+      }
+    }
+}
+
+private fun LauncherDestination.glyph(): LauncherGlyph = when (this) {
+    LauncherDestination.HOME -> LauncherGlyph.Home
+    LauncherDestination.LIBRARY -> LauncherGlyph.Library
+    LauncherDestination.APPS -> LauncherGlyph.Apps
+    LauncherDestination.FAVORITES -> LauncherGlyph.Favorites
+    LauncherDestination.SETTINGS -> LauncherGlyph.Settings
+    LauncherDestination.SEARCH -> LauncherGlyph.Search
+}
+
+private fun LauncherDestination.label(): String = when (this) {
+    LauncherDestination.HOME -> "Home"
+    LauncherDestination.LIBRARY -> "Library"
+    LauncherDestination.APPS -> "Apps"
+    LauncherDestination.FAVORITES -> "Favorites"
+    LauncherDestination.SETTINGS -> "Settings"
+    LauncherDestination.SEARCH -> "Search"
+}
+
+private fun SemanticInputAction.footerLegend(mapping: ConfirmBackMapping): String = when (this) {
+    SemanticInputAction.CONFIRM -> mapping.confirm.legend()
+    SemanticInputAction.BACK -> mapping.back.legend()
+    SemanticInputAction.SECONDARY -> "X"
+    SemanticInputAction.TERTIARY -> "Y"
+    SemanticInputAction.MENU -> "START"
+    SemanticInputAction.PREVIOUS_DESTINATION -> "L"
+    SemanticInputAction.NEXT_DESTINATION -> "R"
+    SemanticInputAction.PREVIOUS_FILTER -> "LT"
+    SemanticInputAction.NEXT_FILTER -> "RT"
+    SemanticInputAction.NAVIGATE_UP,
+    SemanticInputAction.NAVIGATE_DOWN,
+    SemanticInputAction.NAVIGATE_LEFT,
+    SemanticInputAction.NAVIGATE_RIGHT -> "D-PAD"
+}
+
+private fun ControllerFaceButton.legend(): String = when (this) {
+    ControllerFaceButton.A -> "A"
+    ControllerFaceButton.B -> "B"
+}

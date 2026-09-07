@@ -67,17 +67,23 @@ private val vectors = mapOf(
         lineTo(14f, 14f); lineTo(14f, 21f); lineTo(19f, 21f); lineTo(19f, 9f)
     },
     LauncherGlyph.Library to glyphVector("Library") {
-        moveTo(3f, 4f); lineTo(8f, 4f); lineTo(8f, 20f); lineTo(3f, 20f); close()
-        moveTo(11f, 4f); lineTo(15f, 4f); lineTo(15f, 20f); lineTo(11f, 20f); close()
-        moveTo(18f, 5f); lineTo(21f, 19f)
-        moveTo(3f, 8f); lineTo(8f, 8f); moveTo(11f, 16f); lineTo(15f, 16f)
-    },
-    LauncherGlyph.Apps to glyphVector("Apps") {
         moveTo(3f, 3f); lineTo(9f, 3f); lineTo(9f, 9f); lineTo(3f, 9f); close()
         moveTo(15f, 3f); lineTo(21f, 3f); lineTo(21f, 9f); lineTo(15f, 9f); close()
         moveTo(3f, 15f); lineTo(9f, 15f); lineTo(9f, 21f); lineTo(3f, 21f); close()
         moveTo(15f, 15f); lineTo(21f, 15f); lineTo(21f, 21f); lineTo(15f, 21f); close()
     },
+    LauncherGlyph.Apps to ImageVector.Builder("Apps", 24.dp, 24.dp, 24f, 24f).apply {
+        path(fill = SolidColor(Color.Black), stroke = null) {
+            for (y in listOf(5f, 12f, 19f)) for (x in listOf(5f, 12f, 19f)) {
+                moveTo(x + 1.5f, y)
+                curveTo(x + 1.5f, y + .83f, x + .83f, y + 1.5f, x, y + 1.5f)
+                curveTo(x - .83f, y + 1.5f, x - 1.5f, y + .83f, x - 1.5f, y)
+                curveTo(x - 1.5f, y - .83f, x - .83f, y - 1.5f, x, y - 1.5f)
+                curveTo(x + .83f, y - 1.5f, x + 1.5f, y - .83f, x + 1.5f, y)
+                close()
+            }
+        }
+    }.build(),
     LauncherGlyph.Favorites to glyphVector("Favorites") {
         moveTo(12f, 3f); lineTo(14.8f, 8.8f); lineTo(21f, 9.7f)
         lineTo(16.5f, 14.1f); lineTo(17.6f, 20.4f); lineTo(12f, 17.4f)

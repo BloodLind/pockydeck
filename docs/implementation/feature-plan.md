@@ -4,19 +4,19 @@ Status: **implementation in progress**; see [current story status and evidence](
 
 Read [the project plan](../project-plan.md), [the design contract](../design-system.md), and [the agent workflow](agent-workflow.md) before dispatching a packet. Product behavior in those documents remains authoritative. Home alone supplies shell geometry; the other screens are content templates.
 
-The [user-story backlog](user-stories/README.md) now divides each F01–F18 packet into smaller execution units. Use one ready US per implementation assignment. Keep these feature packets as the technical scope, ownership, and integration-group reference; their dependencies and gates still apply to all child stories.
+The [user-story backlog](user-stories/README.md) divides F01–F18 into traceable acceptance criteria. On 8 September the user authorized building the complete native application base first, followed by a combined verification and documentation reconciliation. Per-story dispatch and intermediate wave gates are superseded for this delivery; packet scope, shared-file ownership and truthful device evidence still apply.
 
 ## How to use the packets
 
-Implement the relevant numbered steps for one child user story at a time, using its acceptance criteria. Start no feature before its prerequisites pass. A packet is complete only when all child stories, applicable validation, and handoff evidence are reviewed and accepted by the coordinator. The coordinator integrates after every parallel wave; a successful worker report alone does not open the next wave.
+Implement coherent batches across the native application, then check the integrated result against the story criteria and fix findings. A packet is accepted only when its applicable validation has evidence; code integration does not imply completion of unrun physical checks. ROM, emulator compatibility and provider choices retain their own later readiness decisions.
 
-Use at most **three concurrent implementation workers**, leaving the fourth agent slot for the coordinator. The schedule below is deliberately conservative about shared files. A single worker may do sequential packets. Optional worktrees require a reviewed committed baseline first because this repository currently has no commits; directory leases work for a shared checkout. Do not reset or discard existing work to create a baseline.
+Use at most **three concurrent implementation workers**, leaving the fourth agent slot for the coordinator. Directory leases prevent concurrent edits to the same files in the shared checkout. The repository has committed checkpoints; do not reset or discard existing work to create another baseline.
 
 Model names and reasoning levels are implementation assignments, not estimates of Codex charges. `gpt-5.6-terra` at `high` is the default feature implementer; `gpt-5.6-luna` at `medium` handles constrained visual controls; `gpt-5.6-sol` at `high` handles Android lifecycle, input, persistence, storage, and integration. Those combinations are callable in this session. The Astra `ultra` planning choice is session-specific, not a general statement about API reasoning options.
 
 ## Packet index and dependency graph
 
-All packets begin with status **planned**. Dependencies identify reviewed results, including the coordinator's shared-file integration.
+The table preserves the original dependency plan. Live implementation state and batch evidence are maintained in [progress](progress.md).
 
 | ID | Feature packet | Model / effort | Dependencies | Wave |
 |---|---|---|---|---|

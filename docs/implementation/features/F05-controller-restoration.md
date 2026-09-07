@@ -1,7 +1,7 @@
 # F05 — Controller input and focus restoration
 
-- Status: **planned**.
-- User stories: [US-014](../user-stories/US-014-single-owner-controller-input.md), [US-015](../user-stories/US-015-page-and-modal-focus-navigation.md), [US-016](../user-stories/US-016-identity-and-scroll-restoration.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-014](../user-stories/US-014-single-owner-controller-input.md), [US-015](../user-stories/US-015-page-and-modal-focus-navigation.md), [US-016](../user-stories/US-016-identity-and-scroll-restoration.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: controller and touch operate one coherent focus/action path, and page identity/scroll restore reliably.
 - Prerequisites: F04 and F06 accepted. F04 fixture pages are sufficient for initial testing.

@@ -1,7 +1,7 @@
 # F13 — Real device status
 
-- Status: **planned**.
-- User stories: [US-036](../user-stories/US-036-baseline-device-status.md), [US-037](../user-stories/US-037-honest-optional-device-status.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-036](../user-stories/US-036-baseline-device-status.md), [US-037](../user-stories/US-037-honest-optional-device-status.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: the custom launcher strip displays supported device information honestly and stops unnecessary work while another app is foreground.
 - Prerequisite: F08 accepted. Scheduled beside F12 with disjoint ownership.

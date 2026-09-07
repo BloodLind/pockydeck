@@ -1,7 +1,7 @@
 # F04 — Persistent shell and navigation
 
-- Status: **planned**.
-- User stories: [US-011](../user-stories/US-011-persistent-home-shaped-shell.md), [US-012](../user-stories/US-012-destination-and-origin-navigation.md), [US-013](../user-stories/US-013-shell-keyboard-and-inset-layout.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-011](../user-stories/US-011-persistent-home-shaped-shell.md), [US-012](../user-stories/US-012-destination-and-origin-navigation.md), [US-013](../user-stories/US-013-shell-keyboard-and-inset-layout.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-terra`, reasoning `high`.
 - Outcome: one stable Home-shaped shell surrounds all six destination positions and launcher-local details/dialog content.
 - Prerequisite: F03 accepted. Uses fixtures and explicit unavailable telemetry; live services are not required.

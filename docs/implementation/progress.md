@@ -2,6 +2,12 @@
 
 Updated: 8 September 2026. Coordinator owns this record; story specifications remain the acceptance criteria.
 
+## Current delivery workflow
+
+The user explicitly changed the workflow on 8 September: build the complete application base first, then reconcile it with the documentation and fix findings. Per-story acceptance and wave-order gates no longer block implementation during this run. Large integrated build, logic, visual and device checks replace the former test-after-every-story cadence. Source ownership and truthful evidence still apply; older accepted checkpoints remain historical evidence only.
+
+The native application batch replaces the foundation entry point with the production Home shell and all six destinations, shared catalog actions, native controller input, settings, status and HOME-role setup. See the [batch evidence and documentation reconciliation](evidence/F14/native-application-base.md) for actual verification and remaining physical checks.
+
 ## Baseline and authorization
 
 - Planning baseline: `ad2b668`; accepted F01 baseline: `ce09ddc`; previous theme/catalog checkpoint: `b9e68d2`.
@@ -34,11 +40,17 @@ Updated: 8 September 2026. Coordinator owns this record; story specifications re
 | F07 / US-021 | Accepted | Sol/high; separate Sol review | [8 JVM + 3 native Room/receiver tests](evidence/F07/US-021.md) |
 | F07 / US-022 | Accepted | Sol/high; separate Sol review; coordinator DI | [5 JVM + 3 native dispatch/task tests](evidence/F07/US-022.md) |
 | F07 | Accepted | Sol/high; separate Sol review; coordinator integration | [Combined app build and feature gate](evidence/F07/F07-final-gate.md) |
-| Remaining F03–F18 stories | Planned | Per feature packets | Existing dependency and physical-device gates apply |
+| F04 / US-011–013 | Implemented in native batch | Terra/high; coordinator integration | One shell, six routes, origin navigation and landscape IME layout |
+| F05 / US-014–016 | Implemented; physical controller acceptance pending | Sol/high; coordinator integration | Input ownership/repeat, mapping, modal and stable-ID restoration |
+| F08 / US-023–025 | Implemented; physical HOME/lid acceptance pending | Sol/high; coordinator integration | Real Home carousel, acknowledged launch/return and user-controlled HOME setup |
+| F09–F12 / US-026–035 | Implemented in native batch | Terra/high; coordinator integration | Library/Apps, Favorites/Details, Search/IME and Settings |
+| F13 / US-036–037 | Implemented in native batch | Sol/high review; coordinator integration | Actual lifecycle-bound device status |
+| F14 / US-038–039 | Integrated checks; physical matrix partial | Coordinator and Sol/high review | [Native application evidence](evidence/F14/native-application-base.md) |
+| F15–F18 / US-040–053 | Later work | Per feature packets | ROM support/emulator/provider decisions and final physical delivery gates remain |
 
 ## Ownership and handoff
 
-F01, F02 and F06 creation leases are closed. F03 and F07 creation leases are closed. F04 is ready for its first story. Coordinator owns physical Home calibration, shared deltas, device scheduling and later gate dispatch. Coordinator owns shared contracts, Gradle, manifests, DI, status and commits. Accepted theme/metrics/primitives, Room v1/v2 exports and migration, DataStore keys/encoding, and repository constructors are reserved; later changes use the reviewed shared-file process. See [published contracts](contracts.md).
+F01–F03/F06/F07 have accepted historical checkpoints, most recently `28384f6`. The native batch integrates F04/F05/F08–F14 across disjoint agent leases. Coordinator owns shared contracts, Gradle, manifests, DI, calibration, integration, device scheduling and commits. Room schema/migrations and persisted key encoding were preserved. See [published contracts](contracts.md).
 
 `LauncherApplication` supplies its application context to one lazy `AppContainer`. It shares one Room database across catalog/favorite/override/recency repositories and one preferences store across controller/snapshot repositories. Setup does not scan packages. Debug-only foundation schema fixtures and repository fakes remain separate from production persistence.
 
@@ -56,6 +68,6 @@ No physical device was connected at that checkpoint. The isolated Android 13 emu
 
 Physical Retroid Pocket Flip 2 display/density, controller, lid and HOME lifecycle acceptance remains pending. Emulator acceptance does not close physical gates or permit downstream stories to bypass their explicit prerequisites.
 
-## Current Home milestone
+## Earlier Home milestone baseline
 
 Starting source checkpoint: `bc60032`. The user reports the existing APK runs on the actual device and requests the complete designed Home experience. The connected Flip 2 reports Android 13, landscape 1920×1080, 360dpi (density 2.25), and font scale 1.0. The former 240dpi emulator assumptions require native token/metrics calibration at 853.33×480dp in immersive mode. The foreground was verified as our MainActivity before capturing the foundation baseline in ignored `.local/physical`. Controller, lid and HOME-role acceptance is not inferred from connectivity or the user's initial smoke. Role choice remains user-controlled; no automatic default-HOME change is authorized.

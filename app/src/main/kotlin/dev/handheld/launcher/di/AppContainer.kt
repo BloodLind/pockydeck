@@ -1,6 +1,18 @@
 package dev.handheld.launcher.di
 
 import android.content.Context
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.handheld.launcher.feature.collection.CollectionViewModel
+import dev.handheld.launcher.feature.home.HomeViewModelFactory
+import dev.handheld.launcher.core.domain.model.LauncherDestination
+import dev.handheld.launcher.launch.LaunchCoordinator
+import dev.handheld.launcher.platform.home.HomeRoleRequestCoordinator
+import dev.handheld.launcher.platform.system.SystemActionRegistry
+import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
+import dev.handheld.launcher.core.data.android.status.AndroidDeviceStatusSource
 import dev.handheld.launcher.contract.ActivityRequestPort
 import dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcher
 import dev.handheld.launcher.core.data.android.apps.BroadcastAndroidPackageChangeMonitor
@@ -58,6 +70,27 @@ class AppContainer(
     }
     val launchDispatcher: LaunchDispatcher by lazy {
         AndroidComponentLaunchDispatcher(applicationContext)
+    }
+    val launchCoordinator by lazy {
+        LaunchCoordinator(catalogRepository, navigationSnapshotRepository, launchDispatcher,
+            successfulOpenRepository, applicationScope)
+    }
+    val homeRoleRequests by lazy { HomeRoleRequestCoordinator(activityRequestPort) }
+    val iconLoader by lazy { AndroidIconLoader(applicationContext) }
+    val systemActions by lazy { SystemActionRegistry(applicationContext) }
+    val deviceStatus by lazy { AndroidDeviceStatusSource(applicationContext) }
+
+    fun launcherViewModelFactory(): ViewModelProvider.Factory = viewModelFactory {
+        initializer { LauncherAppViewModel(controllerPreferenceRepository, createSavedStateHandle()) }
+    }
+
+    fun homeViewModelFactory() = HomeViewModelFactory(catalogRepository, successfulOpenRepository,
+        itemOverrideRepository, navigationSnapshotRepository, launchCoordinator,
+        androidCatalog.refreshState, androidCatalog::refresh)
+
+    fun collectionViewModelFactory(destination: LauncherDestination): ViewModelProvider.Factory = viewModelFactory {
+        initializer { CollectionViewModel(destination, catalogRepository, favoriteRepository,
+            itemOverrideRepository, successfulOpenRepository, navigationSnapshotRepository, createSavedStateHandle()) }
     }
 
     fun mainViewModelFactory(): MainViewModelFactory =

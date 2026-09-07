@@ -1,7 +1,7 @@
 # F10 — Favorites and item details
 
-- Status: **planned**.
-- User stories: [US-028](../user-stories/US-028-favorite-collection-management.md), [US-029](../user-stories/US-029-item-details-and-origin-return.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-028](../user-stories/US-028-favorite-collection-management.md), [US-029](../user-stories/US-029-item-details-and-origin-return.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-terra`, reasoning `high`.
 - Outcome: favorite items remain easy to find, and details show the full item title and supported local actions without losing the user's place.
 - Prerequisite: F08 accepted. Runs beside F09 and F11 with no shared-file writes.

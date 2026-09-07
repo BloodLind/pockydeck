@@ -1,7 +1,7 @@
 # F09 — Library and Apps
 
-- Status: **planned**.
-- User stories: [US-026](../user-stories/US-026-unified-library-browsing.md), [US-027](../user-stories/US-027-android-app-category-browsing.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-026](../user-stories/US-026-unified-library-browsing.md), [US-027](../user-stories/US-027-android-app-category-browsing.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-terra`, reasoning `high`.
 - Outcome: browse the unified library or its Android-app view with usable platform/category filters and stable controller selection.
 - Prerequisite: F08 accepted. Runs beside F10 and F11 with no shared-file writes.

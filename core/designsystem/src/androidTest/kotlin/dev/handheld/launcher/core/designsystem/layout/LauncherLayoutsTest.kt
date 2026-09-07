@@ -12,8 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
@@ -57,8 +56,9 @@ class LauncherLayoutsTest {
             }
         }
         compose.onNodeWithText("123 items").assertIsDisplayed()
-        compose.onNodeWithText("Platform 1").performTouchInput { swipeLeft() }
-        compose.onNodeWithText("Platform 12").assertIsDisplayed()
+        // A single drag's distance varies with the host's density and viewport. Ask the
+        // scroll container to reveal the final choice, which verifies the actual contract.
+        compose.onNodeWithText("Platform 12").performScrollTo().assertIsDisplayed()
     }
 
     @Test

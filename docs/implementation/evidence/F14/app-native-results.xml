@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="dev.handheld.launcher.integration.LauncherAppIntegrationTest" tests="3" failures="0" errors="0" skipped="0" time="9.48" timestamp="2026-09-07T23:57:24" hostname="localhost">
+  <properties>
+    <property name="device" value="Handheld_Foundation_API_33(AVD) - 13" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="searchEditsKeepNativeFieldFocusAndQuerySurvivesFilterChange" classname="dev.handheld.launcher.integration.LauncherAppIntegrationTest" time="4.946" />
+  <testcase name="rapidRightShoulderRouteSwitchesKeepOneShellAndReachSettings" classname="dev.handheld.launcher.integration.LauncherAppIntegrationTest" time="1.637" />
+  <testcase name="dockDestinationsReuseOneShellRootAndExposeSelectedDestination" classname="dev.handheld.launcher.integration.LauncherAppIntegrationTest" time="2.358" />
+</testsuite>

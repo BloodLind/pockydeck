@@ -1,0 +1,51 @@
+Native application base - 8 September 2026
+APK: app/build/outputs/apk/debug/app-debug.apk
+SHA-256: 1C07B67783BA1AAE5B6BCBB0B2AEDFD9EC3A2A225367A13E217DE3B4F3318BEB
+JVM: 69 passed (app 24, domain 15, data 20, design system 10); zero failures/errors/skips.
+Android 13: 51 passed (app 3, design system 16, data 32); zero failures/errors/skips.
+Lint: 0 errors, 68 warnings, 8 informational findings. Warnings include pinned dependency/AGP versions, API usage, state reads and icon locations; no broad baseline added.
+Final app command: gradlew --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:connectedDebugAndroidTest :app:lintDebug :app:processReleaseMainManifest
+Earlier combined core command: :core:domain:test :core:data:testDebugUnitTest :core:designsystem:testDebugUnitTest :core:designsystem:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest
+Device test serial: emulator-5556. Emulator Android 13, 1920x1080, 360dpi, font scale 1.0.
+Physical device: Retroid Pocket Flip 2 Android 13; APK installed with install -r and native Home/Library screenshots inspected. Hardware button/lid/full HOME acceptance not inferred.
+Final build output:
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:mergeProjectDexDebug
+> Task :app:generateDebugAndroidTestLintModel
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:compileDebugUnitTestKotlin
+> Task :app:compileDebugAndroidTestKotlin
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+
+> Task :app:testDebugUnitTest
+
+> Task :app:compileDebugAndroidTestJavaWithJavac NO-SOURCE
+> Task :app:dexBuilderDebugAndroidTest UP-TO-DATE
+Picked up JAVA_TOOL_OPTIONS: -Djdk.net.unixdomain.tmpdir=.local/java-tmp
+> Task :app:mergeDebugAndroidTestGlobalSynthetics UP-TO-DATE
+> Task :app:processDebugAndroidTestJavaRes UP-TO-DATE
+> Task :app:mergeDebugAndroidTestJavaResource UP-TO-DATE
+> Task :app:mergeProjectDexDebugAndroidTest UP-TO-DATE
+> Task :app:packageDebugAndroidTest UP-TO-DATE
+> Task :app:createDebugAndroidTestApkListingFileRedirect UP-TO-DATE
+
+> Task :app:connectedDebugAndroidTest
+Starting 3 tests on Handheld_Foundation_API_33(AVD) - 13
+
+Finished 3 tests on Handheld_Foundation_API_33(AVD) - 13
+
+> Task :app:lintAnalyzeDebug
+> Task :app:lintAnalyzeDebugAndroidTest
+> Task :app:lintAnalyzeDebugUnitTest
+
+> Task :app:lintReportDebug
+Wrote HTML report to file:///C:/Users/TakeIt4mo/Documents/ChatGPT/Handheld%20launcher/app/build/reports/lint-results-debug.html
+
+> Task :app:lintDebug
+
+BUILD SUCCESSFUL in 46s
+167 actionable tasks: 18 executed, 149 up-to-date

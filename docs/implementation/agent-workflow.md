@@ -4,7 +4,7 @@ Prepared 7 September 2026. This is an execution guide, not a record of implement
 
 Read [the feature plan](feature-plan.md) for the exact task packets, dependency graph, file ownership, and acceptance criteria. Keep [the project plan](../project-plan.md) and [design system](../design-system.md) as the product/design baseline.
 
-The [user-story backlog](user-stories/README.md) is now the dispatch list. Give a worker one ready US and its parent Fxx packet. The story defines the outcome and acceptance; the parent defines technical ownership and integration gates. Run at most one story writer inside each parent feature at a time. Parallelize across the ready parent features in the existing wave schedule.
+The [user-story backlog](user-stories/README.md) defines acceptance and the parent packet defines technical ownership. The user's 8 September instruction supersedes the original per-story and wave schedule below: build a complete native application base, then run a large integrated verification batch and reconcile the documentation. Parallel workers receive disjoint directory leases. Do not repeat approval gates or per-feature test cycles that this instruction replaced. Report unrun physical checks separately from implemented behavior.
 
 ## 1. Model assignments
 

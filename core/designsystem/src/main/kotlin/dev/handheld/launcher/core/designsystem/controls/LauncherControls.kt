@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -71,7 +73,10 @@ fun LauncherButton(
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
         shape = shape,
-    ) { LauncherText(label, style = LauncherTheme.typography.controlLabel) }
+    ) {
+        LauncherText(label, Modifier.padding(horizontal = LauncherTheme.spacing.md, vertical = LauncherTheme.spacing.xs),
+            style = LauncherTheme.typography.controlLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 /** An activatable icon control. The supplied description is the control's accessible name. */
@@ -151,7 +156,10 @@ fun FilterChip(
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
         shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
-    ) { LauncherText(label, style = LauncherTheme.typography.controlLabel) }
+    ) {
+        LauncherText(label, Modifier.padding(horizontal = LauncherTheme.spacing.sm, vertical = LauncherTheme.spacing.xs),
+            style = LauncherTheme.typography.controlLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 /** A compact sort trigger. The caller owns popup presentation and selected option state. */

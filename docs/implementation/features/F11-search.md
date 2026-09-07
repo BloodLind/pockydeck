@@ -1,7 +1,7 @@
 # F11 — Local Search and system keyboard
 
-- Status: **planned**.
-- User stories: [US-030](../user-stories/US-030-local-search-results.md), [US-031](../user-stories/US-031-native-keyboard-search-editing.md), [US-032](../user-stories/US-032-search-actions-and-origin-restoration.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
+- Status: **implemented in the native application batch**; see [integrated evidence and remaining device checks](../evidence/F14/native-application-base.md). Individual physical acceptance is not implied.
+- User stories: [US-030](../user-stories/US-030-local-search-results.md), [US-031](../user-stories/US-031-native-keyboard-search-editing.md), [US-032](../user-stories/US-032-search-actions-and-origin-restoration.md). This packet remains the scope and acceptance reference; the user-authorized combined delivery workflow is recorded in progress.
 - Agent: `gpt-5.6-terra`, reasoning `high`.
 - Outcome: search indexed games/apps and supported launcher/settings actions while preserving query, origin, and focus through the system keyboard.
 - Prerequisite: F08 accepted. Runs beside F09 and F10 with no shared-file writes.

@@ -1,0 +1,19 @@
+# Gradle and module build caches
+.gradle/
+**/build/
+build/
+
+# Android Studio and machine-local Android SDK configuration
+.idea/
+*.iml
+local.properties
+.android/
+sdk/
+
+# Local reference material is never part of the product source tree
+.reference/
+.local/
+
+# Operating-system files
+.DS_Store
+Thumbs.db

@@ -1,8 +1,11 @@
 # Handheld Launcher
 
-An Android HOME launcher for the Retroid Pocket Flip 2, planned in Kotlin and Jetpack Compose with MVVM.
+An Android HOME launcher for the Retroid Pocket Flip 2, built in Kotlin and Jetpack Compose with MVVM.
 
-The project is currently at the planning stage. No Android application has been scaffolded or built.
+Implementation has started with F01's four-module foundation. The initial debug APK builds and opens as an ordinary Android Activity on an Android 13 emulator. HOME integration and feature screens follow in later stories; physical Flip 2 validation remains pending.
+
+- [Implementation progress](docs/implementation/progress.md): current story status, ownership, evidence, and dependency gates.
+- [Foundation launch evidence](docs/implementation/evidence/F01/US-001-launch.md): Android 13 emulator smoke test and screenshot.
 
 - [Project plan](docs/project-plan.md): scope, architecture, application behavior, delivery stages, and acceptance criteria.
 - [Design system](docs/design-system.md): shared shell, reference measurements, typography, styles, controls, and page templates.

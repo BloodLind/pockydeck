@@ -1,6 +1,6 @@
 # Feature implementation plan
 
-Status: **planned; no Android implementation has been completed**. Baseline: 7 September 2026. This decomposition uses Astra Ultra once for planning. Implementation uses the cheaper model assignments below; it does not automatically escalate back to Astra.
+Status: **implementation in progress**; see [current story status and evidence](progress.md). Planning baseline: 7 September 2026. This decomposition used Astra Ultra once for planning. Implementation uses the cheaper model assignments below; it does not automatically escalate back to Astra.
 
 Read [the project plan](../project-plan.md), [the design contract](../design-system.md), and [the agent workflow](agent-workflow.md) before dispatching a packet. Product behavior in those documents remains authoritative. Home alone supplies shell geometry; the other screens are content templates.
 

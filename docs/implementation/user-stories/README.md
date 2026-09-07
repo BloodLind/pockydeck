@@ -1,6 +1,6 @@
 # Handheld Launcher — user-story backlog
 
-**53 planned user stories under F01–F18. No application implementation or acceptance test has been completed by creating this backlog.**
+**53 user stories under F01–F18.** This backlog defines scope and acceptance; [implementation progress](../progress.md) records current status and actual evidence.
 
 This is the implementation dispatch list. Each linked file contains one bounded story, a user/developer/tester statement, numbered Given/When/Then acceptance criteria, dependencies, exclusions, verification evidence, and a link to its parent feature's technical ownership.
 

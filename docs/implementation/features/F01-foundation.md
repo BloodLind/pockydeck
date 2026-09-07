@@ -1,10 +1,10 @@
 # F01 — Foundation and shared contracts
 
-- Status: **planned**.
+- Status: **accepted**; see [implementation progress](../progress.md) for reviewed story evidence.
 - User stories: [US-001](../user-stories/US-001-installable-four-module-foundation.md), [US-002](../user-stories/US-002-stable-catalog-and-launch-contracts.md), [US-003](../user-stories/US-003-shared-navigation-input-and-presentation-ports.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-sol`, reasoning `high`; sole foundation/integration writer.
 - Outcome: an installable empty native launcher project with clear contracts so later agents can work without overlapping edits.
-- Prerequisites: approved [project plan](../../project-plan.md), [design contract](../../design-system.md), and [ownership policy](../feature-plan.md). No Android scaffold or git baseline currently exists.
+- Prerequisites: approved [project plan](../../project-plan.md), [design contract](../../design-system.md), and [ownership policy](../feature-plan.md). Planning baseline committed as `ad2b668`; scaffold implementation began on 7 September 2026.
 
 ## Ownership and contracts
 

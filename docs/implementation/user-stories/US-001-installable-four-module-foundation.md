@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F01 — Foundation and shared contracts](../features/F01-foundation.md) |
-| Status | Planned |
+| Status | Accepted — Android 13 emulator evidence; physical Flip 2 pending |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-sol` / `high` |
 
@@ -23,19 +23,19 @@ Record compatible pinned build versions and commands after inspecting local inst
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** the recorded compatible tooling, **when** a developer runs the documented build command, **then** the four-module project builds using the recorded pinned versions.
-- [ ] **AC-02** — **Given** the debug application is installed on the initial validation target, **when** it is launched normally, **then** its minimal Activity opens without requiring a feature screen.
-- [ ] **AC-03** — **Given** the module dependency graph, **when** it is inspected or compiled, **then** `core:domain` has no Android or Compose dependency and `core:designsystem` imports no product module.
-- [ ] **AC-04** — **Given** the initial scaffold’s persistence test fixture or configuration is compiled, **when** it uses Room processing/schema export or DataStore support, **then** those facilities are configured without requiring a later F06 implementation.
+- [x] **AC-01** — **Given** the recorded compatible tooling, **when** a developer runs the documented build command, **then** the four-module project builds using the recorded pinned versions.
+- [x] **AC-02** — **Given** the debug application is installed on the initial validation target, **when** it is launched normally, **then** its minimal Activity opens without requiring a feature screen.
+- [x] **AC-03** — **Given** the module dependency graph, **when** it is inspected or compiled, **then** `core:domain` has no Android or Compose dependency and `core:designsystem` imports no product module.
+- [x] **AC-04** — **Given** the initial scaffold’s persistence test fixture or configuration is compiled, **when** it uses Room processing/schema export or DataStore support, **then** those facilities are configured without requiring a later F06 implementation.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned recorded build command and build output | Not run |
-| AC-02 | Planned emulator/manual launch record; physical Flip 2 check remains pending | Not run |
-| AC-03 | Planned module dependency inspection and compile result | Not run |
-| AC-04 | Planned initial scaffold configuration/fixture compile evidence | Not run |
+| AC-01 | [Pinned build and test results](../evidence/F01/US-001.md) | Passed |
+| AC-02 | [Android 13 emulator launch](../evidence/F01/US-001-launch.md); physical Flip 2 pending | Passed on emulator |
+| AC-03 | [Module graph and domain boundary test](../evidence/F01/US-001.md) | Passed |
+| AC-04 | [Room/KSP schema and DataStore fixture compile](../evidence/F01/US-001.md) | Passed |
 
 ## Delivery notes
 

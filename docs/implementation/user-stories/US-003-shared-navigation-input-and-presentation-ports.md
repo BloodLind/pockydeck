@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F01 — Foundation and shared contracts](../features/F01-foundation.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-sol` / `high` |
 
@@ -23,19 +23,19 @@ Define the six fixed destination IDs; origins for details and shortcut Search; p
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a navigation fixture, **when** it represents dock-to-Home Back, shortcut Search return, or item details, **then** it preserves the initiating origin without a Compose object or complete list.
-- [ ] **AC-02** — **Given** a typed action descriptor, **when** a footer prompt and semantic dispatch are rendered or invoked, **then** they use the same action meaning and the A-confirm/B-back default is explicit.
-- [ ] **AC-03** — **Given** independent design-system modal and status consumers, **when** they use the published contracts, **then** modal callbacks require no app/domain import and status distinguishes unavailable from unsupported.
-- [ ] **AC-04** — **Given** an acknowledged Activity request is observed repeatedly, **when** it is consumed, **then** it does not request another launch or role prompt.
+- [x] **AC-01** — **Given** a navigation fixture, **when** it represents dock-to-Home Back, shortcut Search return, or item details, **then** it preserves the initiating origin without a Compose object or complete list.
+- [x] **AC-02** — **Given** a typed action descriptor, **when** a footer prompt and semantic dispatch are rendered or invoked, **then** they use the same action meaning and the A-confirm/B-back default is explicit.
+- [x] **AC-03** — **Given** independent design-system modal and status consumers, **when** they use the published contracts, **then** modal callbacks require no app/domain import and status distinguishes unavailable from unsupported.
+- [x] **AC-04** — **Given** an acknowledged Activity request is observed repeatedly, **when** it is consumed, **then** it does not request another launch or role prompt.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned app-contract fixture test | Not run |
-| AC-02 | Planned descriptor/default mapping test | Not run |
-| AC-03 | Planned independent compile and fixture evidence | Not run |
-| AC-04 | Planned one-shot request observation test | Not run |
+| AC-01 | NavigationContractTest: dock order, origins, Back and independent compact snapshots | Passed |
+| AC-02 | SharedPresentationContractTest and NavigationContractTest: shared descriptors, MENU, A/B and precedence | Passed |
+| AC-03 | Independent design-system compile; available/unavailable/unsupported fixtures | Passed |
+| AC-04 | ActivityRequestPortTest: competing claims, reattachment, duplicate completion and resubmission | Passed |
 
 ## Delivery notes
 
@@ -45,3 +45,5 @@ F01 grants the initial lease for app contract types, the Activity request-port d
 
 - Concrete shell navigation, input processing, or preference encoding.
 - Live telemetry or production sample content.
+
+Accepted by coordinator on 7 September 2026 after independent Sol review, [US-003 checks](../evidence/F01/US-003.md), and [final Android 13 smoke](../evidence/F01/F01-final-gate.md).

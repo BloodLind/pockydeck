@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F01 — Foundation and shared contracts](../features/F01-foundation.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-sol` / `high` |
 
@@ -23,19 +23,19 @@ Define identities for items and launchable components, availability, supported a
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** two launchable components in one package, **when** they are represented or rediscovered, **then** they remain distinct stable identities rather than being keyed by a title or filename.
-- [ ] **AC-02** — **Given** an incomplete inventory result or an availability change, **when** the catalog contract is applied, **then** it distinguishes that outcome from a completed inventory and retains favorite and history references.
-- [ ] **AC-03** — **Given** an acknowledged successful launch for an existing item, **when** it is recorded, **then** that item is promoted exactly once; a failure, focus change, details view, or internal system action does not promote it.
-- [ ] **AC-04** — **Given** deterministic fixture items, **when** successful opens and unopened items are ordered, **then** successful-open order is deterministic and unopened items use title/ID order without asserting process state or session duration.
+- [x] **AC-01** — **Given** two launchable components in one package, **when** they are represented or rediscovered, **then** they remain distinct stable identities rather than being keyed by a title or filename.
+- [x] **AC-02** — **Given** an incomplete inventory result or an availability change, **when** the catalog contract is applied, **then** it distinguishes that outcome from a completed inventory and retains favorite and history references.
+- [x] **AC-03** — **Given** an acknowledged successful launch for an existing item, **when** it is recorded, **then** that item is promoted exactly once; a failure, focus change, details view, or internal system action does not promote it.
+- [x] **AC-04** — **Given** deterministic fixture items, **when** successful opens and unopened items are ordered, **then** successful-open order is deterministic and unopened items use title/ID order without asserting process state or session duration.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned domain fixture and contract test | Not run |
-| AC-02 | Planned contract example and preservation test | Not run |
-| AC-03 | Planned launch-result policy test | Not run |
-| AC-04 | Planned deterministic ordering fixture test | Not run |
+| AC-01 | [Stable identity and mismatch tests](../evidence/F01/US-002.md) | Passed |
+| AC-02 | [Scoped inventory and reference-preservation tests](../evidence/F01/US-002.md) | Passed |
+| AC-03 | [Acknowledgement, duplicate and concurrent-order tests](../evidence/F01/US-002.md) | Passed |
+| AC-04 | [Recency/title/ID ordering tests](../evidence/F01/US-002.md) | Passed |
 
 ## Delivery notes
 

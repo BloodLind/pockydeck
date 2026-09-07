@@ -1,6 +1,6 @@
 # Implementing Handheld Launcher with agents
 
-Prepared 7 September 2026. This is an execution guide, not a record of implemented features. The feature decomposition was delegated to `gpt-6-astra` with `ultra` reasoning as requested. Application implementation has not started.
+Prepared 7 September 2026. This is an execution guide, not a record of implemented features. The feature decomposition was delegated to `gpt-6-astra` with `ultra` reasoning as requested. Implementation is underway; see [progress](progress.md) for the current reviewed state.
 
 Read [the feature plan](feature-plan.md) for the exact task packets, dependency graph, file ownership, and acceptance criteria. Keep [the project plan](../project-plan.md) and [design system](../design-system.md) as the product/design baseline.
 

@@ -73,11 +73,13 @@ class LauncherPrimitivesTest {
         lateinit var focusManager: FocusManager
         lateinit var contentBounds: Rect
         var focusColor = Color.Unspecified
+        var lowerEdgeColor = Color.Unspecified
         compose.mainClock.autoAdvance = false
         compose.setContent {
             LauncherTheme(reducedMotion = reducedMotion) {
                 focusManager = LocalFocusManager.current
                 focusColor = LauncherTheme.colors.focus
+                lowerEdgeColor = LauncherTheme.colors.focusLowerEdge
                 var firstFocused by remember { mutableStateOf(false) }
                 var secondFocused by remember { mutableStateOf(false) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -112,6 +114,7 @@ class LauncherPrimitivesTest {
         compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithTag("first").assertIsFocused().assertIsSelected()
         assertTrue(focusPixels("first", focusColor) > 0)
+        assertTrue("The focused lower edge remains inside the allocation", focusPixels("first", lowerEdgeColor) > 0)
         assertEquals(allocation, compose.onNodeWithTag("first").fetchSemanticsNode().boundsInRoot)
         val focusedContent = compose.runOnIdle { contentBounds }
         assertContained(allocation, neutralContent)

@@ -49,7 +49,9 @@ class MetricsPreviewActivity : ComponentActivity() {
                     val metrics = with(density) {
                         ShellMetrics.calculate(ShellMetricsInput(fixtureWidth.roundToPx(), fixtureHeight.roundToPx(), this.density, fontScale))
                     }
-                    MetricsFixture(metrics, destination, Modifier.size(fixtureWidth, fixtureHeight))
+                    LauncherTheme(referenceScale = metrics.referenceScale) {
+                        MetricsFixture(metrics, destination, Modifier.size(fixtureWidth, fixtureHeight))
+                    }
                 }
             }
         }
@@ -68,7 +70,7 @@ private fun MetricsFixture(metrics: ShellMetrics, destination: String, modifier:
             )
         }
         Column(
-            Modifier.offset(metrics.contentBounds.left, metrics.contentBounds.top)
+            Modifier.offset(metrics.contentBounds.left, metrics.homeMetadataTop)
                 .size(metrics.contentBounds.width, metrics.metadataReservation),
         ) {
             BasicText("SHARED NATIVE METRICS", style = type.platformLabel.copy(color = colors.focus))
@@ -88,7 +90,7 @@ private fun MetricsFixture(metrics: ShellMetrics, destination: String, modifier:
             ) {
                 val outer = metrics.homeCardArtworkSize + metrics.focusFrameReservation * 2f
                 Box(
-                    Modifier.offset(x = metrics.focusLiftReservation / 2f)
+                    Modifier.offset(x = metrics.focusLiftReservation)
                         .size(outer)
                         .border(metrics.focusFrameReservation, colors.focus, RoundedCornerShape(LauncherTheme.shapes.homeOuter))
                         .padding(metrics.focusFrameReservation)
@@ -99,24 +101,28 @@ private fun MetricsFixture(metrics: ShellMetrics, destination: String, modifier:
                 }
             }
         }
-        FixtureBand(metrics.dockBounds, colors.surfaceDock) {
-            Row(horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
+        Box(Modifier.offset(y = metrics.dockCenterY - 24.dp).fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+            Row(horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
                 repeat(6) { index ->
                     Box(
-                        Modifier.size(metrics.minimumTouchTarget)
-                            .background(if (index == 0) colors.destinationSelected else colors.dockInactive, CircleShape),
+                        Modifier.size(metrics.minimumTouchTarget),
                         contentAlignment = Alignment.Center,
                     ) {
-                        BasicText("${index + 1}", style = type.controlLabel.copy(
-                            color = if (index == 0) colors.destinationSelectedContent else colors.textPrimary,
-                        ))
+                        Box(Modifier.size(48.dp * metrics.referenceScale)
+                            .background(if (index == 0) colors.destinationSelected else colors.dockInactive, CircleShape),
+                            contentAlignment = Alignment.Center) {
+                            BasicText("${index + 1}", style = type.controlLabel.copy(
+                                color = if (index == 0) colors.destinationSelectedContent else colors.textPrimary,
+                            ))
+                        }
                     }
                 }
             }
         }
-        FixtureBand(metrics.footerBounds, colors.surfaceApp) {
+        Box(Modifier.offset(y = metrics.footerDividerY).fillMaxWidth().height(1.dp).background(colors.borderEmphasis))
+        Box(Modifier.offset(y = metrics.footerDividerY).fillMaxWidth().height(metrics.windowHeight - metrics.footerDividerY), contentAlignment = Alignment.Center) {
             BasicText(
-                "48dp targets · Square artwork · Reserved focus lift · Calibration pending",
+                "48dp targets · Native reference scale · Separate visual and interaction anchors",
                 style = type.actionLabel.copy(color = colors.textSecondary),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

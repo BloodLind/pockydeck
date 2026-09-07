@@ -1,0 +1,19 @@
+Device: emulator-5556
+OS: Android 13 (API 33)
+Model: Android SDK built for x86_64
+
+Command class filter:
+dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshRoomInstrumentedTest,dev.handheld.launcher.core.data.discovery.AndroidPackageManagerDiscoveryInstrumentedTest
+
+Generated instrumentation output:
+dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshRoomInstrumentedTest:...
+dev.handheld.launcher.core.data.discovery.AndroidPackageManagerDiscoveryInstrumentedTest:...
+
+Time: 1.417
+
+OK (6 tests)
+
+The US-021 receiver test changed the enabled state of the app-details-only fixture component with
+PackageManager.DONT_KILL_APP, received the protected ACTION_PACKAGE_CHANGED through the dynamically
+registered receiver, stopped the receiver, and restored and asserted the component's original state.
+The command explicitly selected emulator-5556; physical device 89a34d44 was not targeted.

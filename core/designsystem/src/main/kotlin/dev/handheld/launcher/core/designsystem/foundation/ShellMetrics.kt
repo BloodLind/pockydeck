@@ -25,11 +25,15 @@ data class ShellMetrics(
     val density: Float,
     val fontScale: Float,
     val compact: Boolean,
+    val referenceScale: Float,
     val gutter: Dp,
     val statusBounds: ShellBounds,
     val contentBounds: ShellBounds,
     val dockBounds: ShellBounds,
     val footerBounds: ShellBounds,
+    val dockCenterY: Dp,
+    val footerDividerY: Dp,
+    val homeMetadataTop: Dp,
     val homeCardArtworkSize: Dp,
     val homeCardGap: Dp,
     val focusFrameReservation: Dp,
@@ -64,15 +68,19 @@ data class ShellMetrics(
             fun Double.asDp(): Dp = coerceIn(0.0, Float.MAX_VALUE.toDouble()).toFloat().dp
             val width = w.asDp()
             val height = h.asDp()
-            val compact = h < 600.0 || fs > 1.15 || w < 900.0
+            // The actual 360dpi Flip 2 is 853.33x480dp in immersive landscape.
+            // Calibrate native tokens to reference units; never scale the rendered UI bitmap.
+            val scale = (w / 1280.0).coerceIn(.5, 1.5)
+            val aspect = if (h > 0.0) w / h else 0.0
+            val compact = fs > 1.15 || w < 640.0 || h < 360.0 || aspect !in 1.70..2.05
             val g = w * .0375
             val gutter = g.asDp()
 
             // Preserve Home's 85.2% dock center / 92.8% footer start in the standard fixture.
             // Compact layouts spend height on readable labels and real target areas first.
-            val desiredStatus = maxOf(h * if (compact) .16 else .13, 18.0 * fs + 16.0).coerceAtMost(h)
-            val desiredDock = maxOf(h * if (compact) .18 else .152, 68.0).coerceAtMost(h)
-            val desiredFooter = maxOf(h * if (compact) .10 else .072, 48.0, 18.0 * fs + 16.0).coerceAtMost(h)
+            val desiredStatus = maxOf(h * if (compact) .16 else .13, (18.0 * fs + 16.0) * scale).coerceAtMost(h)
+            val desiredDock = maxOf(h * if (compact) .18 else .152, 68.0 * scale, 48.0).coerceAtMost(h)
+            val desiredFooter = maxOf(h * if (compact) .10 else .072, 48.0, (18.0 * fs + 16.0) * scale).coerceAtMost(h)
             val total = desiredStatus + desiredDock + desiredFooter
             val bandScale = if (total > h && total > 0.0) h / total else 1.0
             val status = desiredStatus * bandScale
@@ -85,14 +93,17 @@ data class ShellMetrics(
             val contentBottom = contentEnd.asDp()
 
             val contentWidth = (w - g * 2.0).coerceAtLeast(0.0)
-            // Two 40sp Home-title lines, a 14sp platform line and 12dp separation.
+            // Two title lines, a padded platform badge and their separation, in native units.
             // This text region remains useful for a short-window fallback when artwork is absent.
-            val metadata = (94.0 * fs + 12.0).coerceAtMost(contentEnd - status).coerceAtLeast(0.0)
-            val metadataEnd = status + metadata
+            val metadataTop = (if (compact) status else h * .149).coerceIn(status, contentEnd)
+            // Include native line-box rounding and the platform badge's padding. An exact
+            // arithmetic two-line sum can otherwise cause Text to ellipsize at one line.
+            val metadata = ((112.0 * fs + 8.0) * scale).coerceAtMost(contentEnd - metadataTop).coerceAtLeast(0.0)
+            val metadataEnd = metadataTop + metadata
             val provisionalCardTop = if (compact) metadataEnd else maxOf(metadataEnd, h * .356)
-            val frame = 8.0
-            val lift = 4.0
-            val maxArtwork = (minOf(contentWidth, contentEnd - provisionalCardTop) - frame * 2.0 - lift)
+            val frame = 8.0 * scale
+            val lift = 4.0 * scale
+            val maxArtwork = (minOf(contentWidth, contentEnd - provisionalCardTop) - frame * 2.0 - lift * 2.0)
                 .coerceAtLeast(0.0)
             // The reference measures the OUTER frame. Artwork is the square inside that frame.
             val desiredArtwork = maxOf(w * .187 - frame * 2.0, 48.0)
@@ -101,21 +112,29 @@ data class ShellMetrics(
             val cardSize = if (hasCard) artwork.asDp() else 0.dp
             val actualFrame = if (hasCard) frame.asDp() else 0.dp
             val actualLift = if (hasCard) lift.asDp() else 0.dp
-            val allocated = if (hasCard) (artwork + frame * 2.0 + lift).asDp() else 0.dp
+            val allocated = if (hasCard) (artwork + frame * 2.0 + lift * 2.0).asDp() else 0.dp
             val cardTop = provisionalCardTop.coerceIn(status, contentEnd).asDp()
             // The square allocation includes lift slack; subtract it from the inter-slot gap.
-            val gapReference = (w * .019 - lift).coerceAtLeast(0.0).asDp()
+            val gapReference = (w * .019 - lift * 2.0).coerceAtLeast(0.0).asDp()
+            val dockCenterMinimum = contentEnd + minOf(24.0, dock / 2.0)
+            val dockCenterMaximum = maxOf(dockCenterMinimum, h - footer - minOf(24.0, dock / 2.0))
             return ShellMetrics(
                 windowWidth = width,
                 windowHeight = height,
                 density = safeDensity,
                 fontScale = safeFontScale,
                 compact = compact,
+                referenceScale = scale.toFloat(),
                 gutter = gutter,
                 statusBounds = ShellBounds(0.dp, 0.dp, width, statusHeight),
                 contentBounds = ShellBounds(gutter, contentTop, width - gutter, contentBottom),
                 dockBounds = ShellBounds(0.dp, contentBottom, width, contentBottom + dockHeight),
                 footerBounds = ShellBounds(0.dp, contentBottom + dockHeight, width, height),
+                // Reference visual anchors are independent of enlarged, non-overlapping hit bands.
+                dockCenterY = (if (compact) contentEnd + dock / 2.0 else h * .852)
+                    .coerceIn(dockCenterMinimum, dockCenterMaximum).asDp(),
+                footerDividerY = (if (compact) h - footer else maxOf(h - footer, h * .928)).asDp(),
+                homeMetadataTop = metadataTop.asDp(),
                 homeCardArtworkSize = cardSize,
                 homeCardGap = if (hasCard) gapReference.coerceAtLeast(0.dp) else 0.dp,
                 focusFrameReservation = actualFrame,

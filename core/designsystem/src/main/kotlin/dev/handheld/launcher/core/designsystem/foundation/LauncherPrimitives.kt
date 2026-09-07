@@ -16,10 +16,16 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -115,7 +121,7 @@ fun LauncherSurface(
 }
 
 /**
- * The allocation includes frame padding plus lift slack on both axes. Square allocations
+ * The allocation includes frame padding plus lift/depth slack on both sides. Square allocations
  * therefore retain square content. Focus changes drawing/placement only, never measurement.
  * The frame appears immediately; only decorative lift is suppressed for reduced motion.
  * This wrapper does not create a focus target or install an activation handler.
@@ -146,6 +152,10 @@ fun FocusFrame(
         else -> colors.textPrimary
     }
     val lift = if (focused && !LauncherTheme.motion.reducedMotion) focusLift else 0.dp
+    val lowerEdge = if (focused) minOf(focusFrameWidth, focusLift + lift) else focusLift
+    val edgeColor = if (focused) colors.focusLowerEdge else colors.surfaceArtwork
+    val highlight = Color.White.copy(alpha = if (focused) .24f else .08f)
+    val elevation = LauncherTheme.depth.cardElevation
     Box(
         modifier = modifier.clipToBounds().semantics(mergeDescendants = true) {
             this.selected = selected
@@ -157,10 +167,26 @@ fun FocusFrame(
     ) {
         Box(
             modifier = Modifier
-                .padding(start = focusLift / 2f, end = focusLift / 2f, top = focusLift)
+                .padding(focusLift)
                 .offset(y = -lift)
+                .shadow(elevation, shape, clip = false)
+                .drawWithCache {
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    onDrawBehind {
+                        translate(top = lowerEdge.toPx()) { drawOutline(outline, edgeColor) }
+                    }
+                }
                 .background(background, shape)
                 .then(if (focused) Modifier.border(focusFrameWidth, colors.focus, shape) else Modifier)
+                .drawWithCache {
+                    val outline = shape.createOutline(size, layoutDirection, this)
+                    onDrawWithContent {
+                        drawContent()
+                        clipRect(bottom = 1.dp.toPx()) {
+                            drawOutline(outline, highlight, style = Stroke(2.dp.toPx()))
+                        }
+                    }
+                }
                 .padding(focusFrameWidth),
             contentAlignment = Alignment.Center,
         ) {

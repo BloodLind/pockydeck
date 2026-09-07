@@ -1,6 +1,6 @@
 # F07 — Android discovery and launch adapters
 
-- Status: **planned**.
+- Status: **accepted**. All children and the [integration gate](../evidence/F07/F07-final-gate.md) passed.
 - User stories: [US-020](../user-stories/US-020-real-android-component-discovery.md), [US-021](../user-stories/US-021-cache-first-android-reconciliation.md), [US-022](../user-stories/US-022-safe-android-component-dispatch.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: the launcher discovers real installed launchable apps, keeps a usable cached catalog, and can safely dispatch an Android component.

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcherTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-09-07T22:29:04" hostname="BLOODLIND" time="0.082">
+  <properties/>
+  <testcase name="missing or disabled exact component returns target unavailable without starting" classname="dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcherTest" time="0.076"/>
+  <testcase name="security rejection during validation or start is explicit and recoverable" classname="dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcherTest" time="0.001"/>
+  <testcase name="self and non Android targets are rejected before platform access" classname="dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcherTest" time="0.002"/>
+  <testcase name="race to missing target and unexpected start failure remain recoverable" classname="dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcherTest" time="0.001"/>
+  <testcase name="valid exact component is revalidated before successful dispatch" classname="dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcherTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

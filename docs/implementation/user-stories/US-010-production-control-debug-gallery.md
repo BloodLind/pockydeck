@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F03 — Reusable controls and debug gallery](../features/F03-controls-gallery.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 
@@ -23,19 +23,19 @@ Build a debug-only gallery from production controls and deterministic local asse
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a debug build, **when** its gallery entry is opened, **then** it shows the documented production control inventory without network dependencies or production fixture leakage.
-- [ ] **AC-02** — **Given** examples with an active destination or selected chip, **when** a different control receives focus, **then** active/selected state and controller focus remain distinguishable.
-- [ ] **AC-03** — **Given** fixture Home reorder, long labels/counts, varied icon shapes, failed artwork, or IME constraints, **when** examples render, **then** they retain stable card dimensions for review.
-- [ ] **AC-04** — **Given** visual evidence is recorded, **when** clipping or readability issues or physical calibration gaps exist, **then** they are documented without claiming untested device fidelity.
+- [x] **AC-01** — **Given** a debug build, **when** its gallery entry is opened, **then** it shows the documented production control inventory without network dependencies or production fixture leakage.
+- [x] **AC-02** — **Given** examples with an active destination or selected chip, **when** a different control receives focus, **then** active/selected state and controller focus remain distinguishable.
+- [x] **AC-03** — **Given** fixture Home reorder, long labels/counts, varied icon shapes, failed artwork, or IME constraints, **when** examples render, **then** they retain stable card dimensions for review.
+- [x] **AC-04** — **Given** visual evidence is recorded, **when** clipping or readability issues or physical calibration gaps exist, **then** they are documented without claiming untested device fidelity.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned debug-only launch and dependency inspection | Not run |
-| AC-02 | Planned focus/selection screenshot set | Not run |
-| AC-03 | Planned deterministic gallery captures | Not run |
-| AC-04 | Planned evidence log with pending physical checks | Not run |
+| AC-01 | [Native gallery, source and release-manifest inspection](../evidence/F03/US-010-gallery.md) | Passed |
+| AC-02 | [Inspected actual focused/selected controls](../evidence/F03/US-010-controls.png) | Passed |
+| AC-03 | [Native variants, reorder and IME captures](../evidence/F03/US-010-gallery.md) | Passed |
+| AC-04 | [Limits and later device checks recorded](../evidence/F03/US-010-gallery.md) | Passed |
 
 ## Delivery notes
 

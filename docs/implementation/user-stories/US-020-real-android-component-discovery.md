@@ -1,7 +1,7 @@
 # US-020 — Discover real launchable Android components
 
 - Parent: [F07 — Android discovery and launch adapters](../features/F07-android-catalog.md)
-- Status: **Planned**
+- Status: **Accepted**
 - Type: **Enabler**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
@@ -21,17 +21,17 @@ Document and implement Android 13 enumeration for real current-user `MAIN`/`LAUN
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a package with two launchable activities, **when** inventory is produced, **then** it contains two distinct stable component entries rather than one package-level entry.
-- [ ] **AC-02** — **Given** launchable system and emulator activities in the current user, **when** enumeration runs, **then** their real launchable components are included in the result.
-- [ ] **AC-03** — **Given** this launcher and an app-details-only synthesized entry, **when** inventory is produced, **then** neither is presented as a launchable catalog item.
-- [ ] **AC-04** — **Given** the selected Android 13 enumeration approach, **when** its record and manifest delta are reviewed, **then** they identify only required package queries and do not request broad installed-package, ROM, network, overlay, accessibility, or usage access.
+- [x] **AC-01** — **Given** a package with two launchable activities, **when** inventory is produced, **then** it contains two distinct stable component entries rather than one package-level entry.
+- [x] **AC-02** — **Given** launchable system and emulator activities in the current user, **when** enumeration runs, **then** their real launchable components are included in the result.
+- [x] **AC-03** — **Given** this launcher and an app-details-only synthesized entry, **when** inventory is produced, **then** neither is presented as a launchable catalog item.
+- [x] **AC-04** — **Given** the selected Android 13 enumeration approach, **when** its record and manifest delta are reviewed, **then** they identify only required package queries and do not request broad installed-package, ROM, network, overlay, accessibility, or usage access.
 
 ## Verification
 
-- **AC-01:** Not run — automated adapter test with two components sharing one package.
-- **AC-02:** Not run — Android 13 emulator/device inventory capture showing system and emulator targets.
-- **AC-03:** Not run — automated fixture test for self exclusion and rejected synthesized entries.
-- **AC-04:** Not run — manual coordinator review of the documented approach and proposed visibility delta.
+- **AC-01:** Passed — 7 JVM tests and 3 actual Android PackageManager tests; see [evidence](../evidence/F07/US-020.md).
+- **AC-02:** Passed — production query running inside this app on the Android 13 Flip 2 returned 26 components, including Dolphin, RetroArch, PPSSPP and system Settings; see [physical capture](../evidence/F07/US-020-flip2-discovery.png).
+- **AC-03:** Passed — actual Android fixture rejects app-details-only and self entries; physical capture confirms self excluded.
+- **AC-04:** Passed — separate Sol/high source review and coordinator review of exact MAIN/LAUNCHER query, with no new permission.
 
 ## Delivery notes
 

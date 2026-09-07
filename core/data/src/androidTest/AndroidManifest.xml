@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+    <application>
+        <activity android:name="dev.handheld.launcher.core.data.discovery.fixture.LaunchCallerFixtureActivity"
+            android:exported="false" android:taskAffinity="dev.handheld.launcher.fixture.caller" />
+        <activity android:name="dev.handheld.launcher.core.data.discovery.fixture.FirstLauncherActivity"
+            android:exported="true" android:label="F07 Fixture One">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name="dev.handheld.launcher.core.data.discovery.fixture.SecondLauncherActivity"
+            android:exported="true" android:label="F07 Fixture Two">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name="dev.handheld.launcher.core.data.discovery.fixture.AppDetailsOnlyActivity"
+            android:exported="true" android:label="F07 Details Only">
+            <intent-filter>
+                <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

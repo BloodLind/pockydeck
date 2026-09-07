@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F03 — Reusable controls and debug gallery](../features/F03-controls-gallery.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 
@@ -23,19 +23,19 @@ Implement badges and status presentation, `CoverTile`, `AppIconTile`, `SearchRes
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** pending, absent, or failed artwork, **when** its card renders, **then** only the image content is replaced inside unchanged card bounds and the accessible item name remains available.
-- [ ] **AC-02** — **Given** Home, collection, and app variants, **when** they receive focus or activation, **then** each uses the same semantics while differing icon shapes fit and cover artwork remains unstretched.
-- [ ] **AC-03** — **Given** a long caption or a status value, **when** it renders, **then** bounded lines or ellipsis preserve tile height and available, unavailable, and unsupported status states remain distinct.
-- [ ] **AC-04** — **Given** a card control is used, **when** it receives presentation data and callbacks, **then** it does not decide catalog type, emulator, navigation, or image data source.
+- [x] **AC-01** — **Given** pending, absent, or failed artwork, **when** its card renders, **then** only the image content is replaced inside unchanged card bounds and the accessible item name remains available.
+- [x] **AC-02** — **Given** Home, collection, and app variants, **when** they receive focus or activation, **then** each uses the same semantics while differing icon shapes fit and cover artwork remains unstretched.
+- [x] **AC-03** — **Given** a long caption or a status value, **when** it renders, **then** bounded lines or ellipsis preserve tile height and available, unavailable, and unsupported status states remain distinct.
+- [x] **AC-04** — **Given** a card control is used, **when** it receives presentation data and callbacks, **then** it does not decide catalog type, emulator, navigation, or image data source.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned artwork-state screenshot/previews and semantics inspection | Not run |
-| AC-02 | Planned variant interaction test and visual comparison | Not run |
-| AC-03 | Planned long-caption and status-state preview | Not run |
-| AC-04 | Planned API review and isolated control compile test | Not run |
+| AC-01 | [Native tests and inspected render](../evidence/F03/US-008-cards-labels.md) | Passed |
+| AC-02 | [Native tests and inspected render](../evidence/F03/US-008-cards-labels.md) | Passed |
+| AC-03 | [Native tests and inspected render](../evidence/F03/US-008-cards-labels.md) | Passed |
+| AC-04 | [Native tests and inspected render](../evidence/F03/US-008-cards-labels.md) | Passed |
 
 ## Delivery notes
 

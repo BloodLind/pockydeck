@@ -99,12 +99,12 @@ private fun TextStyle.role(size: Int, weight: FontWeight, lineHeight: Int = size
     fontWeight = weight,
 )
 
-// Provisional native defaults: the source is approximately a 1280-unit design width;
-// at 240 dpi Android reports 1280 dp for the 1920 px target. US-005/device calibration
-// must confirm these values before they become accepted device defaults.
+// The source uses approximately 1280 reference units. ShellMetrics converts these to
+// native dp/sp for the current window; the 360dpi Flip 2 uses a 2/3 reference scale.
+// System font scale remains independent and is applied by Android's normal sp layout.
 private val DefaultTypography = TextStyle(fontFamily = PlusJakartaSans).let { base ->
     LauncherTypography(
-        homeTitle = base.role(34, FontWeight.ExtraBold, 40),
+        homeTitle = base.role(34, FontWeight.ExtraBold, 40).copy(letterSpacing = (-.85).sp),
         pageTitle = base.role(24, FontWeight.Bold, 30),
         tileTitleLarge = base.role(18, FontWeight.ExtraBold, 24),
         clock = base.role(14, FontWeight.ExtraBold, 18),
@@ -112,12 +112,29 @@ private val DefaultTypography = TextStyle(fontFamily = PlusJakartaSans).let { ba
         actionLabel = base.role(12, FontWeight.Medium, 16),
         controlLabel = base.role(12, FontWeight.Bold, 16),
         statusValue = base.role(11, FontWeight.Bold, 14),
-        platformLabel = base.role(11, FontWeight.ExtraBold, 14),
+        platformLabel = base.role(11, FontWeight.ExtraBold, 16).copy(letterSpacing = .55.sp),
         badgeLabel = base.role(10, FontWeight.ExtraBold, 13),
         tileTitle = base.role(14, FontWeight.Bold, 18),
         tileSubtitle = base.role(12, FontWeight.Medium, 16),
         body = base.role(16, FontWeight.Normal, 22),
         settingLabel = base.role(14, FontWeight.Medium, 20),
+    )
+}
+
+private fun LauncherTypography.scaled(scale: Float): LauncherTypography {
+    fun TextStyle.scaled() = copy(
+        fontSize = fontSize * scale,
+        lineHeight = lineHeight * scale,
+        letterSpacing = if (letterSpacing == androidx.compose.ui.unit.TextUnit.Unspecified) letterSpacing else letterSpacing * scale,
+    )
+    return copy(
+        homeTitle = homeTitle.scaled(), pageTitle = pageTitle.scaled(),
+        tileTitleLarge = tileTitleLarge.scaled(), clock = clock.scaled(),
+        actionPrimary = actionPrimary.scaled(), actionLabel = actionLabel.scaled(),
+        controlLabel = controlLabel.scaled(), statusValue = statusValue.scaled(),
+        platformLabel = platformLabel.scaled(), badgeLabel = badgeLabel.scaled(),
+        tileTitle = tileTitle.scaled(), tileSubtitle = tileSubtitle.scaled(),
+        body = body.scaled(), settingLabel = settingLabel.scaled(),
     )
 }
 
@@ -162,21 +179,37 @@ val LocalLauncherSpacing = staticCompositionLocalOf { LauncherSpacing() }
 val LocalLauncherShapes = staticCompositionLocalOf { LauncherShapes() }
 val LocalLauncherDepth = staticCompositionLocalOf { LauncherDepth() }
 val LocalLauncherMotion = staticCompositionLocalOf { LauncherMotion() }
+val LocalLauncherReferenceScale = staticCompositionLocalOf { 1f }
 
 /** Shared visual language. Font sizes use sp and therefore follow the system font scale. */
 object LauncherTheme {
     @Composable
     operator fun invoke(
         reducedMotion: Boolean = false,
+        referenceScale: Float = 1f,
         content: @Composable () -> Unit,
     ) {
+        val scale = referenceScale.takeIf { it.isFinite() && it > 0f }?.coerceIn(.5f, 1.5f) ?: 1f
+        val spacing = LauncherSpacing()
+        val shapes = LauncherShapes()
+        val depth = LauncherDepth()
         androidx.compose.runtime.CompositionLocalProvider(
             LocalLauncherColors provides LauncherColors(),
-            LocalLauncherTypography provides DefaultTypography,
-            LocalLauncherSpacing provides LauncherSpacing(),
-            LocalLauncherShapes provides LauncherShapes(),
-            LocalLauncherDepth provides LauncherDepth(),
+            LocalLauncherTypography provides DefaultTypography.scaled(scale),
+            LocalLauncherSpacing provides spacing.copy(
+                xxs = spacing.xxs * scale, xs = spacing.xs * scale, sm = spacing.sm * scale,
+                md = spacing.md * scale, lg = spacing.lg * scale, xl = spacing.xl * scale, xxl = spacing.xxl * scale,
+            ),
+            LocalLauncherShapes provides shapes.copy(
+                homeOuter = shapes.homeOuter * scale, homeInner = shapes.homeInner * scale,
+                smallControl = shapes.smallControl * scale,
+            ),
+            LocalLauncherDepth provides depth.copy(
+                cardElevation = depth.cardElevation * scale, focusedElevation = depth.focusedElevation * scale,
+                dockElevation = depth.dockElevation * scale, focusLift = depth.focusLift * scale,
+            ),
             LocalLauncherMotion provides LauncherMotion(reducedMotion = reducedMotion),
+            LocalLauncherReferenceScale provides scale,
             content = content,
         )
     }
@@ -187,4 +220,5 @@ object LauncherTheme {
     val shapes: LauncherShapes @Composable get() = LocalLauncherShapes.current
     val depth: LauncherDepth @Composable get() = LocalLauncherDepth.current
     val motion: LauncherMotion @Composable get() = LocalLauncherMotion.current
+    val referenceScale: Float @Composable get() = LocalLauncherReferenceScale.current
 }

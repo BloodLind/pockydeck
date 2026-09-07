@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F03 — Reusable controls and debug gallery](../features/F03-controls-gallery.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 
@@ -23,19 +23,19 @@ Implement `PageHeading`, `FilterStrip`, `CollectionGrid`, `EmptyState`, and `Inl
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** an empty or recoverable error collection, **when** it is presented, **then** it explains the state, offers one useful focusable recovery action, and preserves any still-available content.
-- [ ] **AC-02** — **Given** a setting or layout control receives state and callbacks, **when** it renders, **then** it uses the shared typography and focus treatment without owning page state.
-- [ ] **AC-03** — **Given** a fixture dialog is opened, **when** control focus moves, **then** focus remains contained until dismissal and presentation lifecycle can be reported without app/domain types.
-- [ ] **AC-04** — **Given** a layout, settings row, or modal control, **when** it is invoked, **then** it does not navigate, dispatch Android actions, or define its own input owner.
+- [x] **AC-01** — **Given** an empty or recoverable error collection, **when** it is presented, **then** it explains the state, offers one useful focusable recovery action, and preserves any still-available content.
+- [x] **AC-02** — **Given** a setting or layout control receives state and callbacks, **when** it renders, **then** it uses the shared typography and focus treatment without owning page state.
+- [x] **AC-03** — **Given** a fixture dialog is opened, **when** control focus moves, **then** focus remains contained until dismissal and presentation lifecycle can be reported without app/domain types.
+- [x] **AC-04** — **Given** a layout, settings row, or modal control, **when** it is invoked, **then** it does not navigate, dispatch Android actions, or define its own input owner.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned empty/error composition preview and focused recovery test | Not run |
-| AC-02 | Planned settings/layout state preview | Not run |
-| AC-03 | Planned local-fake dialog containment test | Not run |
-| AC-04 | Planned API boundary review | Not run |
+| AC-01 | [Native recovery/keyed-layout tests](../evidence/F03/US-009-layouts.md) | Passed |
+| AC-02 | [Native settings render and actual input tests](../evidence/F03/US-009-layouts.md) | Passed |
+| AC-03 | [Six-direction containment, gesture and lifecycle tests](../evidence/F03/US-009-layouts.md) | Passed |
+| AC-04 | Separate Terra review and coordinator integration | Passed |
 
 ## Delivery notes
 

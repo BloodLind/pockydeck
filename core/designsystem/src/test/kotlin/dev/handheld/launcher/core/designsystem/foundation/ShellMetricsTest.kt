@@ -74,6 +74,25 @@ class ShellMetricsTest {
     }
 
     @Test
+    fun physicalFlip2DensityKeepsReferenceModeAndVisualAnchors() {
+        val physical = ShellMetrics.calculate(ShellMetricsInput(1920, 1080, 2.25f))
+        val emulator = ShellMetrics.calculate(ShellMetricsInput(1920, 1080, 1.5f))
+        assertTrue(!physical.compact)
+        assertEquals(2f / 3f, physical.referenceScale, .001f)
+        assertEquals(.149f, physical.homeMetadataTop / physical.windowHeight, .002f)
+        assertEquals(.356f, physical.homeCardAllocatedBounds.top / physical.windowHeight, .002f)
+        assertEquals(.852f, physical.dockCenterY / physical.windowHeight, .003f)
+        assertEquals(.928f, physical.footerDividerY / physical.windowHeight, .002f)
+        assertTrue(physical.controlsCanReachMinimumTouchTarget)
+        assertTrue(physical.dockCenterY + 24.dp <= physical.footerBounds.top)
+        assertEquals(
+            (emulator.homeCardArtworkSize + emulator.focusFrameReservation * 2f).value * emulator.density,
+            (physical.homeCardArtworkSize + physical.focusFrameReservation * 2f).value * physical.density,
+            .1f,
+        )
+    }
+
+    @Test
     fun compactLargeTextKeepsArtworkSquareAndFocusInsideContent() {
         val metrics = ShellMetrics.calculate(ShellMetricsInput(800, 480, 1f, 1.3f))
         assertTrue(metrics.hasUsableHomeCard)

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F03 — Reusable controls and debug gallery](../features/F03-controls-gallery.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 
@@ -23,19 +23,19 @@ Implement `LauncherButton`, `LauncherIconButton`, `FilterChip`, `SortSelector`, 
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a control receives one physical or touch activation, **when** the event is handled, **then** it invokes one activation callback and moving focus alone invokes none.
-- [ ] **AC-02** — **Given** one selected filter chip and another focused chip, **when** they render together, **then** selection remains visible and focus receives its separate amber treatment.
-- [ ] **AC-03** — **Given** an unavailable control with a supplied reason or recovery state, **when** it is presented or activated, **then** that state is exposed and disabled activation produces no action.
-- [ ] **AC-04** — **Given** `SearchField` enters editing, **when** text is changed, **then** native IME editing is used without navigation, repository, or ViewModel lookup inside the control.
+- [x] **AC-01** — **Given** a control receives one physical or touch activation, **when** the event is handled, **then** it invokes one activation callback and moving focus alone invokes none.
+- [x] **AC-02** — **Given** one selected filter chip and another focused chip, **when** they render together, **then** selection remains visible and focus receives its separate amber treatment.
+- [x] **AC-03** — **Given** an unavailable control with a supplied reason or recovery state, **when** it is presented or activated, **then** that state is exposed and disabled activation produces no action.
+- [x] **AC-04** — **Given** `SearchField` enters editing, **when** text is changed, **then** native IME editing is used without navigation, repository, or ViewModel lookup inside the control.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned Compose interaction test | Not run |
-| AC-02 | Planned selected/focused visual example | Not run |
-| AC-03 | Planned unavailable-state semantics and activation test | Not run |
-| AC-04 | Planned IME-compatible local control test | Not run |
+| AC-01 | Touch, Enter, D-pad center and actual focus-movement instrumentation | Passed |
+| AC-02 | Native selected Games / focused Apps fixture plus shared frame pixel checks | Passed |
+| AC-03 | Disabled click and reason semantics instrumentation | Passed |
+| AC-04 | Public focus requester, native editing and one IME Search callback | Passed |
 
 ## Delivery notes
 

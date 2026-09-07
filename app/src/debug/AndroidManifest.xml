@@ -2,6 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <activity
+            android:name=".debug.ControlGalleryActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:windowSoftInputMode="adjustResize" />
+        <activity android:name=".debug.DiscoveryPreviewActivity" android:exported="true" />
+        <activity
             android:name=".debug.ThemePreviewActivity"
             android:exported="true" />
         <activity

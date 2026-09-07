@@ -2,6 +2,10 @@ package dev.handheld.launcher.di
 
 import android.content.Context
 import dev.handheld.launcher.contract.ActivityRequestPort
+import dev.handheld.launcher.core.data.android.apps.AndroidComponentLaunchDispatcher
+import dev.handheld.launcher.core.data.android.apps.BroadcastAndroidPackageChangeMonitor
+import dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshCoordinator
+import dev.handheld.launcher.core.data.discovery.PackageManagerAndroidAppDiscovery
 import dev.handheld.launcher.core.data.local.LauncherDatabase
 import dev.handheld.launcher.core.data.local.LauncherPreferencesStore
 import dev.handheld.launcher.core.data.repository.DataStoreControllerPreferenceRepository
@@ -14,8 +18,12 @@ import dev.handheld.launcher.core.domain.repository.CatalogRepository
 import dev.handheld.launcher.core.domain.repository.ControllerPreferenceRepository
 import dev.handheld.launcher.core.domain.repository.FavoriteRepository
 import dev.handheld.launcher.core.domain.repository.ItemOverrideRepository
+import dev.handheld.launcher.core.domain.repository.LaunchDispatcher
 import dev.handheld.launcher.core.domain.repository.NavigationSnapshotRepository
 import dev.handheld.launcher.core.domain.repository.SuccessfulOpenRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class AppContainer(
     context: Context,
@@ -26,6 +34,7 @@ class AppContainer(
     // One application-owned storage instance per file; discovery is not a startup prerequisite.
     private val database by lazy { LauncherDatabase.open(applicationContext) }
     private val preferences by lazy { LauncherPreferencesStore.open(applicationContext) }
+    private val applicationScope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
 
     val catalogRepository: CatalogRepository by lazy { RoomCatalogRepository(database) }
     val favoriteRepository: FavoriteRepository by lazy { RoomFavoriteRepository(database) }
@@ -38,6 +47,17 @@ class AppContainer(
     }
     val navigationSnapshotRepository: NavigationSnapshotRepository by lazy {
         DataStoreNavigationSnapshotRepository(preferences)
+    }
+    val androidCatalog by lazy {
+        AndroidCatalogRefreshCoordinator(
+            catalogRepository,
+            PackageManagerAndroidAppDiscovery(applicationContext),
+            BroadcastAndroidPackageChangeMonitor(applicationContext),
+            applicationScope,
+        )
+    }
+    val launchDispatcher: LaunchDispatcher by lazy {
+        AndroidComponentLaunchDispatcher(applicationContext)
     }
 
     fun mainViewModelFactory(): MainViewModelFactory =

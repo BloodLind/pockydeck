@@ -1,6 +1,6 @@
 # F03 — Reusable controls and debug gallery
 
-- Status: **planned**.
+- Status: **accepted**. All four children and the [combined feature gate](../evidence/F03/F03-F07-final-gate.md) passed.
 - User stories: [US-007](../user-stories/US-007-reusable-input-controls.md), [US-008](../user-stories/US-008-stable-card-and-label-controls.md), [US-009](../user-stories/US-009-reusable-content-and-modal-layouts.md), [US-010](../user-stories/US-010-production-control-debug-gallery.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-luna`, reasoning `medium`.
 - Outcome: every destination can compose the same accessible buttons, cards, settings rows, and dialogs; developers can inspect their states before live data is connected.

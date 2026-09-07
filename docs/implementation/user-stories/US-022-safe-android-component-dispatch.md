@@ -1,7 +1,7 @@
 # US-022 — Dispatch revalidated Android targets into external tasks
 
 - Parent: [F07 — Android discovery and launch adapters](../features/F07-android-catalog.md)
-- Status: **Planned**
+- Status: **Accepted**
 - Type: **Enabler**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
@@ -21,17 +21,17 @@ Revalidate the exact component immediately before dispatch and use normal Androi
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a previously listed component is missing, disabled, or rejected for security, **when** dispatch is requested, **then** the adapter returns an explicit recoverable failure and does not report a successful open.
-- [ ] **AC-02** — **Given** an enabled matching component, **when** dispatch is requested, **then** it is revalidated and launched using normal Android launcher task semantics.
-- [ ] **AC-03** — **Given** a valid target has been dispatched, **when** the user returns to the launcher, **then** the target is not finished by launcher task reuse and its external task is observed separately.
-- [ ] **AC-04** — **Given** either adapter outcome, **when** it is delivered to a consumer, **then** it contains only dispatch success or recoverable failure and does not write a second recency event or claim a running process, suspension, or resume guarantee.
+- [x] **AC-01** — **Given** a previously listed component is missing, disabled, or rejected for security, **when** dispatch is requested, **then** the adapter returns an explicit recoverable failure and does not report a successful open.
+- [x] **AC-02** — **Given** an enabled matching component, **when** dispatch is requested, **then** it is revalidated and launched using normal Android launcher task semantics.
+- [x] **AC-03** — **Given** a valid target has been dispatched, **when** the user returns to the launcher, **then** the target is not finished by launcher task reuse and its external task is observed separately.
+- [x] **AC-04** — **Given** either adapter outcome, **when** it is delivered to a consumer, **then** it contains only dispatch success or recoverable failure and does not write a second recency event or claim a running process, suspension, or resume guarantee.
 
 ## Verification
 
-- **AC-01:** Not run — automated missing, disabled, and security-rejection adapter tests.
-- **AC-02:** Not run — Android emulator/device manual dispatch check with the selected component.
-- **AC-03:** Not run — Android emulator/device task-placement and return procedure.
-- **AC-04:** Not run — automated test verifying no history mutation plus review of result contract.
+- **AC-01:** Passed — 5 JVM adapter tests and 3 API-33 tests; typed failures, disabled/restored component, and race outcomes.
+- **AC-02:** Passed — exact Settings component revalidation and MAIN/LAUNCHER task flags on API 33.
+- **AC-03:** Passed — distinct caller task 78 and Settings task 74, with Settings retained after caller returned.
+- **AC-04:** Passed — unchanged seeded Room recency and separate Sol/high contract review. See [evidence](../evidence/F07/US-022.md).
 
 ## Delivery notes
 

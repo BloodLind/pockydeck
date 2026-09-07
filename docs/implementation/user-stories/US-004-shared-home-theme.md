@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F02 — Theme, metrics, and visual primitives](../features/F02-visual-foundations.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 
@@ -23,19 +23,19 @@ Inspect the actual Home app-content crop and record reference and density assump
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** the Home reference is documented, **when** it is used for comparison, **then** editor surroundings are excluded and Home is identified as the sole shell-geometry authority.
-- [ ] **AC-02** — **Given** a visual consumer, **when** it requests color, type, or spacing, **then** it can use semantic theme roles without repeating visual literals and essential text remains readable after compositing.
-- [ ] **AC-03** — **Given** the application is offline, **when** a themed screen renders, **then** bundled Plus Jakarta Sans and its required notice are available.
-- [ ] **AC-04** — **Given** system font scaling or reduced-motion intent, **when** the theme is rendered, **then** it respects that setting without fixed bitmap scaling.
+- [x] **AC-01** — **Given** the Home reference is documented, **when** it is used for comparison, **then** editor surroundings are excluded and Home is identified as the sole shell-geometry authority.
+- [x] **AC-02** — **Given** a visual consumer, **when** it requests color, type, or spacing, **then** it can use semantic theme roles without repeating visual literals and essential text remains readable after compositing.
+- [x] **AC-03** — **Given** the application is offline, **when** a themed screen renders, **then** bundled Plus Jakarta Sans and its required notice are available.
+- [x] **AC-04** — **Given** system font scaling or reduced-motion intent, **when** the theme is rendered, **then** it respects that setting without fixed bitmap scaling.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned reference-crop record and manual comparison | Not run |
-| AC-02 | Planned theme consumer preview and contrast review | Not run |
-| AC-03 | Planned offline render and notice review | Not run |
-| AC-04 | Planned font-scale and reduced-motion preview | Not run |
+| AC-01 | Actual Home image/crop inspected; reference and provisional density recorded | Passed |
+| AC-02 | Native debug consumer screenshots, pixel samples and essential text contrast | Passed |
+| AC-03 | Offline cold render; five TTF files and OFL verified in APK | Passed |
+| AC-04 | Actual 1.0/1.3 font scale and animator-enabled/disabled renders | Passed |
 
 ## Delivery notes
 
@@ -45,3 +45,5 @@ The F02 one-time creation lease covers theme files, font resources/notices, and 
 
 - Shell composition, live data, and final device-calibrated dp/sp values.
 - Direct copying of CSS units into Android dimensions.
+
+Accepted 7 September 2026 after independent Terra review and [build/render evidence](../evidence/F02/US-004-theme.md). US-005 is ready; physical density calibration remains pending.

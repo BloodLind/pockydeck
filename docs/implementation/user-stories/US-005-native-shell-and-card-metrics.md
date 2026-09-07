@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F02 — Theme, metrics, and visual primitives](../features/F02-visual-foundations.md) |
-| Status | Planned |
+| Status | Ready |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 

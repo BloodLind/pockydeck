@@ -1,6 +1,6 @@
 # F06 — Catalog and preferences persistence
 
-- Status: **planned**.
+- Status: **in progress**; US-017 accepted; US-018 ready. Recency/preferences and the parent gate remain open.
 - User stories: [US-017](../user-stories/US-017-durable-catalog-and-inventory-cache.md), [US-018](../user-stories/US-018-durable-successful-open-order.md), [US-019](../user-stories/US-019-durable-preferences-and-navigation-snapshots.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: catalog, favorites, most-recent opens, preferences, and navigation state survive restarts without losing user data during refreshes.

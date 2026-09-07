@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F06 — Catalog and preferences persistence](../features/F06-persistence.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-sol` / `high` |
 
@@ -23,19 +23,19 @@ Implement Room catalog and favorite-reference storage that separates discovered 
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** cached catalog rows and a discovery operation that has not finished, **when** a consumer observes the catalog, **then** cached rows are available and multiple components from one package retain distinct stable IDs.
-- [ ] **AC-02** — **Given** a completed, failed, cancelled, or partial inventory result, **when** reconciliation occurs, **then** only the completed result updates availability and all other outcomes preserve the existing catalog.
-- [ ] **AC-03** — **Given** rediscovery, update, or temporary unavailability, **when** active lists are queried, **then** unavailable items are hidden while favorite, override, and history references remain retained.
-- [ ] **AC-04** — **Given** the initial persistent schema, **when** its export and migration setup are reviewed, **then** approved semantics are preserved without destructive fallback or speculative ROM/provider tables.
+- [x] **AC-01** — **Given** cached catalog rows and a discovery operation that has not finished, **when** a consumer observes the catalog, **then** cached rows are available and multiple components from one package retain distinct stable IDs.
+- [x] **AC-02** — **Given** a completed, failed, cancelled, or partial inventory result, **when** reconciliation occurs, **then** only the completed result updates availability and all other outcomes preserve the existing catalog.
+- [x] **AC-03** — **Given** rediscovery, update, or temporary unavailability, **when** active lists are queried, **then** unavailable items are hidden while favorite, override, and history references remain retained.
+- [x] **AC-04** — **Given** the initial persistent schema, **when** its export and migration setup are reviewed, **then** approved semantics are preserved without destructive fallback or speculative ROM/provider tables.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned actual Room query/instrumentation test | Not run |
-| AC-02 | Planned completed/failed/cancelled/partial inventory tests | Not run |
-| AC-03 | Planned reconciliation and reference-preservation test | Not run |
-| AC-04 | Planned exported-schema, transaction-note, and migration review | Not run |
+| AC-01 | Actual Room reopen and pending-discovery cache test; two components round-trip | Passed |
+| AC-02 | Room scoped atomic emission, incomplete outcomes, collision rollback and 1,005 removals | Passed |
+| AC-03 | Unavailability/rediscovery retains favorites, overrides and history references | Passed |
+| AC-04 | Exported seven-table v1 schema opens via MigrationTestHelper; explicit migrations/no destructive fallback | Passed |
 
 ## Delivery notes
 
@@ -44,3 +44,5 @@ F06’s one-time creation lease covers local Room/catalog repository/schema path
 ## Out of scope
 
 - Package scans, UI state, and silent schema expansion.
+
+Accepted 7 September 2026 after independent Sol review, [8 passing Android 13 Room tests](../evidence/F06/US-017.md), and the combined build/lint/JVM gate. US-018 is ready; successful-open recording and DataStore preferences remain later child stories.

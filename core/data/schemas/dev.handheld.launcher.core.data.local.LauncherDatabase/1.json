@@ -1,0 +1,296 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "65366a7ca917bc2c519397c34881148c",
+    "entities": [
+      {
+        "tableName": "catalog_items",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`item_id` TEXT NOT NULL, `kind_code` TEXT NOT NULL, `title` TEXT NOT NULL, `category_code` TEXT NOT NULL, `availability_code` TEXT NOT NULL, `unavailability_reason_code` TEXT, PRIMARY KEY(`item_id`))",
+        "fields": [
+          {
+            "fieldPath": "itemId",
+            "columnName": "item_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kindCode",
+            "columnName": "kind_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryCode",
+            "columnName": "category_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "availabilityCode",
+            "columnName": "availability_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unavailabilityReasonCode",
+            "columnName": "unavailability_reason_code",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "item_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_catalog_items_kind_code",
+            "unique": false,
+            "columnNames": [
+              "kind_code"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_items_kind_code` ON `${TABLE_NAME}` (`kind_code`)"
+          },
+          {
+            "name": "index_catalog_items_availability_code",
+            "unique": false,
+            "columnNames": [
+              "availability_code"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_catalog_items_availability_code` ON `${TABLE_NAME}` (`availability_code`)"
+          }
+        ]
+      },
+      {
+        "tableName": "catalog_provenance",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`item_id` TEXT NOT NULL, `provenance_code` TEXT NOT NULL, `source_id` TEXT, `android_package_name` TEXT, `android_activity_class_name` TEXT, `system_action_id` TEXT, PRIMARY KEY(`item_id`), FOREIGN KEY(`item_id`) REFERENCES `catalog_items`(`item_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "itemId",
+            "columnName": "item_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provenanceCode",
+            "columnName": "provenance_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "source_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "androidPackageName",
+            "columnName": "android_package_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "androidActivityClassName",
+            "columnName": "android_activity_class_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "systemActionId",
+            "columnName": "system_action_id",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "item_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "catalog_items",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "item_id"
+            ],
+            "referencedColumns": [
+              "item_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "catalog_item_actions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`item_id` TEXT NOT NULL, `action_code` TEXT NOT NULL, PRIMARY KEY(`item_id`, `action_code`), FOREIGN KEY(`item_id`) REFERENCES `catalog_items`(`item_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "itemId",
+            "columnName": "item_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionCode",
+            "columnName": "action_code",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "item_id",
+            "action_code"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "catalog_items",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "item_id"
+            ],
+            "referencedColumns": [
+              "item_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "inventory_status",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`singleton_id` INTEGER NOT NULL, `state_code` TEXT NOT NULL, `scope_code` TEXT NOT NULL, `source_id` TEXT, `incomplete_reason_code` TEXT, PRIMARY KEY(`singleton_id`))",
+        "fields": [
+          {
+            "fieldPath": "singletonId",
+            "columnName": "singleton_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stateCode",
+            "columnName": "state_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scopeCode",
+            "columnName": "scope_code",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "source_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "incompleteReasonCode",
+            "columnName": "incomplete_reason_code",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "singleton_id"
+          ]
+        }
+      },
+      {
+        "tableName": "favorite_references",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`item_id` TEXT NOT NULL, PRIMARY KEY(`item_id`))",
+        "fields": [
+          {
+            "fieldPath": "itemId",
+            "columnName": "item_id",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "item_id"
+          ]
+        }
+      },
+      {
+        "tableName": "item_overrides",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`item_id` TEXT NOT NULL, `category_code` TEXT, `artwork_reference` TEXT, PRIMARY KEY(`item_id`))",
+        "fields": [
+          {
+            "fieldPath": "itemId",
+            "columnName": "item_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categoryCode",
+            "columnName": "category_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "artworkReference",
+            "columnName": "artwork_reference",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "item_id"
+          ]
+        }
+      },
+      {
+        "tableName": "successful_open_history",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`item_id` TEXT NOT NULL, `open_order` INTEGER NOT NULL, PRIMARY KEY(`item_id`))",
+        "fields": [
+          {
+            "fieldPath": "itemId",
+            "columnName": "item_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "openOrder",
+            "columnName": "open_order",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "item_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_successful_open_history_open_order",
+            "unique": true,
+            "columnNames": [
+              "open_order"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_successful_open_history_open_order` ON `${TABLE_NAME}` (`open_order`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '65366a7ca917bc2c519397c34881148c')"
+    ]
+  }
+}

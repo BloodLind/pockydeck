@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F06 — Catalog and preferences persistence](../features/F06-persistence.md) |
-| Status | Planned |
+| Status | Ready |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-sol` / `high` |
 

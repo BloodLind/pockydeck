@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F02 — Theme, metrics, and visual primitives](../features/F02-visual-foundations.md) |
-| Status | Ready |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 
@@ -23,19 +23,19 @@ Define root-computed `ShellMetrics` from bounds, density, and font scale, coveri
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** standard and compact window fixtures, **when** their metrics are calculated, **then** each receives coherent content bounds from one metrics source.
-- [ ] **AC-02** — **Given** a normal destination uses the shell, **when** its content density adapts, **then** it does not independently move shared shell anchors.
-- [ ] **AC-03** — **Given** a focused card or larger-font fixture, **when** it renders, **then** focus outline/lift remains inside reserved bounds and square artwork and usable controls remain available.
-- [ ] **AC-04** — **Given** reference proportions are recorded, **when** metrics are reviewed, **then** they are described as initial guidance and physical Flip 2 calibration is still identified as pending.
+- [x] **AC-01** — **Given** standard and compact window fixtures, **when** their metrics are calculated, **then** each receives coherent content bounds from one metrics source.
+- [x] **AC-02** — **Given** a normal destination uses the shell, **when** its content density adapts, **then** it does not independently move shared shell anchors.
+- [x] **AC-03** — **Given** a focused card or larger-font fixture, **when** it renders, **then** focus outline/lift remains inside reserved bounds and square artwork and usable controls remain available.
+- [x] **AC-04** — **Given** reference proportions are recorded, **when** metrics are reviewed, **then** they are described as initial guidance and physical Flip 2 calibration is still identified as pending.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned standard and compact metrics preview | Not run |
-| AC-02 | Planned multi-destination shell fixture comparison | Not run |
-| AC-03 | Planned focused-card and large-font preview | Not run |
-| AC-04 | Planned calibration-assumption record | Not run |
+| AC-01 | [Accepted evidence](../evidence/F02/US-005-metrics.md) | Passed |
+| AC-02 | [Accepted evidence](../evidence/F02/US-005-metrics.md) | Passed |
+| AC-03 | [Accepted evidence](../evidence/F02/US-005-metrics.md) | Passed |
+| AC-04 | [Accepted evidence](../evidence/F02/US-005-metrics.md) | Passed |
 
 ## Delivery notes
 
@@ -45,3 +45,5 @@ The F02 creation lease covers `ShellMetrics`, related theme metrics, and isolate
 
 - Screen-specific shell dimensions or whole-UI bitmap scaling.
 - Invented performance or device-fidelity claims.
+
+Coordinator acceptance: 8 September 2026; independent review passed. See linked evidence for actual commands, tests and limitations.

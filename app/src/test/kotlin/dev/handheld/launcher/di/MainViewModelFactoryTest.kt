@@ -6,10 +6,10 @@ import org.junit.Test
 class MainViewModelFactoryTest {
     @Test
     fun factoryInjectsTheApplicationScopedRequestPort() {
-        val container = AppContainer()
-        val viewModel = container.mainViewModelFactory().create(MainViewModel::class.java)
+        val port = InMemoryActivityRequestPort()
+        val viewModel = MainViewModelFactory(port).create(MainViewModel::class.java)
 
-        assertEquals(container.activityRequestPort.pending, viewModel.activityRequests)
+        assertEquals(port.pending, viewModel.activityRequests)
         assertEquals(true, viewModel.state.isReady)
     }
 }

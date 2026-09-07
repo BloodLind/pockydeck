@@ -1,6 +1,6 @@
 # F02 — Theme, metrics, and visual primitives
 
-- Status: **in progress**; US-004 accepted; US-005 ready. Parent metrics/primitives gate remains open.
+- Status: **accepted**, 8 September 2026; US-004/005/006 and the [combined feature gate](../evidence/F02/F02-F06-final-gate.md) passed. Physical calibration remains pending.
 - User stories: [US-004](../user-stories/US-004-shared-home-theme.md), [US-005](../user-stories/US-005-native-shell-and-card-metrics.md), [US-006](../user-stories/US-006-accessible-visual-primitives.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-luna`, reasoning `medium`.
 - Outcome: Home's visual language is expressed once as reusable native tokens and layout metrics.

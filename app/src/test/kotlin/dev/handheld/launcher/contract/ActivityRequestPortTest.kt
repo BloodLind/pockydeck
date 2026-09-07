@@ -1,6 +1,6 @@
 package dev.handheld.launcher.contract
 
-import dev.handheld.launcher.di.AppContainer
+import dev.handheld.launcher.di.InMemoryActivityRequestPort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -14,7 +14,7 @@ class ActivityRequestPortTest {
 
     @Test
     fun pendingRequestMustBeClaimedThenCompletedByTheWinningObserver() {
-        val port = AppContainer().activityRequestPort
+        val port = InMemoryActivityRequestPort()
         val request = PendingActivityRequest(ActivityRequestId("operation-1"), TestRequest)
 
         assertTrue(port.submit(request))
@@ -31,14 +31,14 @@ class ActivityRequestPortTest {
 
     @Test
     fun secondRequestIsRejectedWhileOneIsPending() {
-        val port = AppContainer().activityRequestPort
+        val port = InMemoryActivityRequestPort()
         assertTrue(port.submit(PendingActivityRequest(ActivityRequestId("one"), TestRequest)))
         assertFalse(port.submit(PendingActivityRequest(ActivityRequestId("two"), TestRequest)))
     }
 
     @Test
     fun competingConsumersClaimOnceAndReattachmentCannotReplay() {
-        val port = AppContainer().activityRequestPort
+        val port = InMemoryActivityRequestPort()
         val request = PendingActivityRequest(ActivityRequestId("competing"), TestRequest)
         assertTrue(port.submit(request))
 

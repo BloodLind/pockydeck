@@ -4,5 +4,11 @@
         <activity
             android:name=".debug.ThemePreviewActivity"
             android:exported="true" />
+        <activity
+            android:name=".debug.MetricsPreviewActivity"
+            android:exported="true" />
+        <activity
+            android:name=".debug.PrimitivesPreviewActivity"
+            android:exported="true" />
     </application>
 </manifest>

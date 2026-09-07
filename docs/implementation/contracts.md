@@ -1,6 +1,6 @@
 # Handheld Launcher shared contracts
 
-Implementation contract baseline for F01. This file records accepted code semantics; it does not mark a story or feature accepted. Kotlin symbols live under `dev.handheld.launcher.core.domain` unless stated otherwise.
+Accepted implementation contracts for F01, F02 and F06. This file records code semantics; progress and story evidence record acceptance. Kotlin symbols live under `dev.handheld.launcher.core.domain` unless stated otherwise.
 
 ## Catalog identity and item model
 
@@ -63,7 +63,7 @@ Android/external dispatch and a later Room commit cannot be one cross-process tr
 - `LaunchDispatcher`: external dispatch acknowledgement without process-liveness claims.
 - `SuccessfulOpenRepository`: observable recency and transactionally idempotent, globally ordered writes.
 
-The production Room/DataStore implementation, Android enumeration and dispatch, ROM source identity details, metadata-provider fields, and concrete shell navigation, physical input, status-source, and Activity side-effect implementations remain owned by their later stories.
+The Room and DataStore implementations below fulfill the catalog/reference/recency and preference/snapshot ports. Android enumeration and dispatch, ROM source identity details, metadata-provider fields, and concrete shell navigation, physical input, status-source, and Activity side-effect implementations remain owned by their later stories.
 
 ## Navigation and restoration keys
 
@@ -108,14 +108,56 @@ Claiming favors at-most-once external behavior over replay. If lifecycle or proc
 
 ## US-004 theme integration
 
-`core.designsystem.theme.LauncherTheme(reducedMotion, content)` provides typed `colors`, `typography`, `spacing`, `shapes`, `depth`, and `motion` groups. `colors.backgroundGradient()` creates the one Home elliptical radial recipe from actual drawing bounds. Apply it once at the root; consumers do not add their own gradient or guess pixel dimensions. Typography uses bundled Plus Jakarta Sans static weights 400–800 and native `sp`; default dimensions are provisional until US-005/physical calibration.
+`core.designsystem.theme.LauncherTheme(reducedMotion, content)` provides typed `colors`, `typography`, `spacing`, `shapes`, `depth`, and `motion` groups. `colors.backgroundGradient()` creates the one Home elliptical radial recipe from actual drawing bounds. Apply it once at the root; consumers do not add their own gradient or guess pixel dimensions. Typography uses bundled Plus Jakarta Sans static weights 400–800 and native `sp`; physical-device calibration remains pending.
 
-The app supplies reduced-motion intent from Android's animator-enabled setting on resume. Motion duration properties derive from that input, so requesting reduced motion resolves decorative durations to zero. Theme code imports no app/domain modules or status sensors. The debug-only `ThemePreviewActivity` is an isolated color/type/motion evidence consumer and is absent from the release manifest. Shell metrics and reusable visual primitives remain US-005/US-006.
+The app supplies reduced-motion intent from Android's animator-enabled setting on resume. Motion duration properties derive from that input, so requesting reduced motion resolves decorative durations to zero. Theme code imports no app/domain modules or status sensors. The debug-only `ThemePreviewActivity` is an isolated color/type/motion evidence consumer and is absent from the release manifest. Shared metrics and primitives are published below.
 
-## US-017 persistence handoff
+## US-005 shared metrics
 
-`core.data.local.LauncherDatabase.open(context, databaseName)` opens the version-1 Room database (`handheld-launcher.db` by default). Share one application-owned instance among `RoomCatalogRepository(database)`, `RoomFavoriteRepository(database)`, and `RoomItemOverrideRepository(database)`; their public contracts are the accepted domain interfaces. Observation reads the persisted cache before discovery completes. Catalog snapshots are read transactionally and sorted by the shared title/ID policy; recency recording/query integration follows in US-018.
+`core.designsystem.foundation.ShellMetrics.calculate(ShellMetricsInput(widthPx, heightPx, density, fontScale))` runs once from the actual available root bounds. It returns status/content/dock/footer `ShellBounds`, gutter, compact mode, square Home artwork/allocation bounds, metadata/frame/lift reservation, and explicit capacity flags. Destinations consume these anchors; destination identity and content do not enter the calculation.
+
+Native dp geometry adapts to height and width while text keeps system font scale. The reference guidance is 3.75% gutter, 18.7% outer card width, 1.9% outer-frame gap, 35.6% card top, 85.2% dock center and 92.8% footer start at the standard 1280×720dp fixture. Metadata reserves two scaled Home-title lines and platform text. Small windows can report no usable card while retaining text space; `controlsCanReachMinimumTouchTarget` requires both band width and height to fit 48dp, and does not promise an entire dock fits every window. Malformed inputs remain finite and bounds do not overlap. Physical Flip 2 density calibration remains pending. Debug-only `MetricsPreviewActivity` demonstrates standard, native compact/large-font, and alternate-destination fixtures.
+
+## US-006 visual primitives
+
+`LauncherText(text, modifier, style, color, maxLines, overflow, unavailable, unavailableReason)` uses native text layout and exposes its text plus an optional caller-supplied unavailable state description. `LauncherIcon(imageVector, contentDescription, modifier, tint)` clears internal image semantics: a non-null description is meaningful; null is decoration that neither becomes a focus target nor hides its containing control.
+
+`LauncherSurface` and `FocusFrame` accept independent `selected`, `focused`, `pressed`, `enabled` and `unavailable` values, optional descriptions, shape, frame width and lift. Callers own actual focus and activation; wire `onFocusChanged` before their `focusable` modifier and pass the resulting focus value. Selection publishes selected semantics and chooses the selected surface/foreground; it never synthesizes focus. Only `enabled=false` marks a control disabled; an unavailable value can still have an enabled details action. Pressed treatment does not dim or delay the focus outline.
+
+The measured allocation reserves frame padding plus lift slack on both axes, so a square allocation retains square content. Pass US-005 frame/lift reservations for Home geometry. Focus changes placement/drawing without changing measurement; the amber outline is immediate and reduced motion suppresses decorative lift. `LauncherSurface` requests at least 48dp before applying a caller's preferred size. Parent constraints must still permit that target, and consumers own spacing. `LocalLauncherContentColor` / `launcherContentColor()` supplies readable foregrounds to nested text/icons on selected, default and unavailable surfaces.
+
+`glyphs.LauncherGlyph` contains Home, Library, Apps, Favorites, Settings and Search, rendered by `LauncherGlyphIcon` using original bundled native vector paths. `LauncherFaceButton` contains physical A/B/X/Y/Start legends; `LauncherFaceGlyph` takes a caller-supplied semantic label. The data/domain mapping chooses which physical glyph means Confirm or Back; the design system hardcodes no such mapping. Meaningful glyphs announce their description once; decoration exposes no raw symbol text.
+
+`LauncherPrimitivesPreviewContent(reducedMotion)` is an isolated native evidence fixture with real requested focus, long text, static pressed/unavailable examples and glyphs. Its app Activity is registered only in debug. Physical density/controller calibration remains pending.
+
+## US-017 / US-018 persistence handoff
+
+`core.data.local.LauncherDatabase.open(context, databaseName)` opens the version-2 Room database (`handheld-launcher.db` by default). Share one application-owned instance among `RoomCatalogRepository(database)`, `RoomFavoriteRepository(database)`, `RoomItemOverrideRepository(database)`, and `RoomSuccessfulOpenRepository(database)`; their public contracts are the accepted domain interfaces. Observation reads the persisted cache before discovery completes. Catalog snapshots are read transactionally and sorted by the shared title/ID policy. Combine successful-open `records` with `LibraryItemOrdering.recentFirst` for recency order.
 
 Every valid completed inventory is reconciled in one Room transaction. Observed discovered fields/provenance/actions are updated, omissions are retained as unavailable, and the inventory status changes in that same commit. Large omission sets are divided into bounded SQL batches inside the transaction. Valid incomplete inventories only update status. F01's scoped, unique-ID validation remains in force for all inventory objects.
 
-The exported initial schema separates catalog fields, provenance, actions, inventory status, favorite references, user overrides, and successful-open history references. User references have no cascade relationship to discovered catalog rows. History recording/deduplication is still US-018; DataStore formats are US-019. The migration registry starts empty at version 1 and contains no destructive fallback. Future schema changes require the coordinator's reviewed migration step. `AppContainer` wiring follows the F06 child-story handoff and must not make scanning a startup prerequisite.
+The frozen v1 export separates catalog fields, provenance, actions, inventory status, favorite references, user overrides, and successful-open history references. User references have no cascade relationship to discovered catalog rows. Version 2 adds immutable `successful_open_operations` receipts (operation primary key, unique order) and singleton `successful_open_order_state`. `migration1To2` preserves all seven old tables and seeds the counter from maximum retained history order; it invents no legacy receipts. The builder registers that migration and has no destructive fallback.
+
+`RoomSuccessfulOpenRepository.recordOnce` deduplicates, increments the guarded positive order, inserts the receipt, and updates the item's single history row in one transaction; conflicts and overflow roll back all changes. Receipts survive restart. No persisted structure stores an external launch request. Future schema changes require the coordinator's reviewed migration step.
+
+## US-019 preferences and snapshot format
+
+`core.data.local.LauncherPreferencesStore.open(context, fileName)` owns the single DataStore for that file, default `handheld-launcher.preferences_pb` in the app's DataStore directory. Share it between `DataStoreControllerPreferenceRepository(store)` and `DataStoreNavigationSnapshotRepository(store)`; DataStore types remain internal. Its IO scope is owned for the application lifetime; tests call suspend `close()` to cancel and join that scope before reopening. Normal storage errors propagate; only an unreadable protobuf invokes whole-file corruption recovery to empty preferences. Room is a separate file and remains intact.
+
+The only global keys are string `controller.confirm_button` and `controller.back_button`, with explicit `a`/`b` values. Missing, unknown, wrong-type or duplicate button assignments yield `ConfirmBackMapping.Default` without deleting unrelated saved data.
+
+Each accepted destination key owns `navigation.<persistedKey>.` with exactly these fields:
+
+| Suffix | Type | Meaning |
+| --- | --- | --- |
+| `version` | Int | Snapshot encoding version, currently 1 |
+| `selected_item_id` | String, optional | Stable selected ID |
+| `first_visible_item_id` | String, optional | Stable scroll anchor ID |
+| `first_visible_offset_px` | Int | Non-negative anchor offset |
+| `query` | String | Query text, including empty text |
+| `filter_key` | String, optional | Typed opaque filter key |
+| `sort_key` | String, optional | Typed opaque sort key |
+
+Saving or clearing one destination is one atomic edit of its own fields. Missing/unknown/wrong-type versions yield no snapshot. Invalid optional IDs/keys become null, an invalid offset becomes zero, and an invalid query becomes empty. Valid unrelated fields, destinations and controller mapping survive local recovery. Destination identity comes from the stable prefix, never an ordinal; unknown prefixes are ignored. Encoding contains no Compose object, full list, external request or speculative provider preference.
+
+Debug-only `FakeControllerPreferenceRepository` and `FakeNavigationSnapshotRepository` implement the same domain ports for isolated consumers. `LauncherApplication` owns one lazy `AppContainer(applicationContext)`, which shares one lazy Room database and one lazy preferences store among typed repository properties. Repository setup does not enumerate packages or require discovery before startup. These formats and constructors are reserved for subsequent F05/F07 consumers.

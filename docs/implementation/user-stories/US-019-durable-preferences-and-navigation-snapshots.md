@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F06 — Catalog and preferences persistence](../features/F06-persistence.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-sol` / `high` |
 
@@ -23,19 +23,19 @@ Implement typed confirm/back mapping and small DataStore navigation snapshots. V
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a stored or absent confirm/back preference, **when** it is read after a storage round-trip, **then** the stored mapping is retained and absence defaults to A-confirm/B-back.
-- [ ] **AC-02** — **Given** destination, selected ID, anchor ID/offset, query, filter, and sort keys, **when** a snapshot makes a storage round-trip, **then** each key is retained for that destination.
-- [ ] **AC-03** — **Given** malformed or obsolete optional snapshot data, **when** it is read, **then** safe defaults are used without clearing Room catalog, favorites, or recency.
-- [ ] **AC-04** — **Given** stored preference and snapshot data, **when** its encoding and published interface are reviewed, **then** it contains compact identifiers/keys rather than Compose objects or lists and matches F01 contracts.
+- [x] **AC-01** — **Given** a stored or absent confirm/back preference, **when** it is read after a storage round-trip, **then** the stored mapping is retained and absence defaults to A-confirm/B-back.
+- [x] **AC-02** — **Given** destination, selected ID, anchor ID/offset, query, filter, and sort keys, **when** a snapshot makes a storage round-trip, **then** each key is retained for that destination.
+- [x] **AC-03** — **Given** malformed or obsolete optional snapshot data, **when** it is read, **then** safe defaults are used without clearing Room catalog, favorites, or recency.
+- [x] **AC-04** — **Given** stored preference and snapshot data, **when** its encoding and published interface are reviewed, **then** it contains compact identifiers/keys rather than Compose objects or lists and matches F01 contracts.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned actual DataStore default and round-trip test | Not run |
-| AC-02 | Planned typed per-destination snapshot round-trip test | Not run |
-| AC-03 | Planned malformed/obsolete snapshot recovery test | Not run |
-| AC-04 | Planned encoding/interface review and consumer fake test | Not run |
+| AC-01 | [Accepted evidence](../evidence/F06/US-019.md) | Passed |
+| AC-02 | [Accepted evidence](../evidence/F06/US-019.md) | Passed |
+| AC-03 | [Accepted evidence](../evidence/F06/US-019.md) | Passed |
+| AC-04 | [Accepted evidence](../evidence/F06/US-019.md) | Passed |
 
 ## Delivery notes
 
@@ -44,3 +44,6 @@ F06’s one-time lease covers DataStore preferences/navigation repository, match
 ## Out of scope
 
 - New user preferences, speculative ROM/provider keys, and destructive recovery.
+
+
+Coordinator acceptance: 8 September 2026; independent review and final combined gate passed. See evidence for scope and physical-device limitations.

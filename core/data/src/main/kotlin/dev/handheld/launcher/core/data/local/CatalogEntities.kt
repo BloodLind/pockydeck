@@ -98,8 +98,7 @@ internal data class ItemOverrideEntity(
 )
 
 /**
- * US-017 reserves the independent history-reference representation needed to prove that catalog
- * reconciliation cannot delete recency. US-018 owns recording and operation-id deduplication.
+ * One latest successful-open record per item. It remains independent from catalog availability.
  */
 @Entity(
     tableName = "successful_open_history",
@@ -111,3 +110,29 @@ internal data class SuccessfulOpenReferenceEntity(
     val itemId: String,
     @ColumnInfo(name = "open_order") val openOrder: Long,
 )
+
+/** Immutable idempotency receipt for one successful-open operation. */
+@Entity(
+    tableName = "successful_open_operations",
+    indices = [Index(value = ["open_order"], unique = true)],
+)
+internal data class SuccessfulOpenOperationEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "operation_id")
+    val operationId: String,
+    @ColumnInfo(name = "item_id") val itemId: String,
+    @ColumnInfo(name = "open_order") val openOrder: Long,
+)
+
+/** Single serialized allocator; repository code keeps [singletonId] fixed at one. */
+@Entity(tableName = "successful_open_order_state")
+internal data class SuccessfulOpenOrderStateEntity(
+    @androidx.room.PrimaryKey
+    @ColumnInfo(name = "singleton_id")
+    val singletonId: Int = SINGLETON_ID,
+    @ColumnInfo(name = "last_open_order") val lastOpenOrder: Long,
+) {
+    companion object {
+        const val SINGLETON_ID = 1
+    }
+}

@@ -83,3 +83,45 @@ internal interface CatalogReferenceDao {
     @Query("SELECT * FROM successful_open_history ORDER BY open_order DESC")
     suspend fun readHistoryReferences(): List<SuccessfulOpenReferenceEntity>
 }
+
+@Dao
+internal interface SuccessfulOpenDao {
+    @Query("SELECT * FROM successful_open_history ORDER BY open_order DESC")
+    fun observeHistory(): Flow<List<SuccessfulOpenReferenceEntity>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM successful_open_operations WHERE operation_id = :operationId)")
+    suspend fun operationExists(operationId: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun ensureOrderState(state: SuccessfulOpenOrderStateEntity)
+
+    @Query("SELECT last_open_order FROM successful_open_order_state WHERE singleton_id = 1")
+    suspend fun readLastOpenOrder(): Long?
+
+    @Query(
+        """
+        UPDATE successful_open_order_state
+        SET last_open_order = :nextOpenOrder
+        WHERE singleton_id = 1 AND last_open_order = :expectedOpenOrder
+        """,
+    )
+    suspend fun updateOpenOrder(expectedOpenOrder: Long, nextOpenOrder: Long): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertOperation(operation: SuccessfulOpenOperationEntity)
+
+    @Query(
+        """
+        UPDATE successful_open_history
+        SET open_order = :openOrder
+        WHERE item_id = :itemId
+        """,
+    )
+    suspend fun updateHistory(itemId: String, openOrder: Long): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertHistory(reference: SuccessfulOpenReferenceEntity)
+
+    @Query("SELECT COUNT(*) FROM successful_open_operations")
+    suspend fun operationCount(): Int
+}

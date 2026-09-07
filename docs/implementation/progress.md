@@ -1,52 +1,50 @@
 # Implementation progress
 
-Updated: 7 September 2026. Coordinator owns this record; story specifications remain the acceptance criteria.
+Updated: 8 September 2026. Coordinator owns this record; story specifications remain the acceptance criteria.
 
 ## Baseline and authorization
 
-- Planning baseline: `ad2b668` (`docs: establish handheld launcher planning baseline`).
-- Accepted F01 baseline: `ce09ddc` (`feat: establish F01 launcher foundation and shared contracts`).
+- Planning baseline: `ad2b668`; accepted F01 baseline: `ce09ddc`; previous theme/catalog checkpoint: `b9e68d2`.
 - Implementation branch: `codex/f01-foundation`.
-- User authorized F01 implementation and parallel implementation of features whose prerequisites are satisfied.
-- User confirmed a new four-module launcher with Argosy cloned as a local reference for selective reuse.
-- Reference: `https://github.com/rommapp/argosy-launcher.git`, local `.reference/argosy-launcher`, revision `25ccb40840e5c53b3592265820c9494745ce8046` (shallow clone). Its source and notices remain in that separate checkout; no application source has been reused.
+- User authorized F01 and parallel implementation of ready features, then requested continuation. This continuation completes the remaining F02/F06 stories and their feature gates.
+- User confirmed a new four-module launcher with Argosy as a cloned reference for selective reuse. The local reference is `.reference/argosy-launcher`, upstream `https://github.com/rommapp/argosy-launcher.git`, revision `25ccb40840e5c53b3592265820c9494745ce8046`. Source/notices remain separate; no application source has been reused.
 
 ## Story and feature status
 
-| Feature / story | State | Owner / model | Evidence and next gate |
+| Feature / story | State | Owner / review | Evidence |
 | --- | --- | --- | --- |
-| F01 | Accepted | Sol / high; coordinator integration | All three children accepted; [final build, review and Android 13 gate](evidence/F01/F01-final-gate.md) |
-| US-001 | Accepted | `f01_foundation`, gpt-5.6-sol / high; separate Sol review | [Build, lint, tests, dependency and schema evidence](evidence/F01/US-001.md); [Android 13 launch](evidence/F01/US-001-launch.md). All four criteria passed; physical Flip 2 pending |
-| US-002 | Accepted | `f01_foundation`, gpt-5.6-sol / high; separate Sol review | [12 passing domain tests and consumer compilation](evidence/F01/US-002.md); [published catalog/launch contracts](contracts.md) |
-| US-003 | Accepted | `f01_foundation`, gpt-5.6-sol / high; separate Sol review | [22 total passing tests, build, lint and contract evidence](evidence/F01/US-003.md); final Android 13 smoke passed |
-| F02 / US-004 | US-004 accepted; F02 in progress | `f02_theme`, Luna / medium; coordinator integration; Terra review | [Theme, offline/font-scale/motion renders and combined gate](evidence/F02/US-004-theme.md); US-005 ready |
-| F06 / US-017 | US-017 accepted; F06 in progress | `persistence_preparation`, Sol / high; separate Sol review | [8 passing Android 13 Room tests, schema and transaction evidence](evidence/F06/US-017.md); US-018 ready |
-| F03–F18, excluding F06 | Planned | Per feature packets | Existing dependency gates apply |
+| F01 | Accepted | Sol/high; coordinator integration | [Final F01 gate](evidence/F01/F01-final-gate.md) |
+| US-001 | Accepted, 7 September | Sol/high; separate Sol review | [Build/schema](evidence/F01/US-001.md), [Android 13 launch](evidence/F01/US-001-launch.md) |
+| US-002 | Accepted, 7 September | Sol/high; separate Sol review | [Catalog/launch contracts and tests](evidence/F01/US-002.md) |
+| US-003 | Accepted, 7 September | Sol/high; separate Sol review | [Navigation/input/status/Activity ports](evidence/F01/US-003.md) |
+| F02 | Accepted, 8 September | Luna/medium; coordinator integration; Terra review | All children and [combined feature gate](evidence/F02/F02-F06-final-gate.md) passed |
+| US-004 | Accepted, 7 September | Luna/medium; coordinator integration; Terra review | [Theme/font/offline/motion evidence](evidence/F02/US-004-theme.md) |
+| US-005 | Accepted, 8 September | Luna/medium; coordinator geometry integration; Terra review | [9 metrics tests and native fixtures](evidence/F02/US-005-metrics.md) |
+| US-006 | Accepted, 8 September | Luna/medium; coordinator source/test integration; Terra review | [4 native focus/semantics/layout tests and renders](evidence/F02/US-006-primitives.md) |
+| F06 | Accepted, 8 September | Sol/high; separate Sol review; coordinator DI | All children and [combined feature gate](evidence/F02/F02-F06-final-gate.md) passed |
+| US-017 | Accepted, 7 September | Sol/high; separate Sol review | [Actual Room inventory/cache preservation](evidence/F06/US-017.md) |
+| US-018 | Accepted, 8 September | Sol/high; separate Sol review | [Recency transactions, migration and concurrency](evidence/F06/US-018.md) |
+| US-019 | Accepted, 8 September | Sol/high; separate Sol review; coordinator DI | [Actual DataStore round-trip and recovery](evidence/F06/US-019.md) |
+| F03 / US-007 | Ready, not started | Per packet: Luna/medium | Reusable input controls are the next visual work |
+| F07 / US-020 | Ready, not started | Per packet: Sol/high | Real Android component discovery is the next catalog work |
+| Remaining F03–F18 stories | Planned | Per feature packets | Existing dependency and physical-device gates apply |
 
-## Active ownership
+## Ownership and handoff
 
-- F01 creation leases are closed. Shared domain/app contracts, Gradle, manifest, DI, and contract publication return to coordinator ownership.
-- US-004 theme/font signatures are integrated and reserved. US-005 is ready for a future single F02 writer; US-006 and the parent gate remain pending.
-- US-017 catalog repositories and initial schema are integrated and reserved. US-018 is ready for a future single F06 writer; US-019, AppContainer wiring and the parent gate remain pending.
-- This checkpoint has no active story writers. Coordinator owns shared changes, acceptance, commits, broad builds and emulator scheduling; future workers receive bounded leases.
-- Debug-only foundation Room schemas are compile fixtures, separate from the F06 production database.
+F01, F02 and F06 creation leases are closed. No feature writer remains active. Coordinator owns shared contracts, Gradle, manifests, DI, status and commits. Accepted theme/metrics/primitives, Room v1/v2 exports and migration, DataStore keys/encoding, and repository constructors are reserved; later changes use the reviewed shared-file process. See [published contracts](contracts.md).
 
-## Device evidence
-
-No physical device is connected. An isolated Android 13 emulator was used at `emulator-5556`, 1920×1080 at 240 dpi, then stopped after restoring its settings; see [environment evidence](evidence/F01/emulator-environment.md). US-001 APK installed and opened normally, with its screenshot inspected and no Android runtime error. Physical Retroid Pocket Flip 2 behavior and density calibration remain pending.
-
-## Reviews
-
-- US-001: independent `foundation_review` (Sol / high) found no blocking findings after dependency compatibility, lifecycle request consumption, schema assets, test dependencies, and wrapper checksum fixes. Lint has zero errors and 48 warnings; warnings remain recorded rather than suppressed. Accepted by coordinator on 7 September 2026.
-- US-002: independent Sol review found no remaining semantic blocker after inventory preservation/scope, launch identity, global order, collision, and concurrency fixes. Coordinator verified 12 passing domain test results and consumer compile evidence. Accepted on 7 September 2026.
-
-- US-003/F01: independent Sol navigation/input/status/modal review and coordinator Activity-claim review found no remaining blocker. Full gate passed with 22 tests and zero lint errors; final Android 13 install/cold launch/task-return smoke passed. Accepted 7 September 2026.
-
-- US-004: independent Terra review plus coordinator native rendering/contrast/font packaging checks passed. Default and 1.3 font scale rendered offline; reduced motion resolved to zero-duration properties. Accepted 7 September 2026.
-- US-017: independent Sol review passed after chunked removal fix; actual Room suite passed 8/8, including 1,005 omissions and reopened cache while discovery remained pending. Accepted 7 September 2026.
+`LauncherApplication` supplies its application context to one lazy `AppContainer`. It shares one Room database across catalog/favorite/override/recency repositories and one preferences store across controller/snapshot repositories. Setup does not scan packages. Debug-only foundation schema fixtures and repository fakes remain separate from production persistence.
 
 ## Final combined checkpoint
 
-`assembleDebug lintDebug :core:domain:test :app:testDebugUnitTest :app:processReleaseMainManifest` passed in 34s. JVM tests: 22/22; actual Room Android 13 tests: 8/8; zero failures/errors/skips. Lint has zero errors and 48 existing app warnings, with no data/design-system issues. Release manifest excludes the debug preview Activity. Final ordinary Activity cold launch passed with no AndroidRuntime errors.
+[Full command, review and smoke evidence](evidence/F02/F02-F06-final-gate.md): build, lint, JVM tests, release manifest and actual Android storage/UI tests passed in 54s. JVM: 31/31 (15 domain, 7 app, 9 metrics). Android 13: 27/27 (23 storage, 4 native UI). Zero failures/errors/skips. Lint: zero errors and 48 existing app warnings, with no data/design-system issues.
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`; SHA-256 `d34ac5e92d3d9b00c8f99fe8b3efc53ca05127412d29e1c53568fd41855ee557`. The UI remains a themed foundation; HOME integration and feature screens are later work. F02 and F06 are not complete: the next ready parallel stories are US-005 (metrics) and US-018 (successful-open ordering).
+US-019 review fixes cover wrong-type values and exact filenames; the final run includes both obsolete and wrong-type versions and preserves unrelated valid state. US-006 review fixes cover default target sizing; its tests request 24dp and verify at least 48dp, no adjacent overlap, actual focus/pixels, stable allocation and meaningful/decorative semantics.
+
+APK: `app/build/outputs/apk/debug/app-debug.apk`; SHA-256 `874b1f1f3df62fcee88214e9a4d75c95d1667945704eabb7f6332af94801bffe`. Final install and ordinary Activity cold launch passed with no AndroidRuntime errors. Release manifest includes none of the debug preview/test Activities. MainActivity remains a themed foundation; production controls, catalog discovery, HOME behavior and feature screens remain later work.
+
+## Device evidence and remaining gates
+
+No physical device is connected. The isolated Android 13 emulator at `emulator-5556`, 1920×1080/240dpi, was used for Room/DataStore and native Compose checks. Standard, compact, alternate-destination, 1.3 font scale and reduced-motion evidence was inspected. Settings were restored and the emulator stopped after the final smoke.
+
+Physical Retroid Pocket Flip 2 display/density, controller, lid and HOME lifecycle acceptance remains pending. Emulator acceptance does not close physical gates or permit downstream stories to bypass their explicit prerequisites.

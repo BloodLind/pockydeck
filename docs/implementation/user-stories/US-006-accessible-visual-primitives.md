@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F02 — Theme, metrics, and visual primitives](../features/F02-visual-foundations.md) |
-| Status | Planned |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-luna` / `medium` |
 
@@ -23,19 +23,19 @@ Implement `LauncherText`, `LauncherIcon`, `LauncherSurface`, `FocusFrame`, and s
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a focused control whose destination or filter is selected, **when** it renders, **then** actual focus has one immediate visible treatment independent of selection and decorative motion does not delay it.
-- [ ] **AC-02** — **Given** text, icon, and decorative primitives, **when** accessibility semantics are exposed, **then** meaningful content is announced and decoration is not a misleading focus target.
-- [ ] **AC-03** — **Given** long text or an unavailable value, **when** it renders, **then** it remains readable and a supported touch target can reach 48dp without overlapping an adjacent target.
-- [ ] **AC-04** — **Given** an isolated primitive preview, **when** it runs, **then** it needs no repository, sensor, or product-module import and records unresolved calibration evidence.
+- [x] **AC-01** — **Given** a focused control whose destination or filter is selected, **when** it renders, **then** actual focus has one immediate visible treatment independent of selection and decorative motion does not delay it.
+- [x] **AC-02** — **Given** text, icon, and decorative primitives, **when** accessibility semantics are exposed, **then** meaningful content is announced and decoration is not a misleading focus target.
+- [x] **AC-03** — **Given** long text or an unavailable value, **when** it renders, **then** it remains readable and a supported touch target can reach 48dp without overlapping an adjacent target.
+- [x] **AC-04** — **Given** an isolated primitive preview, **when** it runs, **then** it needs no repository, sensor, or product-module import and records unresolved calibration evidence.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned focused/selected state preview and interaction test | Not run |
-| AC-02 | Planned accessibility semantics inspection | Not run |
-| AC-03 | Planned long-text, unavailable, and touch-target preview | Not run |
-| AC-04 | Planned isolated compile/render evidence and API inventory | Not run |
+| AC-01 | [Accepted evidence](../evidence/F02/US-006-primitives.md) | Passed |
+| AC-02 | [Accepted evidence](../evidence/F02/US-006-primitives.md) | Passed |
+| AC-03 | [Accepted evidence](../evidence/F02/US-006-primitives.md) | Passed |
+| AC-04 | [Accepted evidence](../evidence/F02/US-006-primitives.md) | Passed |
 
 ## Delivery notes
 
@@ -45,3 +45,6 @@ The F02 creation lease covers foundation/glyph packages, their matching tests/pr
 
 - Product cards, shell navigation, and sensor readings.
 - Tests that merely restate token constants.
+
+
+Coordinator acceptance: 8 September 2026; independent review and final combined gate passed. See evidence for scope and physical-device limitations.

@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Parent feature | [F06 — Catalog and preferences persistence](../features/F06-persistence.md) |
-| Status | Ready |
+| Status | Accepted |
 | Type | Enabler |
 | Implementation agent | `gpt-5.6-sol` / `high` |
 
@@ -23,21 +23,21 @@ Implement serialized increasing open-order keys and one recency record per stabl
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** persisted order `[C, B, A]`, **when** B is successfully opened once or repeatedly, **then** the order becomes and remains `[B, C, A]` with one B.
-- [ ] **AC-02** — **Given** failed dispatch or a repeated acknowledgement for one operation, **when** it is recorded, **then** failure leaves order unchanged and acknowledgement cannot add a second promotion.
-- [ ] **AC-03** — **Given** concurrent successful opens, **when** recency is written, **then** they receive deterministic serialized order independent of wall-clock ties or clock changes.
-- [ ] **AC-04** — **Given** the application restarts, **when** recency and restoration are reloaded, **then** order persists and no external launch request is replayed.
-- [ ] **AC-05** — **Given** recent items and unopened items share the catalog, **when** Home ordering is read, **then** recent items precede unopened items and unopened items use deterministic title/ID ordering to break ties.
+- [x] **AC-01** — **Given** persisted order `[C, B, A]`, **when** B is successfully opened once or repeatedly, **then** the order becomes and remains `[B, C, A]` with one B.
+- [x] **AC-02** — **Given** failed dispatch or a repeated acknowledgement for one operation, **when** it is recorded, **then** failure leaves order unchanged and acknowledgement cannot add a second promotion.
+- [x] **AC-03** — **Given** concurrent successful opens, **when** recency is written, **then** they receive deterministic serialized order independent of wall-clock ties or clock changes.
+- [x] **AC-04** — **Given** the application restarts, **when** recency and restoration are reloaded, **then** order persists and no external launch request is replayed.
+- [x] **AC-05** — **Given** recent items and unopened items share the catalog, **when** Home ordering is read, **then** recent items precede unopened items and unopened items use deterministic title/ID ordering to break ties.
 
 ## Verification
 
 | Criterion | Evidence | Status |
 | --- | --- | --- |
-| AC-01 | Planned actual Room ordering/repeat test | Not run |
-| AC-02 | Planned failure and duplicate-operation transaction test | Not run |
-| AC-03 | Planned concurrent-write deterministic-order test | Not run |
-| AC-04 | Planned restart/persistence and no-replay test | Not run |
-| AC-05 | Planned mixed recent/unopened ordering fixture test | Not run |
+| AC-01 | [Accepted evidence](../evidence/F06/US-018.md) | Passed |
+| AC-02 | [Accepted evidence](../evidence/F06/US-018.md) | Passed |
+| AC-03 | [Accepted evidence](../evidence/F06/US-018.md) | Passed |
+| AC-04 | [Accepted evidence](../evidence/F06/US-018.md) | Passed |
+| AC-05 | [Accepted evidence](../evidence/F06/US-018.md) | Passed |
 
 ## Delivery notes
 
@@ -46,3 +46,5 @@ F06’s creation lease covers recency repository/local transaction implementatio
 ## Out of scope
 
 - Running-process state, session analytics, or recording opens outside this launcher.
+
+Coordinator acceptance: 8 September 2026; independent review passed. See linked evidence for actual commands, tests and limitations.

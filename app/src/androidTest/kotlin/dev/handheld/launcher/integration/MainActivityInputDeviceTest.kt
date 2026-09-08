@@ -39,6 +39,7 @@ import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.core.domain.model.LauncherLocation
+import dev.handheld.launcher.core.domain.model.LibraryItem
 import dev.handheld.launcher.di.LauncherAppViewModel
 import dev.handheld.launcher.di.LauncherApplication
 import dev.handheld.launcher.feature.collection.CollectionViewModel
@@ -82,8 +83,6 @@ class MainActivityInputDeviceTest {
     private lateinit var app: LauncherAppViewModel
     private lateinit var mapping: ConfirmBackMapping
     private var originalFilter: String? = null
-    private var originalSearch: String? = null
-    private var searchEdited = false
     private val heldKeys = mutableMapOf<Int, Long>()
     private var joystickUsed = false
     private var originalWindowCallback: Window.Callback? = null
@@ -138,11 +137,16 @@ class MainActivityInputDeviceTest {
         compose.waitUntil(TIMEOUT_MS) { !library.state.value.loading && !search.state.value.loading }
         mapping = runBlocking { container.controllerPreferenceRepository.confirmBackMapping.first() }
         originalFilter = library.state.value.filter
-        originalSearch = search.state.value.query
         tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
         waitForImeHidden()
         cycleToFilter("all")
-        compose.waitUntil(TIMEOUT_MS) { !library.state.value.searching && library.state.value.items.size >= 12 }
+        // On a fresh process, repository publication can finish before the Activity's
+        // lifecycle collector has rendered that snapshot. Wait for the actual page too.
+        waitWithDiagnostics("The populated Library grid must be rendered before input testing") {
+            app.navigation.location.value == LauncherLocation.Destination(LauncherDestination.LIBRARY) &&
+                !library.state.value.loading && !library.state.value.searching && library.state.value.items.size >= 12 &&
+                compose.onAllNodes(hasTestTag(GRID)).fetchSemanticsNodes().size == 1
+        }
         compose.onNodeWithTag(GRID).assertExists()
     }
 
@@ -151,10 +155,10 @@ class MainActivityInputDeviceTest {
         try {
             heldKeys.keys.toList().forEach(::keyUp)
             if (joystickUsed) triggers()
-            if (searchEdited && originalSearch != null) {
-                openSearchEditorByTouch()
-                compose.onNode(hasSetTextAction(), useUnmergedTree = true).performTextReplacement(originalSearch!!)
-                applySearch()
+            if (compose.onAllNodes(hasSetTextAction() and isFocused(), useUnmergedTree = true)
+                    .fetchSemanticsNodes().isNotEmpty()) {
+                press(faceKey(mapping.back))
+                waitForImeHidden()
             }
         } finally {
             tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
@@ -229,7 +233,6 @@ class MainActivityInputDeviceTest {
 
     @Test fun searchSupportsMappedApplyCancelAndTouchCancelWithoutOpeningResults() {
         val query = library.state.value.items.first().title.take(18)
-        searchEdited = true
         press(KeyEvent.KEYCODE_BUTTON_X)
         waitForEditor()
         compose.onNode(hasSetTextAction(), useUnmergedTree = true).performTextReplacement(query)
@@ -251,6 +254,77 @@ class MainActivityInputDeviceTest {
         waitForClosedEditor()
         compose.waitUntil(TIMEOUT_MS) { search.state.value.query == query }
         compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SEARCH)).assertIsSelected()
+    }
+
+    @Test fun realRomSearchUpdatesClearAndCloseDoNotResurrectAQueryOrRestrictiveFilter() {
+        val items = library.state.value.items
+        val rom = requireNotNull(items.filterIsInstance<LibraryItem.RomGame>().firstOrNull { candidate ->
+            candidate.title.length >= 12 && items.count { it.title.contains(candidate.title.dropLast(1), ignoreCase = true) } == 1
+        }) { "This real-device regression requires a ROM with a unique title prefix" }
+        val query = rom.title
+        fun replaceAndFindRom(value: String) {
+            compose.onNode(hasSetTextAction(), useUnmergedTree = true).performTextReplacement(value)
+            waitWithDiagnostics("Search must publish the existing ROM for '$value'") {
+                search.state.value.let { it.query == value && !it.searching && it.items.any { item -> item.id == rom.id } }
+            }
+            compose.onNode(hasAnyAncestor(hasTestTag(SearchScreenTags.Results)) and
+                hasContentDescription(rom.title) and hasClickAction()).assertIsDisplayed()
+        }
+        fun chooseAppsScope() {
+            assertEquals("all", search.state.value.filter)
+            press(KeyEvent.KEYCODE_BUTTON_R2)
+            compose.waitUntil(TIMEOUT_MS) { search.state.value.filter == "games" }
+            press(KeyEvent.KEYCODE_BUTTON_R2)
+            compose.waitUntil(TIMEOUT_MS) { search.state.value.filter == "apps" }
+            waitForImeHidden()
+        }
+        fun assertFreshSearch() {
+            waitWithDiagnostics("Closed Search must reopen empty with the All scope") {
+                search.state.value.let { it.query.isEmpty() && it.filter == "all" && !it.searching && it.items.isEmpty() }
+            }
+            val field = compose.onNode(hasSetTextAction(), useUnmergedTree = true).fetchSemanticsNode()
+            assertEquals("The saved editor buffer must also be empty", "", field.config[SemanticsProperties.EditableText].text)
+        }
+
+        press(KeyEvent.KEYCODE_BUTTON_X)
+        waitForEditor()
+        replaceAndFindRom(query.dropLast(1))
+        val prefixMatches = search.state.value.items.map { it.id }
+        replaceAndFindRom(query)
+        assertEquals("This edit must retain the same catalog matches", prefixMatches, search.state.value.items.map { it.id })
+        replaceAndFindRom("$query ")
+        assertEquals(prefixMatches, search.state.value.items.map { it.id })
+        applySearch()
+        chooseAppsScope()
+        press(KeyEvent.KEYCODE_BUTTON_X)
+        waitForEditor()
+        compose.waitUntil(TIMEOUT_MS) { imeIsVisible() }
+        compose.onNodeWithTag(LauncherShellTags.footerAction(SemanticInputAction.TERTIARY)).assertIsDisplayed()
+        press(KeyEvent.KEYCODE_BUTTON_Y)
+        compose.waitUntil(TIMEOUT_MS) { search.state.value.query.isEmpty() && search.state.value.filter == "all" }
+        waitForEditor()
+        assertTrue("Controller Clear keeps the native keyboard open", imeIsVisible())
+        press(faceKey(mapping.back))
+        waitForClosedEditor()
+        assertEquals("Cancel after Clear must not restore the previous query", "", search.state.value.query)
+        press(faceKey(mapping.back))
+        assertEquals("Shortcut Search must return to its Library origin",
+            LauncherLocation.Destination(LauncherDestination.LIBRARY), app.navigation.location.value)
+
+        tapTag(LauncherShellTags.destination(LauncherDestination.SEARCH))
+        assertFreshSearch()
+        press(KeyEvent.KEYCODE_BUTTON_X)
+        waitForEditor()
+        replaceAndFindRom(query)
+        applySearch()
+        chooseAppsScope()
+        assertTrue("The close check starts with a nonempty query", search.state.value.query.isNotEmpty())
+        tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+        compose.waitUntil(TIMEOUT_MS) { search.state.value.query.isEmpty() && search.state.value.filter == "all" }
+        tapTag(LauncherShellTags.destination(LauncherDestination.SEARCH))
+        assertFreshSearch()
+        press(faceKey(mapping.back))
+        assertEquals("Dock Search Back goes Home", LauncherLocation.Destination(LauncherDestination.HOME), app.navigation.location.value)
     }
 
     @Test fun displayScaleKeepsDockAndFooterInsideTheNativeWindowAndRestoresOriginalSetting() {
@@ -277,12 +351,22 @@ class MainActivityInputDeviceTest {
                 chooseScale(percent)
                 compose.waitForIdle()
                 assertChromeInsideNativeWindow(percent)
+                tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+                compose.onNodeWithTag(GRID).performScrollToIndex(0)
+                compose.waitForIdle()
+                val viewport = compose.onNodeWithTag(GRID).fetchSemanticsNode().boundsInRoot
+                val firstCard = gridCards().minWith(compareBy({ it.positionInRoot.y }, { it.positionInRoot.x }))
+                val cardBottom = firstCard.positionInRoot.y + firstCard.size.height
+                assertTrue("At $percent%, the full first card and both caption lines must fit above the dock: $cardBottom > ${viewport.bottom}",
+                    cardBottom <= viewport.bottom + 1f)
+                tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
             }
         } catch (failure: Throwable) {
             testFailure = failure
             throw failure
         } finally {
             try {
+                tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
                 chooseScale(originalScale)
             } catch (restoreFailure: Throwable) {
                 // A cropping regression may hide the Settings controls. Restore this one
@@ -300,12 +384,16 @@ class MainActivityInputDeviceTest {
     @Test fun slowTriggerReportsMergeAndAHeldTriggerAcceleratesThenStopsOnRelease() {
         assertTrue("Trigger hold coverage requires at least two detected console filters", filterKeys().size >= 3)
         val changes = CopyOnWriteArrayList<FilterChange>()
+        val emptyCollections = CopyOnWriteArrayList<String>()
         val observer = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         compose.runOnIdle {
             observer.launch {
                 library.state.map { it.filter }.distinctUntilChanged().drop(1).collect {
                     changes += FilterChange(it, SystemClock.uptimeMillis())
                 }
+            }
+            observer.launch {
+                library.state.collect { if (it.items.isEmpty()) emptyCollections += it.filter }
             }
         }
         try {
@@ -340,6 +428,7 @@ class MainActivityInputDeviceTest {
             val releasedCount = changes.size
             SystemClock.sleep(500)
             assertEquals("No repeat may survive trigger release", releasedCount, changes.size)
+            assertTrue("Populated category changes must not briefly empty the collection: $emptyCollections", emptyCollections.isEmpty())
         } finally {
             try {
                 keyUp(KeyEvent.KEYCODE_BUTTON_L2)
@@ -349,7 +438,7 @@ class MainActivityInputDeviceTest {
         }
     }
 
-    @Test fun filterStripDirectionsExitWithoutSelectingAndTriggersStopAtFiniteEnds() {
+    @Test fun filterDirectionsTraverseVisibleChipsWithoutScrollingAndTriggersStopAtFiniteEnds() {
         val keys = filterKeys()
         assertTrue("Strip navigation requires at least one detected console filter", keys.size >= 2)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
@@ -357,24 +446,35 @@ class MainActivityInputDeviceTest {
         cycleToFilter(keys[1])
         waitForFocusedCard()
         val selectedFilter = library.state.value.filter
-        val firstCategoryTag = "collection-filter-${keys[1]}"
-        fun focusFirstCategory() {
-            compose.onNodeWithTag(FILTER_STRIP).performScrollToIndex(0)
-            compose.onNodeWithTag(firstCategoryTag).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            compose.onNodeWithTag(firstCategoryTag).assertIsFocused()
-        }
-
-        focusFirstCategory()
+        compose.onNodeWithTag(FILTER_STRIP).performScrollToIndex(0)
+        val visible = fullyVisibleFilterTags()
+        assertTrue("At least one complete category must fit in the native header", visible.isNotEmpty())
+        val stripScroll = filterStripScroll()
+        compose.onNodeWithTag(visible.first()).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithTag(visible.first()).assertIsFocused()
         press(KeyEvent.KEYCODE_DPAD_LEFT)
         compose.onNodeWithTag(FILTER_ALL).assertIsFocused()
         assertEquals("Left exits to All without applying it", selectedFilter, library.state.value.filter)
 
-        focusFirstCategory()
+        for (tag in visible) {
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag(tag).assertIsFocused()
+            assertEquals("D-pad traversal must not change the strip's scroll", stripScroll, filterStripScroll(), .001f)
+            assertEquals("D-pad focus must not apply a category", selectedFilter, library.state.value.filter)
+        }
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         compose.onNode(hasContentDescription("Show all console filters in a grid")).assertIsFocused()
-        assertEquals("Right exits to All filters without applying a category", selectedFilter, library.state.value.filter)
-
-        focusFirstCategory()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        val sortLabel = if (library.state.value.sort == "recent") "Recent" else "Title"
+        compose.onNode(hasContentDescription("Sort: $sortLabel")).assertIsFocused()
+        assertEquals(stripScroll, filterStripScroll(), .001f)
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        compose.onNode(hasContentDescription("Show all console filters in a grid")).assertIsFocused()
+        for (tag in visible.asReversed()) {
+            press(KeyEvent.KEYCODE_DPAD_LEFT)
+            compose.onNodeWithTag(tag).assertIsFocused()
+        }
+        assertEquals(stripScroll, filterStripScroll(), .001f)
         press(KeyEvent.KEYCODE_DPAD_DOWN)
         waitForFocusedCard()
         assertEquals("Down returns to the grid without applying a category", selectedFilter, library.state.value.filter)
@@ -398,14 +498,16 @@ class MainActivityInputDeviceTest {
         }
     }
 
-    @Test fun backStaysOnRootPagesAndDismissesMenuWithoutNavigatingOrCyclingFilters() {
+    @Test fun backUsesPageRootsAndDismissesMenuWithoutNavigatingOrCyclingFilters() {
         for (destination in LauncherDestination.dockOrder) {
             tapTag(LauncherShellTags.destination(destination))
             compose.onNodeWithTag(LauncherShellTags.destination(destination)).assertIsSelected()
             press(faceKey(mapping.back))
-            assertEquals("Back must stay on ${destination.persistedKey}",
-                LauncherLocation.Destination(destination), app.navigation.location.value)
-            compose.onNodeWithTag(LauncherShellTags.destination(destination)).assertIsSelected()
+            val expected = if (destination in setOf(LauncherDestination.SEARCH, LauncherDestination.SETTINGS))
+                LauncherDestination.HOME else destination
+            assertEquals("Back from ${destination.persistedKey}",
+                LauncherLocation.Destination(expected), app.navigation.location.value)
+            compose.onNodeWithTag(LauncherShellTags.destination(expected)).assertIsSelected()
         }
 
         tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
@@ -459,6 +561,22 @@ class MainActivityInputDeviceTest {
     private fun filterKeys(): List<String> = library.state.value.let {
         collectionFilterKeys(LauncherDestination.LIBRARY, it.allItems, it.overrides, it.favorites)
     }
+
+    private fun fullyVisibleFilterTags(): List<String> {
+        val viewport = compose.onNodeWithTag(FILTER_STRIP).fetchSemanticsNode().boundsInRoot
+        return compose.onAllNodes(hasAnyAncestor(hasTestTag(FILTER_STRIP)) and hasClickAction())
+            .fetchSemanticsNodes().mapNotNull { node ->
+                val tag = if (node.config.contains(SemanticsProperties.TestTag)) node.config[SemanticsProperties.TestTag] else ""
+                val position = node.positionInRoot
+                val size = node.size
+                if (tag.startsWith("collection-filter-") && size.width > 0 &&
+                    position.x >= viewport.left && position.x + size.width <= viewport.right &&
+                    position.y >= viewport.top && position.y + size.height <= viewport.bottom) tag to position.x else null
+            }.sortedBy { it.second }.map { it.first }
+    }
+
+    private fun filterStripScroll(): Float = compose.onNodeWithTag(FILTER_STRIP).fetchSemanticsNode()
+        .config[SemanticsProperties.HorizontalScrollAxisRange].value()
 
     private fun assertChromeInsideNativeWindow(percent: Int) {
         val nativeSize = IntArray(2)
@@ -540,9 +658,11 @@ class MainActivityInputDeviceTest {
     }
 
     private fun waitForImeHidden() = compose.waitUntil(TIMEOUT_MS) {
-        ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
-            ?.isVisible(WindowInsetsCompat.Type.ime()) != true
+        !imeIsVisible()
     }
+
+    private fun imeIsVisible(): Boolean = ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+        ?.isVisible(WindowInsetsCompat.Type.ime()) == true
 
     private fun openSearchEditorByTouch() {
         tapTag(LauncherShellTags.footerAction(SemanticInputAction.SECONDARY))

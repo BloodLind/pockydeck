@@ -32,6 +32,12 @@ Recently active badges and optional Usage Access polling are removed; successful
 
 **347 tests passed** (242 JVM, 105 Android), one Windows fixture skipped; lint has zero errors and both APK builds passed. All seven MainActivity tests passed together on the final APK, including live 120% scaling and restoration to 100%. Home, Library, Apps and Settings were inspected on the physical Flip 2. See [0.7 verification and reconciliation](evidence/F14/finite-controls-070.md) for exact coverage, primary process-status references, artifact and remaining limits. Earlier revision descriptions above are historical.
 
+The **0.8.0 (code 11)** follow-up stabilizes filter changes, aligns Library's compact header, shortens its finite category strip and lets D-pad/stick focus traverse only fully visible chips before reaching the next control. Collection gaps are smaller, and artwork respects scaled caption height so both title lines fit above the dock at 120%. Short footer and cover transitions respect Reduce motion. Search now reliably republishes matching ROMs, resets when closed, provides Y Clear during controller editing, and keeps the keyboard closed after a zero-result filter. Search and Settings return to Home on Back; modal/editor and explicit-origin behavior remain intact.
+
+Bluetooth appears only when enabled. An active-notification dot uses an opt-in Android listener, with setup under Settings → Android → Notification indicator; access remains ungranted on the test device. Only presence is held in memory. No catalog migration, data reset, ROM/save changes or radio/permission changes are involved.
+
+**363 tests passed** (251 JVM, 112 Android), with one Windows fixture skipped; lint has zero errors and both APK builds passed. All 13 app tests passed together on the final APK using the physical Flip 2 and its existing catalog. The installed checksum matches the release copy, All files access remains allowed, and Library still shows 3,768 items. Normal and 120% layouts were inspected, and app scale is restored to 100%. See [0.8 verification and reconciliation](evidence/F14/search-status-080.md) for precise coverage, corrected verification findings, permission behavior and artifact. Earlier revision descriptions above are historical.
+
 Full rich metadata import, manual artwork/match correction and the complete emulator/game-boot matrix remain later work. The large-catalog discovery/search work requested in this batch is implemented; no universal storage-scan time is promised.
 
 ## Baseline and authorization

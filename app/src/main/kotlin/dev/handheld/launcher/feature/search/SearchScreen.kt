@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalFocusManager
@@ -69,10 +71,13 @@ import dev.handheld.launcher.ui.presentation.toTileUiModel
 import kotlinx.coroutines.launch
 
 class SearchEditorActions(val apply: () -> Unit, val cancel: () -> Unit)
+class SearchPageActions(val clear: () -> Unit, val hasQuery: Boolean)
 
 object SearchScreenTags {
     const val Results = "search-results"
     const val Edit = "search-edit"
+    const val Clear = "search-clear"
+    fun filter(key: String) = "search-filter-$key"
 }
 
 /** Query state remains in CollectionViewModel, so IME edits do not reset selection or filters. */
@@ -90,6 +95,8 @@ fun SearchScreen(
     restoreFocusRequest: Int = 1,
     allowFocusRequest: Boolean = true,
     onEditorActionsChanged: (SearchEditorActions?) -> Unit = {},
+    onPageActionsChanged: (SearchPageActions?) -> Unit = {},
+    onClearSearch: () -> Unit = { onQuery(""); callbacks.onFilter("all") },
 ) {
     val list = rememberLazyGridState()
     val laidOutItemCount by remember { derivedStateOf { list.layoutInfo.totalItemsCount } }
@@ -100,19 +107,10 @@ fun SearchScreen(
     val scope = rememberCoroutineScope()
     val controllerInput = LocalControllerInput.current
     val currentControllerInput by rememberUpdatedState(controllerInput)
+    val focusAllowed by rememberUpdatedState(allowFocusRequest && controllerInput)
     var editQuery by rememberSaveable { mutableStateOf(state.query) }
     val query = editQuery.trim()
-    val matchingSystemActions = systemActions.filter { action ->
-        query.isNotEmpty() && "${action.title} ${action.description}".contains(query, ignoreCase = true)
-    }.filter { state.filter == "all" || state.filter == "system" }
-    val results = remember(query, state.items, matchingSystemActions) {
-        buildList<SearchResult> {
-            if (query.isNotEmpty()) {
-                if (state.query == editQuery) addAll(state.items.map(SearchResult::Catalog))
-                addAll(matchingSystemActions.map(SearchResult::System))
-            }
-        }
-    }
+    val results = rememberSearchResults(editQuery, state.query, state.items, state.filter, systemActions)
     // Result composition is virtualized. Requesters remain stable by result key and are only
     // invoked after the corresponding lazy item is in the placed viewport.
     val resultRequesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -131,6 +129,9 @@ fun SearchScreen(
     var focusAfterScroll by remember { mutableStateOf(false) }
     var automaticScrollCount by remember { mutableIntStateOf(0) }
     val compactEditRequester = remember { FocusRequester() }
+    val filterRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    var filterControlsVisible by remember { mutableStateOf(false) }
+    var focusedHeaderKey by remember { mutableStateOf<String?>(null) }
     var listHasLaidOutItems by remember { mutableStateOf(false) }
 
     fun finishEditing(cancel: Boolean) {
@@ -145,6 +146,7 @@ fun SearchScreen(
         onQuery(nextQuery)
     }
     fun beginEditing() {
+        if (!editing) { editEntryQuery = editQuery; editing = true }
         headerCollapsed = false
         scope.launch {
             inputMode.requestInputMode(InputMode.Keyboard)
@@ -153,13 +155,39 @@ fun SearchScreen(
             keyboard?.show()
         }
     }
+    fun clearQuery() {
+        editQuery = ""
+        editEntryQuery = ""
+        selectedResultKey = null
+        focusedResultKey = null
+        pendingResultsFocusQuery = null
+        headerCollapsed = false
+        onClearSearch()
+        // An active editor retains its native input connection and keyboard. Cancel after
+        // Clear must also stay empty rather than resurrecting the old edit-entry value.
+        if (!editing) beginEditing()
+    }
     val currentApply = rememberUpdatedState { finishEditing(cancel = false) }
     val currentCancel = rememberUpdatedState { finishEditing(cancel = true) }
+    val currentClear = rememberUpdatedState { clearQuery() }
     val editorActions = remember { SearchEditorActions({ currentApply.value() }, { currentCancel.value() }) }
+    val hasQuery = editQuery.isNotEmpty()
+    val pageActions = remember(hasQuery) { SearchPageActions({ currentClear.value() }, hasQuery) }
+    val currentEditorPublisher by rememberUpdatedState(onEditorActionsChanged)
+    val currentPagePublisher by rememberUpdatedState(onPageActionsChanged)
     // Observe focus/session state during composition. Reads made only inside SideEffect do
     // not invalidate this scope, leaving the Activity's controller routing stale on focus.
     val activeEditorActions = editorActions.takeIf { editing && allowFocusRequest }
-    SideEffect { onEditorActionsChanged(activeEditorActions) }
+    SideEffect {
+        onEditorActionsChanged(activeEditorActions)
+        onPageActionsChanged(pageActions.takeIf { allowFocusRequest })
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            currentEditorPublisher(null)
+            currentPagePublisher(null)
+        }
+    }
     suspend fun restoreAnchor() {
         automaticScrollCount++
         try {
@@ -175,6 +203,7 @@ fun SearchScreen(
         } finally { automaticScrollCount-- }
     }
     suspend fun restoreResultFocus(): Boolean {
+        if (!focusAllowed || editing) return false
         automaticScrollCount++
         try {
         val selectedIndex = state.selectedItemId?.let { selectedId ->
@@ -190,6 +219,7 @@ fun SearchScreen(
             if (list.layoutInfo.visibleItemsInfo.none { it.index == targetIndex })
                 list.scrollToItem(targetIndex, if (targetIndex == anchorIndex) state.firstVisibleOffsetPx else 0)
             withFrameNanos { }
+            if (!focusAllowed || editing) return false
             if (list.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) return false
             val requester = resultRequesters[results[targetIndex].key] ?: return false
             inputMode.requestInputMode(InputMode.Keyboard)
@@ -198,9 +228,39 @@ fun SearchScreen(
         return false
         } finally { automaticScrollCount-- }
     }
+    suspend fun restoreEmptyFocus(): Boolean {
+        if (!focusAllowed || editing) return false
+        keyboard?.hide()
+        inputMode.requestInputMode(InputMode.Keyboard)
+        withFrameNanos { }
+        if (!focusAllowed || editing) return false
+        if (filterControlsVisible) {
+            val requester = filterRequesters[state.filter]
+            if (requester != null && runCatching { requester.requestFocus() }.isSuccess) {
+                withFrameNanos { }
+                if (!focusAllowed || editing) return false
+                if (focusedHeaderKey == "filter:${state.filter}") { keyboard?.hide(); return true }
+            }
+        }
+        // Apply collapses the filters, and small windows may not render them at all.
+        // The existing Edit action is a useful focus target without starting an edit.
+        headerCollapsed = true
+        repeat(3) {
+            withFrameNanos { }
+            if (!focusAllowed || editing) return false
+            if (runCatching { compactEditRequester.requestFocus() }.isSuccess) {
+                withFrameNanos { }
+                if (!focusAllowed || editing) return false
+                if (focusedHeaderKey == "edit") { keyboard?.hide(); return true }
+            }
+        }
+        return false
+    }
+    val passiveFocusPending = controllerInput && allowFocusRequest && restoreFocusRequest > 0 &&
+        restoreFocusRequest != handledPageActivation && queryFocusRequest <= handledQueryFocusRequest && !editing
     // A page activation is consumed exactly once. Later query/catalog updates cannot steal
     // the editor's focus; the Search shortcut is a separate explicit request to type.
-    LaunchedEffect(restoreFocusRequest, queryFocusRequest, state.loading, renderedResultKeys, allowFocusRequest, controllerInput, laidOutItemCount) {
+    LaunchedEffect(restoreFocusRequest, queryFocusRequest, state.loading, state.searching, renderedResultKeys, allowFocusRequest, controllerInput, laidOutItemCount) {
         if (!allowFocusRequest) return@LaunchedEffect
         if (queryFocusRequest > handledQueryFocusRequest) {
             headerCollapsed = false
@@ -211,15 +271,11 @@ fun SearchScreen(
                 handledPageActivation = restoreFocusRequest
                 keyboard?.show()
             }
-        } else if (controllerInput && restoreFocusRequest > 0 && restoreFocusRequest != handledPageActivation && !state.loading) {
+        } else if (passiveFocusPending && !state.loading && !state.searching) {
             if (results.isNotEmpty()) {
                 if (restoreResultFocus()) handledPageActivation = restoreFocusRequest
             } else {
-                headerCollapsed = false
-                inputMode.requestInputMode(InputMode.Keyboard)
-                withFrameNanos { }
-                runCatching { queryRequester.requestFocus() }
-                handledPageActivation = restoreFocusRequest
+                if (restoreEmptyFocus()) handledPageActivation = restoreFocusRequest
             }
             keyboard?.hide()
         }
@@ -308,6 +364,7 @@ fun SearchScreen(
     }
     BoxWithConstraints(modifier.fillMaxSize()) {
     val constrained = maxHeight < 240.dp
+    SideEffect { filterControlsVisible = !constrained && !headerCollapsed }
     val resultColumns = if (!constrained && maxWidth >= 720.dp) 2 else 1
     val navigator = rememberGridNavigation(renderedResultKeys, focusedResultKey, resultColumns, list, resultRequesters,
         enabled = allowFocusRequest && controllerInput && !editing, reducedMotion = LauncherTheme.motion.reducedMotion,
@@ -327,10 +384,17 @@ fun SearchScreen(
             verticalAlignment = Alignment.CenterVertically) {
             LauncherButton("Edit search", ::beginEditing,
                 Modifier.focusRequester(compactEditRequester).testTag(SearchScreenTags.Edit),
-                onFocusChanged = { hasFocus -> if (hasFocus) callbacks.onFocusedAction(FocusedControlAction(
-                    LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.OPEN_SEARCH, "Edit search"), ::beginEditing,
-                )) })
+                onFocusChanged = { hasFocus ->
+                    if (hasFocus) focusedHeaderKey = "edit" else if (focusedHeaderKey == "edit") focusedHeaderKey = null
+                    if (hasFocus) callbacks.onFocusedAction(FocusedControlAction(
+                        LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.OPEN_SEARCH, "Edit search"), ::beginEditing,
+                    )) else callbacks.onFocusedAction(null)
+                })
             LauncherText("${results.size} results", color = LauncherTheme.colors.textSecondary)
+            if (hasQuery) LauncherButton("Clear", ::clearQuery, Modifier.testTag(SearchScreenTags.Clear),
+                onFocusChanged = { focused -> if (focused) callbacks.onFocusedAction(FocusedControlAction(
+                    LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Clear"), ::clearQuery,
+                )) else callbacks.onFocusedAction(null) })
         } else SearchField(
             query = editQuery,
             onQueryChange = {
@@ -339,7 +403,11 @@ fun SearchScreen(
                 editQuery = it
                 onQuery(it)
             },
-            modifier = Modifier.focusRequester(queryRequester).fillMaxWidth(),
+            modifier = Modifier.focusRequester(queryRequester).focusProperties {
+                // Do not let native fallback start a new edit while a filter/page is
+                // restoring focus. Explicit X/Edit and an existing edit keep ownership.
+                canFocus = !passiveFocusPending || inputMode.inputMode == InputMode.Touch
+            }.fillMaxWidth(),
             onSearch = { finishEditing(cancel = false) },
             onFocusChanged = { focused ->
                 queryHasFocus = focused
@@ -369,10 +437,15 @@ fun SearchScreen(
                     filter.replaceFirstChar { it.uppercase() },
                     selected = filter == state.filter,
                     onSelectedChange = { callbacks.onFilter(filter) },
-                    onFocusChanged = { focused -> if (focused) callbacks.onFocusedAction(FocusedControlAction(
-                        LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.CHANGE_FILTER, "Filter ${filter.replaceFirstChar { it.uppercase() }}"),
-                        { callbacks.onFilter(filter) },
-                    )) else callbacks.onFocusedAction(null) },
+                    modifier = Modifier.focusRequester(filterRequesters.getOrPut(filter) { FocusRequester() })
+                        .testTag(SearchScreenTags.filter(filter)),
+                    onFocusChanged = { focused ->
+                        if (focused) focusedHeaderKey = "filter:$filter" else if (focusedHeaderKey == "filter:$filter") focusedHeaderKey = null
+                        if (focused) callbacks.onFocusedAction(FocusedControlAction(
+                            LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.CHANGE_FILTER, "Filter ${filter.replaceFirstChar { it.uppercase() }}"),
+                            { callbacks.onFilter(filter) },
+                        )) else callbacks.onFocusedAction(null)
+                    },
                 )
             }
         }
@@ -467,7 +540,27 @@ fun SearchScreen(
     }
 }
 
-private sealed interface SearchResult {
+/** Raw editor and published query are both keys: a whitespace edit may keep identical rows. */
+@Composable
+internal fun rememberSearchResults(
+    editQuery: String,
+    publishedQuery: String,
+    items: List<dev.handheld.launcher.core.domain.model.LibraryItem>,
+    filter: String,
+    systemActions: List<SupportedSystemAction>,
+): List<SearchResult> = remember(editQuery, publishedQuery, items, filter, systemActions) {
+    val query = editQuery.trim()
+    buildList {
+        if (query.isNotEmpty()) {
+            if (publishedQuery == editQuery) addAll(items.map(SearchResult::Catalog))
+            if (filter == "all" || filter == "system") addAll(systemActions.filter { action ->
+                "${action.title} ${action.description}".contains(query, ignoreCase = true)
+            }.map(SearchResult::System))
+        }
+    }
+}
+
+internal sealed interface SearchResult {
     val key: String
     data class Catalog(val item: dev.handheld.launcher.core.domain.model.LibraryItem) : SearchResult {
         override val key: String = "item:${item.id.value}"

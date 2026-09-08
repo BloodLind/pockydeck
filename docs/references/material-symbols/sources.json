@@ -148,5 +148,11 @@
     "variant": "wght200",
     "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/sort/wght200/24px.svg",
     "sha256": "a446c661ccd9b99b73b1df1d616e3fe866a4d97fb57b61e59868e94c730118d5"
+  },
+  {
+    "name": "bluetooth",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/bluetooth/wght200/24px.svg",
+    "sha256": "abd08594da9227ecad41dc67f5073b1812ccfd99ec592bb64bfebf08aa5ee642"
   }
 ]

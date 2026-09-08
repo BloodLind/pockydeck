@@ -11,15 +11,17 @@ import org.junit.Test
 
 class LauncherNavigationControllerTest {
     @Test
-    fun dockBackStaysOnEveryRootWithoutReturningToEarlierDestinations() {
+    fun dockSearchAndSettingsBackGoHomeWhileCatalogRootsStayOpen() {
         val navigation = LauncherNavigationController()
 
         for (destination in LauncherDestination.dockOrder) {
             navigation.selectDestination(destination)
+            val expected = if (destination in setOf(LauncherDestination.SEARCH, LauncherDestination.SETTINGS))
+                LauncherDestination.HOME else destination
             repeat(2) {
                 navigation.back()
-                assertEquals(LauncherLocation.Destination(destination), navigation.location.value)
-                assertEquals(destination, navigation.location.value.selectedDockDestination())
+                assertEquals(LauncherLocation.Destination(expected), navigation.location.value)
+                assertEquals(expected, navigation.location.value.selectedDockDestination())
             }
         }
     }
@@ -46,6 +48,12 @@ class LauncherNavigationControllerTest {
         assertEquals(LauncherLocation.Destination(LauncherDestination.FAVORITES), navigation.location.value)
         navigation.back()
         assertEquals(LauncherLocation.Destination(LauncherDestination.FAVORITES), navigation.location.value)
+
+        navigation.openShortcutSearch(LauncherDestination.SETTINGS)
+        navigation.back()
+        assertEquals(LauncherLocation.Destination(LauncherDestination.SETTINGS), navigation.location.value)
+        navigation.back()
+        assertEquals(LauncherLocation.Destination(LauncherDestination.HOME), navigation.location.value)
     }
 
     @Test

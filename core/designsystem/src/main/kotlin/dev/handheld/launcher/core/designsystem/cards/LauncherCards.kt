@@ -108,6 +108,7 @@ private fun CardActivation(
     shape: Shape,
     focusFrameWidth: Dp,
     focusLift: Dp,
+    maxArtworkSize: Dp = Dp.Infinity,
     caption: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -145,7 +146,8 @@ private fun CardActivation(
         }
         if (caption != null) {
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                frame(Modifier.size(minOf(maxWidth, 176.dp * LauncherTheme.referenceScale)))
+                frame(Modifier.size(minOf(maxWidth, 208.dp * LauncherTheme.referenceScale,
+                    maxArtworkSize.coerceAtLeast(0.dp))))
             }
         } else frame(Modifier)
         caption?.invoke()
@@ -171,6 +173,7 @@ fun CoverTile(
     focusLift: Dp = LauncherTheme.depth.focusLift,
     subtitleColor: Color? = null,
     status: (@Composable () -> Unit)? = null,
+    maxArtworkSize: Dp = Dp.Infinity,
 ) {
     require(variant != CardVariant.AppIcon) { "Use AppIconTile for the app variant" }
     val isCollection = variant == CardVariant.CollectionCover
@@ -178,6 +181,7 @@ fun CoverTile(
         onActivate, onFocusChanged, modifier,
         RoundedCornerShape(if (isCollection) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
+        maxArtworkSize = maxArtworkSize,
         caption = if (isCollection) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), subtitleColor,
             reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {
@@ -222,6 +226,7 @@ fun AppIconTile(
     showCaption: Boolean = false,
     badge: (@Composable () -> Unit)? = null,
     status: (@Composable () -> Unit)? = null,
+    maxArtworkSize: Dp = Dp.Infinity,
 ) {
     val scale = LauncherTheme.referenceScale
     val type = LauncherTheme.typography
@@ -232,6 +237,7 @@ fun AppIconTile(
         onActivate, onFocusChanged, modifier,
         RoundedCornerShape(if (showCaption) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
+        maxArtworkSize = maxArtworkSize,
         caption = if (showCaption) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
             reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {

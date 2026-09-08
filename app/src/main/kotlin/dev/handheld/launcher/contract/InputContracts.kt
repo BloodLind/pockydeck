@@ -24,6 +24,7 @@ enum class LauncherActionMeaning {
     OPEN_DETAILS,
     TOGGLE_FAVORITE,
     OPEN_SEARCH,
+    CLEAR_SEARCH,
     OPEN_SETTINGS,
     OPEN_MENU,
     DISMISS,

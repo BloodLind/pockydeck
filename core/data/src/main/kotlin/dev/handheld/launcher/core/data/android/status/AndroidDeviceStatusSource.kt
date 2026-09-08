@@ -1,6 +1,8 @@
 package dev.handheld.launcher.core.data.android.status
 
 import android.app.ActivityManager
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -20,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -31,6 +34,8 @@ data class DeviceStatusSnapshot(
     val freeStorageBytes: StatusValue<Long> = StatusValue.Unavailable,
     val wifiConnected: StatusValue<Boolean> = StatusValue.Unavailable,
     val wifiEnabled: StatusValue<Boolean> = StatusValue.Unavailable,
+    val bluetoothEnabled: StatusValue<Boolean> = StatusValue.Unavailable,
+    val notificationsPresent: StatusValue<Boolean> = StatusValue.Unavailable,
 )
 
 /** Starts callbacks and modest off-main sampling only while the foreground UI collects. */
@@ -41,6 +46,7 @@ class AndroidDeviceStatusSource(context: Context) {
         val current = AtomicReference(DeviceStatusSnapshot())
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
         val wifiManager = context.getSystemService(WifiManager::class.java)
+        val notificationAccess = NotificationStatusAccess(context)
 
         fun update(transform: (DeviceStatusSnapshot) -> DeviceStatusSnapshot) {
             synchronized(current) { trySend(current.updateAndGet(transform)) }
@@ -64,6 +70,27 @@ class AndroidDeviceStatusSource(context: Context) {
         fun readWifiRadio() {
             val enabled = readWifiRadioEnabled(wifiManager?.let { manager -> { manager.isWifiEnabled } })
             update { it.copy(wifiEnabled = enabled) }
+        }
+
+        fun readBluetoothRadio() {
+            // isEnabled reads adapter power only; no scan, connection or device identity access.
+            val enabled = readBluetoothRadioEnabled {
+                context.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled
+            }
+            update { it.copy(bluetoothEnabled = enabled) }
+        }
+
+        fun readNotificationPresence() {
+            val present = notificationPresenceForAccess(
+                notificationAccess.accessState(), NotificationPresenceStore.presence.state.value,
+            )
+            update { it.copy(notificationsPresent = present) }
+        }
+
+        val bluetoothReceiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) readBluetoothRadio()
+            }
         }
 
         val wifiReceiver = object : BroadcastReceiver() {
@@ -137,13 +164,27 @@ class AndroidDeviceStatusSource(context: Context) {
             context.registerReceiver(wifiReceiver, IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION))
             true
         } catch (_: RuntimeException) { false }
+        val bluetoothRegistered = try {
+            // Bluetooth broadcasts can originate from a privileged UID other than system UID.
+            // Ignore broadcast extras and reread the public adapter state.
+            context.registerReceiver(bluetoothReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+                Context.RECEIVER_EXPORTED)
+            true
+        } catch (_: RuntimeException) { false }
         readNetwork()
         readWifiRadio()
+        readBluetoothRadio()
+        val notificationObservation = launch {
+            NotificationPresenceStore.presence.state.collect { readNotificationPresence() }
+        }
 
         val sampling = launch(Dispatchers.IO) {
             while (isActive) {
                 if (!networkRegistered) readNetwork()
                 if (!wifiRegistered) readWifiRadio()
+                if (!bluetoothRegistered) readBluetoothRadio()
+                // Recheck access with the existing sampling tick, never enumerate notifications.
+                readNotificationPresence()
                 val memory = ActivityManager.MemoryInfo()
                 val memoryPair = try {
                     val manager = context.getSystemService(ActivityManager::class.java)
@@ -176,6 +217,7 @@ class AndroidDeviceStatusSource(context: Context) {
 
         awaitClose {
             sampling.cancel()
+            notificationObservation.cancel()
             if (batteryRegistered) {
                 runCatching { context.unregisterReceiver(batteryReceiver) }
             }
@@ -183,6 +225,7 @@ class AndroidDeviceStatusSource(context: Context) {
                 runCatching { connectivity.unregisterNetworkCallback(networkCallback) }
             }
             if (wifiRegistered) runCatching { context.unregisterReceiver(wifiReceiver) }
+            if (bluetoothRegistered) runCatching { context.unregisterReceiver(bluetoothReceiver) }
         }
     }.buffer(Channel.CONFLATED)
 

@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableIntStateOf
@@ -37,6 +39,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -149,12 +152,15 @@ private fun CollectionBody(
     var handledFocusRequest by remember { mutableStateOf<Triple<Int, String, String>?>(null) }
     var viewportRestored by remember { mutableStateOf(false) }
     var filterStripFocused by remember { mutableStateOf(false) }
+    var focusedHeaderKey by remember { mutableStateOf<String?>(null) }
     val allFilterFocus = remember { FocusRequester() }
     val allFiltersFocus = remember { FocusRequester() }
     val sortFocus = remember { FocusRequester() }
+    val filterRow = rememberLazyListState()
+    val categoryRequesters = remember { mutableMapOf<String, FocusRequester>() }
     val scope = rememberCoroutineScope()
     val navigator = rememberGridNavigation(itemKeys, focusedGridItem?.value, columns, grid, requesters,
-        enabled = allowFocusRequest && controllerInput, reducedMotion = LauncherTheme.motion.reducedMotion)
+        enabled = allowFocusRequest && controllerInput && !state.searching, reducedMotion = LauncherTheme.motion.reducedMotion)
     suspend fun restoreSelection(restoreViewport: Boolean = false): Boolean {
         if (!focusAllowed) return false
         val anchor = state.firstVisibleItemId?.let { target -> state.items.indexOfFirst { it.id == target } } ?: -1
@@ -183,17 +189,56 @@ private fun CollectionBody(
         return false
     }
     RegisterPageNavigation { direction ->
-        if (filterStripFocused) {
-            // Directional navigation leaves the strip. Only triggers change categories.
-            when (direction) {
-                FocusDirection.Left, FocusDirection.Up -> allFilterFocus.requestFocus()
-                FocusDirection.Right -> (if (callbacks.onOpenFilters != null) allFiltersFocus else sortFocus).requestFocus()
-                FocusDirection.Down -> scope.launch { if (!restoreSelection() && focusAllowed) allFilterFocus.requestFocus() }
+        if (filterStripFocused || focusedHeaderKey != null) {
+            // Only fully visible categories belong to the D-pad path. Moving through the
+            // strip must never bring a clipped/off-screen chip into view implicitly.
+            val layout = filterRow.layoutInfo
+            val visible = layout.visibleItemsInfo.filter {
+                it.offset >= layout.viewportStartOffset && it.offset + it.size <= layout.viewportEndOffset
+            }.map { it.key as String }
+            val path = buildList {
+                add("all"); addAll(visible)
+                if (callbacks.onOpenFilters != null) add("header-more")
+                add("header-sort")
             }
+            fun requestHeader(key: String) {
+                when (key) {
+                    "all" -> allFilterFocus
+                    "header-more" -> allFiltersFocus
+                    "header-sort" -> sortFocus
+                    else -> categoryRequesters[key]
+                }?.requestFocus()
+            }
+            when (direction) {
+                FocusDirection.Left, FocusDirection.Right -> {
+                    val index = path.indexOf(focusedHeaderKey)
+                    val next = if (index < 0) {
+                        if (direction == FocusDirection.Left) "all" else visible.firstOrNull() ?: "header-sort"
+                    } else path.getOrNull(index + if (direction == FocusDirection.Right) 1 else -1)
+                    if (next == null) false else { requestHeader(next); true }
+                }
+                FocusDirection.Down -> {
+                    scope.launch { if (!restoreSelection() && focusAllowed) allFilterFocus.requestFocus() }
+                    true
+                }
+                else -> false
+            }
+        } else if (direction == FocusDirection.Up && !state.searching &&
+            itemKeys.indexOf(focusedGridItem?.value) in 0 until columns) {
+            val layout = filterRow.layoutInfo
+            val activeVisible = layout.visibleItemsInfo.any {
+                it.key == state.filter && it.offset >= layout.viewportStartOffset &&
+                    it.offset + it.size <= layout.viewportEndOffset
+            }
+            // Entering from the first grid row also skips clipped chips; Android's
+            // geometric default can otherwise reveal an off-screen category on focus.
+            ((if (activeVisible) categoryRequesters[state.filter] else null) ?: allFilterFocus).requestFocus()
             true
         } else navigator.move(direction)
     }
     val focusRequest = Triple(restoreFocusRequest, state.filter, state.sort)
+    val restoringCardFocus = controllerInput && allowFocusRequest && restoreFocusRequest > 0 &&
+        focusRequest != handledFocusRequest && (state.items.isNotEmpty() || state.searching)
     LaunchedEffect(focusRequest, state.loading, state.searching, renderedItemIds, allowFocusRequest, controllerInput, laidOutItemCount) {
         if (!viewportRestored && !state.loading && state.items.isNotEmpty()) {
             val anchor = renderedItemIds.indexOf(state.firstVisibleItemId)
@@ -221,27 +266,43 @@ private fun CollectionBody(
     }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
+        // Keep header native targets available, but do not paint Android's temporary
+        // fallback focus while a changed filter is restoring the resulting card.
+        CompositionLocalProvider(LocalControllerInput provides (controllerInput && !restoringCardFocus)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val compactHeader = maxWidth < 560.dp
+            val headerCallbacks = callbacks.copy(onFocusedAction = {
+                if (!restoringCardFocus) callbacks.onFocusedAction(it)
+            })
+            val headerFocus: (String, Boolean) -> Unit = { key, focused ->
+                if (focused) focusedHeaderKey = key else if (focusedHeaderKey == key) focusedHeaderKey = null
+            }
             val sortControl: @Composable () -> Unit = {
                 val sort = callbacks.onOpenSort ?: callbacks.onToggleSort
                 SortSelector(if (state.sort == "recent") "Recent" else "Title", listOf("Recent", "Title"), sort,
                     Modifier.height(48.dp).focusRequester(sortFocus),
-                    onFocusChanged = { focused -> callbacks.focused("Sort", LauncherActionMeaning.CHANGE_FILTER, sort, focused) })
+                    onFocusChanged = { focused ->
+                        headerFocus("header-sort", focused)
+                        headerCallbacks.focused("Sort", LauncherActionMeaning.CHANGE_FILTER, sort, focused)
+                    })
             }
-            if (maxWidth < 560.dp) Column {
-                Row(Modifier.fillMaxWidth().heightIn(min = 54.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PageHeading(title, countLabel(state.items.size, visibleSystemActions.size), Modifier.weight(1f))
+            Column {
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    LauncherText(title, style = LauncherTheme.typography.pageTitle,
+                        modifier = if (compactHeader) Modifier.weight(1f) else Modifier.width(102.dp),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!compactHeader) CollectionFilters(state, headerCallbacks, Modifier.weight(1f), allFilterFocus, allFiltersFocus,
+                        filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it })
                     sortControl()
                 }
-                CollectionFilters(state, callbacks, Modifier.fillMaxWidth(), allFilterFocus, allFiltersFocus,
-                    onStripFocused = { filterStripFocused = it })
-            } else Row(Modifier.fillMaxWidth().heightIn(min = 54.dp), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
-                verticalAlignment = Alignment.CenterVertically) {
-                PageHeading(title, countLabel(state.items.size, visibleSystemActions.size), Modifier.width(102.dp))
-                CollectionFilters(state, callbacks, Modifier.weight(1f), allFilterFocus, allFiltersFocus,
-                    onStripFocused = { filterStripFocused = it })
-                sortControl()
+                LauncherText(countLabel(state.items.size, visibleSystemActions.size),
+                    style = LauncherTheme.typography.tileSubtitle, color = LauncherTheme.colors.textSecondary)
+                if (compactHeader) CollectionFilters(state, headerCallbacks, Modifier.fillMaxWidth(), allFilterFocus, allFiltersFocus,
+                    filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it })
             }
+        }
         }
         if (state.inventoryIncomplete) InlineNotice("Catalog may be incomplete.", "Retry", callbacks.onRetry)
         state.error?.let { InlineNotice(it, "Retry", callbacks.onRetry) }
@@ -255,19 +316,24 @@ private fun CollectionBody(
                 requestInitialFocus = allowFocusRequest && controllerInput,
                 restoreFocusRequest = restoreFocusRequest,
             )
-            else -> LazyVerticalGrid(
+            else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val availableCardHeight = (maxHeight - (LauncherTheme.depth.focusLift + LauncherTheme.spacing.xs) * 2f).coerceAtLeast(0.dp)
+            LazyVerticalGrid(
                 columns = GridCells.Fixed(columns), state = grid,
-                modifier = Modifier.weight(1f).fillMaxWidth().testTag("collection-grid"),
+                modifier = Modifier.fillMaxSize().testTag("collection-grid"),
                 contentPadding = PaddingValues(vertical = LauncherTheme.depth.focusLift + LauncherTheme.spacing.xs),
-                horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md),
-                verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
             ) {
                 items(state.items, key = { it.id.value }) { item ->
                     val model = item.toTileUiModel(state.overrides[item.id], item.id in state.recentIds)
                     val open = { callbacks.onSelect(item.id); callbacks.onOpen(item.id) }
                     LibraryItemCard(
                         model, LibraryItemCardVariant.Collection, state.selectedItemId == item.id,
+                        // Keep the native target attached during filtering. The ViewModel's
+                        // synchronous launch guard rejects activation until criteria settle.
                         activationEnabled = model.canOpen,
+                        maxCollectionCardHeight = availableCardHeight,
                         modifier = Modifier.fillMaxWidth()
                             .focusRequester(requesters.getOrPut(item.id.value) { FocusRequester() }),
                         iconLoader = iconLoader, onActivate = open,
@@ -294,6 +360,7 @@ private fun CollectionBody(
                         onFocusChanged = { focused -> callbacks.focused(action.title, LauncherActionMeaning.ACTIVATE, { callbacks.onOpenSystemAction(action.key) }, focused) })
                 }
             }
+            }
         }
     }
 }
@@ -305,6 +372,9 @@ private fun CollectionFilters(
     modifier: Modifier,
     allFocus: FocusRequester,
     moreFocus: FocusRequester,
+    row: LazyListState,
+    categoryRequesters: MutableMap<String, FocusRequester>,
+    onHeaderFocus: (String, Boolean) -> Unit,
     onStripFocused: (Boolean) -> Unit,
 ) {
     val options = remember(state.destination, state.allItems, state.overrides, state.favorites) { collectionFilterOptions(state) }
@@ -315,12 +385,13 @@ private fun CollectionFilters(
         FilterChip("All", state.filter == "all", { callbacks.onFilter("all") },
             Modifier.focusRequester(allFocus).testTag("collection-filter-all"),
             contentDescription = "Filter All, ${options.firstOrNull { it.key == "all" }?.count ?: 0} items",
-            onFocusChanged = { focused -> callbacks.focused("Filter All", LauncherActionMeaning.CHANGE_FILTER,
-                { callbacks.onFilter("all") }, focused) })
+            onFocusChanged = { focused ->
+                onHeaderFocus("all", focused)
+                callbacks.focused("Filter All", LauncherActionMeaning.CHANGE_FILTER, { callbacks.onFilter("all") }, focused)
+            })
         if (categories.isNotEmpty()) {
             Box(Modifier.width(1.dp).height(20.dp).border(1.dp, LauncherTheme.colors.borderEmphasis))
             ControllerGlyph("L2", semanticLabel = "L2: previous filter; hold to accelerate")
-            val row = rememberLazyListState()
             val reducedMotion = LauncherTheme.motion.reducedMotion
             LaunchedEffect(state.filter, categories.map { it.key }) {
                 val selected = categories.indexOfFirst { it.key == state.filter }
@@ -331,25 +402,37 @@ private fun CollectionFilters(
                     }
                 }
             }
+            // Reserve roughly one short category less than the available width. This
+            // keeps the chooser and sort visually separate even at enlarged UI scales.
+            BoxWithConstraints(Modifier.weight(1f, fill = false)) {
+            val stripWidth = (maxWidth - 72.dp * LauncherTheme.referenceScale).coerceAtLeast(48.dp)
             LazyRow(state = row,
-                modifier = Modifier.weight(1f, fill = false).clipToBounds().testTag("collection-filter-strip")
+                modifier = Modifier.widthIn(max = stripWidth).clipToBounds().testTag("collection-filter-strip")
                     .onFocusChanged { onStripFocused(it.hasFocus) }.focusGroup(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 items(categories.size, key = { categories[it].key }) { index ->
                     val option = categories[index]
                     FilterChip(option.label, option.key == state.filter, { callbacks.onFilter(option.key) },
-                        Modifier.testTag("collection-filter-${option.key}"),
+                        Modifier.testTag("collection-filter-${option.key}")
+                            .focusRequester(categoryRequesters.getOrPut(option.key) { FocusRequester() }),
                         contentDescription = "Filter ${collectionFilterLabel(option.key)}, ${option.count} items",
-                        onFocusChanged = { focused -> callbacks.focused("Filter ${collectionFilterLabel(option.key)}", LauncherActionMeaning.CHANGE_FILTER,
-                            { callbacks.onFilter(option.key) }, focused) })
+                        onFocusChanged = { focused ->
+                            onHeaderFocus(option.key, focused)
+                            callbacks.focused("Filter ${collectionFilterLabel(option.key)}", LauncherActionMeaning.CHANGE_FILTER,
+                                { callbacks.onFilter(option.key) }, focused)
+                        })
                 }
+            }
             }
             ControllerGlyph("R2", semanticLabel = "R2: next filter; hold to accelerate")
         } else androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
         callbacks.onOpenFilters?.let { open ->
             FilterChip("All filters", false, { open() }, Modifier.focusRequester(moreFocus),
                 contentDescription = "Show all console filters in a grid",
-                onFocusChanged = { focused -> callbacks.focused("All filters", LauncherActionMeaning.CHANGE_FILTER, open, focused) },
+                onFocusChanged = { focused ->
+                    onHeaderFocus("header-more", focused)
+                    callbacks.focused("All filters", LauncherActionMeaning.CHANGE_FILTER, open, focused)
+                },
                 trailingIcon = { LauncherGlyphIcon(LauncherGlyph.Apps, Modifier.size(16.dp), contentDescription = null) })
         }
     }

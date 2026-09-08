@@ -1,5 +1,7 @@
 package dev.handheld.launcher.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.foundation.layout.Box
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.Dp
@@ -51,6 +54,7 @@ fun LibraryItemCard(
     iconLoader: AndroidIconLoader? = null,
     onActivate: () -> Unit,
     onFocusChanged: (Boolean) -> Unit = {},
+    maxCollectionCardHeight: Dp = Dp.Infinity,
 ) {
     val cardModifier = modifier.semantics { this.selected = selected }
     val unavailable = model.availability !is Availability.Available
@@ -80,6 +84,14 @@ fun LibraryItemCard(
     val contextualSubtitle = model.subtitle?.takeUnless {
         it.equals(model.platformLabel, ignoreCase = true) || it in setOf("App", "Game", "Emulator", "System")
     }
+    val type = LauncherTheme.typography
+    val captionHeight = with(LocalDensity.current) {
+        type.tileTitle.lineHeight.toDp() * 2f +
+            if (contextualSubtitle != null) type.tileSubtitle.lineHeight.toDp() else 0.dp
+    } + 6.dp // Four dp caption padding plus native text-layout rounding slack.
+    val maxArtworkSize = if (variant == LibraryItemCardVariant.Collection && maxCollectionCardHeight.value.isFinite()) {
+        (maxCollectionCardHeight - captionHeight).coerceAtLeast(0.dp)
+    } else Dp.Infinity
 
     if (model.artwork is TileArtwork.AndroidIcon && variant != LibraryItemCardVariant.SearchResult) {
         AppIconTile(
@@ -97,6 +109,7 @@ fun LibraryItemCard(
             focusLift = focusLift,
             showCaption = variant == LibraryItemCardVariant.Collection,
             badge = badge,
+            maxArtworkSize = maxArtworkSize,
         )
         return
     }
@@ -134,6 +147,7 @@ fun LibraryItemCard(
             focusFrameWidth = focusFrameWidth,
             focusLift = focusLift,
             subtitleColor = model.platformAccent.takeIf { model.typeLabel == "Game" },
+            maxArtworkSize = maxArtworkSize,
         )
 
         LibraryItemCardVariant.SearchResult -> SearchResultCard(
@@ -161,14 +175,29 @@ private fun TileArtwork(
     iconPainter: Painter?,
 ) {
     val enriched = rememberEnrichedArtwork(model)
+    val visual = ArtworkVisual(
+        painter = enriched.painter ?: iconPainter,
+        cover = enriched.painter != null,
+        fallback = if (model.artwork is TileArtwork.LocalReference) "Custom artwork unavailable" else model.typeLabel,
+    )
     Box(Modifier.fillMaxSize()) {
-        when {
-            enriched.painter != null -> CoverArtwork(enriched.painter)
-            iconPainter != null -> AppIconArtwork(iconPainter)
-            model.artwork is TileArtwork.LocalReference -> ArtworkFallback(label = "Custom artwork unavailable")
-            else -> ArtworkFallback(label = model.typeLabel)
+        if (LauncherTheme.motion.reducedMotion) ArtworkVisualContent(visual)
+        else Crossfade(visual, Modifier.fillMaxSize(), animationSpec = tween(140), label = "Loaded artwork") { frame ->
+            ArtworkVisualContent(frame)
         }
         if (enriched.pending) ArtworkPendingHint(Modifier.align(Alignment.TopStart).padding(6.dp))
+    }
+}
+
+private data class ArtworkVisual(val painter: Painter?, val cover: Boolean, val fallback: String)
+
+@Composable
+private fun ArtworkVisualContent(visual: ArtworkVisual) {
+    val painter = visual.painter
+    when {
+        painter == null -> ArtworkFallback(label = visual.fallback)
+        visual.cover -> CoverArtwork(painter)
+        else -> AppIconArtwork(painter)
     }
 }
 

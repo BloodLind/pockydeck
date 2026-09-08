@@ -98,5 +98,5 @@ fun rememberAndroidIconPainter(
     componentId: CurrentUserAndroidComponentId,
 ): Painter? {
     val result = rememberAndroidIconResult(loader, componentId).value
-    return (result as? AndroidIconResult.Loaded)?.bitmap?.let(::BitmapPainter)
+    return remember(result) { (result as? AndroidIconResult.Loaded)?.bitmap?.let(::BitmapPainter) }
 }

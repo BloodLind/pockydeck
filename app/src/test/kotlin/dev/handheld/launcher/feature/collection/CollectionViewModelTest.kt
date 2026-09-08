@@ -27,6 +27,7 @@ import dev.handheld.launcher.core.domain.repository.NavigationSnapshotRepository
 import dev.handheld.launcher.core.domain.repository.SuccessfulOpenRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +46,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CollectionViewModelTest {
@@ -55,6 +57,102 @@ class CollectionViewModelTest {
 
     @After
     fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun `populated collections retain attached cards while a new filter is computed`() = runTest(dispatcher) {
+        val game = collectionItem("game", "A Game", LibraryCategory.GAME)
+        val app = collectionItem("app", "B App", LibraryCategory.OTHER)
+        val emulator = collectionItem("emulator", "C Emulator", LibraryCategory.EMULATOR)
+        val rom = collectionRom("D PSP Game", "psp")
+        val items = listOf(game, app, emulator, rom)
+        val cases = listOf(LauncherDestination.LIBRARY to "console:psp",
+            LauncherDestination.APPS to "emulators", LauncherDestination.FAVORITES to "games")
+        for ((destination, filter) in cases) {
+            val cpu = QueuedCollectionDispatcher()
+            val viewModel = collectionViewModel(items, releasedSnapshots(destination), destination = destination,
+                favorites = CollectionFavorites(items.map { it.id }.toSet()), computationDispatcher = cpu)
+            fun settle() { repeat(8) { cpu.drain(); runCurrent() } }
+            settle()
+            assertFalse(viewModel.state.value.loading)
+            val before = viewModel.state.value
+            assertTrue(before.items.isNotEmpty())
+            assertTrue(viewModel.canOpenItem(before.items.first().id))
+            viewModel.filter(filter)
+            assertFalse("Same-frame Confirm must reject an old card before state publication", viewModel.canOpenItem(before.items.first().id))
+            runCurrent() // The calculation dispatcher is deliberately paused.
+            val pending = viewModel.state.value
+            assertTrue("The test must observe pending computation for $destination", pending.searching)
+            org.junit.Assert.assertSame(before.items, pending.items)
+            assertEquals(before.selectedItemId, pending.selectedItemId)
+            assertFalse(viewModel.canOpenItem(before.items.first().id))
+            settle()
+            assertTrue(viewModel.canOpenItem(viewModel.state.value.items.first().id))
+            val ready = viewModel.state.value
+            assertFalse(ready.searching)
+            assertEquals(filter, ready.filter)
+            assertTrue(ready.items.isNotEmpty())
+            assertTrue(ready.items.all { collectionFilterMatches(it, filter, emptyMap()) })
+            assertTrue(ready.items.any { it.id == ready.selectedItemId })
+        }
+    }
+
+    @Test
+    fun `Search hides old query matches while the replacement calculation is pending`() = runTest(dispatcher) {
+        val cpu = QueuedCollectionDispatcher()
+        val viewModel = collectionViewModel(listOf(collectionRom("Mario", "gba"), collectionRom("Sonic", "megadrive")),
+            releasedSnapshots(LauncherDestination.SEARCH), destination = LauncherDestination.SEARCH, computationDispatcher = cpu)
+        fun settle() { repeat(8) { cpu.drain(); runCurrent() } }
+        settle()
+        viewModel.query("Mario")
+        settle()
+        assertEquals("Mario", viewModel.state.value.items.single().title)
+        viewModel.query("Sonic")
+        runCurrent()
+        assertTrue(viewModel.state.value.searching)
+        assertTrue(viewModel.state.value.items.isEmpty())
+        assertNull(viewModel.state.value.selectedItemId)
+        settle()
+        assertEquals("Sonic", viewModel.state.value.items.single().title)
+    }
+
+    @Test
+    fun `clearing Search removes stale Apps scope and selection so a ROM query can match`() = runTest(dispatcher) {
+        val rom = collectionRom("Super Mario Advance", "gba")
+        val items = listOf(rom, collectionItem("editor", "Mario Editor", LibraryCategory.OTHER))
+        val viewModel = collectionViewModel(items, releasedSnapshots(LauncherDestination.SEARCH), destination = LauncherDestination.SEARCH)
+        viewModel.query("Mario")
+        viewModel.filter("apps")
+        viewModel.sort("title")
+        advanceUntilIdle()
+        val selected = viewModel.state.value.items.single().id
+        viewModel.select(selected)
+        viewModel.rememberAnchor(selected, 31)
+        viewModel.clearSearch()
+        advanceUntilIdle()
+        val cleared = viewModel.state.value
+        assertEquals("", cleared.query)
+        assertEquals("all", cleared.filter)
+        assertEquals("title", cleared.sort)
+        assertNull(cleared.selectedItemId)
+        assertNull(cleared.firstVisibleItemId)
+        assertEquals(0, cleared.firstVisibleOffsetPx)
+        assertTrue(cleared.items.isEmpty())
+        viewModel.query(" Super Mario Advance ")
+        advanceUntilIdle()
+        assertEquals(listOf(rom.id), viewModel.state.value.items.map { it.id })
+    }
+
+    @Test
+    fun `closing empty Search prevents a delayed old snapshot from restoring its query`() = runTest(dispatcher) {
+        val snapshots = DelayedCollectionSnapshots(DestinationSnapshot(LauncherDestination.SEARCH,
+            query = "old search", filterKey = PageStateKey("apps")))
+        val viewModel = collectionViewModel(collectionItems(), snapshots, destination = LauncherDestination.SEARCH)
+        viewModel.clearSearch()
+        snapshots.release()
+        advanceUntilIdle()
+        assertEquals("", viewModel.state.value.query)
+        assertEquals("all", viewModel.state.value.filter)
+    }
 
     @Test
     fun `trigger categories stop at ends and retain viewport on repeated boundary input`() = runTest(dispatcher) {
@@ -357,6 +455,7 @@ private fun TestScope.collectionViewModel(
     destination: LauncherDestination = LauncherDestination.LIBRARY,
     favorites: FavoriteRepository = EmptyFavorites,
     overrides: ItemOverrideRepository = EmptyOverrides,
+    computationDispatcher: CoroutineDispatcher = StandardTestDispatcher(testScheduler),
 ) = CollectionViewModel(
     destination,
     catalog,
@@ -365,8 +464,15 @@ private fun TestScope.collectionViewModel(
     EmptyOpens,
     snapshots,
     SavedStateHandle(),
-    computationDispatcher = StandardTestDispatcher(testScheduler),
+    computationDispatcher = computationDispatcher,
 )
+
+/** Controls CPU publication independently of Main without timing sleeps or another scheduler. */
+private class QueuedCollectionDispatcher : CoroutineDispatcher() {
+    private val pending = ArrayDeque<Runnable>()
+    override fun dispatch(context: CoroutineContext, block: Runnable) { pending.addLast(block) }
+    fun drain() { while (pending.isNotEmpty()) pending.removeFirst().run() }
+}
 
 private fun releasedSnapshots(destination: LauncherDestination = LauncherDestination.LIBRARY) =
     DelayedCollectionSnapshots(DestinationSnapshot(destination)).apply { release() }

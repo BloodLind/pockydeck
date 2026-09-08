@@ -1,5 +1,8 @@
 package dev.handheld.launcher.shell
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,11 +26,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.testTag
@@ -36,6 +42,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -95,6 +102,10 @@ data class LauncherShellStatus(
     val readings: List<ShellStatusReading> = emptyList(),
     /** Right-aligned readings, such as wireless or battery, in caller-defined order. */
     val rightReadings: List<ShellStatusReading> = emptyList(),
+    /** The root maps only an explicitly available, enabled radio to true. */
+    val bluetoothEnabled: Boolean = false,
+    /** Presence only: the shell receives no notification text or app identity. */
+    val notificationsPresent: Boolean = false,
 )
 
 /** State for shell chrome. Destination selection and actual controller focus remain separate. */
@@ -203,9 +214,21 @@ private fun StatusStrip(
             color = LauncherTheme.colors.textPrimary,
             maxLines = 1,
         )
+        if (status.notificationsPresent) {
+            Spacer(Modifier.width(LauncherTheme.spacing.xs))
+            Box(Modifier.size((5.dp * scale).coerceAtLeast(3.dp))
+                .background(LauncherTheme.colors.textPrimary, CircleShape)
+                .semantics { contentDescription = "Notifications available" })
+        }
         if (status.readings.isNotEmpty()) Spacer(Modifier.width(LauncherTheme.spacing.md))
         StatusReadings(status.readings)
         Spacer(Modifier.weight(1f))
+        if (status.bluetoothEnabled) {
+            LauncherStatusGlyphIcon(LauncherStatusGlyph.Bluetooth,
+                Modifier.size(16.dp * scale * LauncherTheme.smallControlScale),
+                tint = LauncherTheme.colors.textPrimary, contentDescription = "Bluetooth enabled")
+            if (status.rightReadings.any { it.presentation.shouldRender }) Spacer(Modifier.width(LauncherTheme.spacing.sm))
+        }
         StatusReadings(
             readings = status.rightReadings,
         )
@@ -405,6 +428,16 @@ private fun ShellFooter(
     confirmBackMapping: ConfirmBackMapping,
     modifier: Modifier = Modifier,
 ) {
+    val reducedMotion = LauncherTheme.motion.reducedMotion
+    val reveal = remember { Animatable(1f) }
+    val visibleActions = footer.actions.map { Triple(it.input, it.meaning, it.label) }
+    LaunchedEffect(visibleActions, confirmBackMapping, reducedMotion) {
+        if (reducedMotion) reveal.snapTo(1f)
+        else {
+            reveal.snapTo(.72f)
+            reveal.animateTo(1f, tween(120))
+        }
+    }
     Box(
         modifier = modifier
             .offset(layout.footerBounds.left, layout.footerBounds.top)
@@ -420,13 +453,18 @@ private fun ShellFooter(
         Row(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(horizontal = gutter),
+                .then(if (reducedMotion) Modifier else Modifier.animateContentSize(
+                    animationSpec = tween(120), alignment = Alignment.CenterEnd))
+                .padding(horizontal = gutter)
+                .graphicsLayer { alpha = reveal.value },
             horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xl),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             footer.actions.forEach { descriptor ->
-                FooterAction(descriptor, actionPort, confirmBackMapping,
-                    visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f - 8.dp * LauncherTheme.referenceScale)
+                key(descriptor.input) {
+                    FooterAction(descriptor, actionPort, confirmBackMapping,
+                        visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f - 8.dp * LauncherTheme.referenceScale)
+                }
             }
         }
     }
@@ -441,6 +479,7 @@ private fun FooterAction(
 ) {
     Box(
         modifier = Modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
             .height(48.dp)
             .testTag(LauncherShellTags.footerAction(descriptor.input))
             .semantics { if (!descriptor.enabled) disabled() }

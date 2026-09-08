@@ -37,6 +37,7 @@ enum class LauncherStatusGlyph(internal val resourceId: Int) {
     StorageLow(R.drawable.ic_material_sd_card_alert),
     Wifi(R.drawable.ic_material_wifi),
     WifiOff(R.drawable.ic_material_wifi_off),
+    Bluetooth(R.drawable.ic_material_bluetooth),
     Battery(R.drawable.ic_material_battery_5_bar),
     Battery0(R.drawable.ic_material_battery_0_bar),
     Battery1(R.drawable.ic_material_battery_1_bar),

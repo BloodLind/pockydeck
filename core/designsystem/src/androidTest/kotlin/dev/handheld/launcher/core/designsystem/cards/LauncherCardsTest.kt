@@ -198,7 +198,7 @@ class LauncherCardsTest {
         val appCaption = compose.onNodeWithText(appTitle, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val artwork = compose.onNodeWithTag("compact-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals("The artwork remains square", artwork.width, artwork.height, 1f)
-        assertTrue("Artwork is capped independently of the wider caption", artwork.width <= 176f * 2f / 3f * actualDensity)
+        assertTrue("Artwork is capped independently of the wider caption", artwork.width <= 208f * 2f / 3f * actualDensity)
         // Text semantics measure the laid-out text, so use wrapping titles to exercise the full caption width.
         assertTrue("The ROM caption keeps the wider column allocation", romCaption.width > artwork.width)
         assertTrue("The app caption keeps the wider column allocation", appCaption.width > artwork.width)

@@ -64,6 +64,7 @@ data class SettingsScreenState(
     val artwork: ArtworkSummary = ArtworkSummary(),
     val uiScalePercent: Int = 100,
     val reduceMotion: Boolean = false,
+    val notificationAccessGranted: Boolean = false,
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -76,6 +77,7 @@ data class SettingsCallbacks(
     val artwork: ArtworkSettingsCallbacks = ArtworkSettingsCallbacks(),
     val onSetUiScalePercent: (Int) -> Unit = {},
     val onSetReduceMotion: (Boolean) -> Unit = {},
+    val onSetupNotificationAccess: () -> Unit = {},
 )
 
 private val settingsSections = listOf("Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
@@ -133,7 +135,7 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
     val initial = remember { FocusRequester() }
     val hasInitialControl = when (section) {
         "Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "All" -> true
-        "Android" -> systemActions.isNotEmpty()
+        "Android" -> true
         else -> false
     }
     val inputMode = LocalInputModeManager.current
@@ -204,8 +206,14 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
         }
         if (section == "All" || section == "Android") {
             if (section != "All") PageHeading("Android")
-            systemActions.forEachIndexed { index, action -> ActionRow(action.title, action.description,
-                modifier = if (section == "Android" && index == 0) Modifier.focusRequester(initial) else Modifier,
+            ActionRow("Notification indicator",
+                if (state.notificationAccessGranted) "Enabled · Show a dot while notifications are present"
+                else "Enable Notification access to show a status dot",
+                modifier = if (section == "Android") Modifier.focusRequester(initial) else Modifier,
+                onActivate = callbacks.onSetupNotificationAccess,
+                onFocusChanged = settingsFocus("Notification indicator", LauncherActionMeaning.OPEN_SETTINGS,
+                    callbacks.onSetupNotificationAccess, callbacks.onFocusedAction))
+            systemActions.forEach { action -> ActionRow(action.title, action.description,
                 onActivate = { callbacks.onOpenSystemAction(action.key) },
                 onFocusChanged = settingsFocus(action.title, LauncherActionMeaning.OPEN_SETTINGS, { callbacks.onOpenSystemAction(action.key) }, callbacks.onFocusedAction)) }
         }

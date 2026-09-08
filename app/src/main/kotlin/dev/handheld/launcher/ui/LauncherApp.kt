@@ -44,6 +44,7 @@ import dev.handheld.launcher.feature.home.*
 import dev.handheld.launcher.feature.library.LibraryScreen
 import dev.handheld.launcher.feature.search.SearchScreen
 import dev.handheld.launcher.feature.search.SearchEditorActions
+import dev.handheld.launcher.feature.search.SearchPageActions
 import dev.handheld.launcher.feature.settings.*
 import dev.handheld.launcher.feature.settings.sources.RomSourcesCallbacks
 import dev.handheld.launcher.feature.settings.emulators.EmulatorSettingsCallbacks
@@ -75,6 +76,9 @@ fun LauncherApp(
     onSetupStorageAccess: () -> Unit = {},
     onSearchEditorActiveChanged: (Boolean) -> Unit = {},
     bindTouchInput: (() -> Unit) -> Unit = {},
+    onSearchClearEnabledChanged: (Boolean) -> Unit = {},
+    notificationAccessGranted: Boolean = false,
+    onSetupNotificationAccess: () -> Unit = {},
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
@@ -110,6 +114,7 @@ fun LauncherApp(
     var focused by remember(location) { mutableStateOf<FocusedControlAction?>(null) }
     var focusedDock by remember(location) { mutableStateOf<LauncherDestination?>(null) }
     var searchEditorActions by remember(location) { mutableStateOf<SearchEditorActions?>(null) }
+    var searchPageActions by remember(location) { mutableStateOf<SearchPageActions?>(null) }
     var menuVisible by remember { mutableStateOf(false) }
     var filterMenuDestination by remember { mutableStateOf<LauncherDestination?>(null) }
     var sortMenuDestination by remember { mutableStateOf<LauncherDestination?>(null) }
@@ -126,6 +131,15 @@ fun LauncherApp(
     var queryFocusRequest by rememberSaveable { mutableIntStateOf(0) }
     var pageActivationRequest by remember { mutableIntStateOf(1) }
     var settingsSection by rememberSaveable { mutableStateOf("Launcher") }
+    LaunchedEffect(location) {
+        // Details reached from Search belong to the same session. Actual page closure
+        // clears both persisted query/filter state and the editor's saveable local state.
+        if (!location.hasSearchSession()) {
+            pageModels.getValue(LauncherDestination.SEARCH).clearSearch()
+            saveablePages.removeState(LauncherDestination.SEARCH.persistedKey)
+            queryFocusRequest = 0
+        }
+    }
     val searchableActions = remember(container) {
         container.systemActions.actions + listOf(
             SupportedSystemAction("launcher-controls", "Confirm and Back buttons", "Choose the launcher's A/B controller mapping", "launcher:controls"),
@@ -231,7 +245,10 @@ fun LauncherApp(
         }
     }
     fun openSearch() {
-        if (destination != LauncherDestination.SEARCH) {
+        if (location is LauncherLocation.ItemDetails && location.hasSearchSession()) {
+            focused = null
+            app.navigation.back()
+        } else if (destination != LauncherDestination.SEARCH) {
             pageFocus.saveFocusedChild()
             focused = null
             app.navigation.openShortcutSearch(destination)
@@ -249,21 +266,26 @@ fun LauncherApp(
     }
     val selectedItemId = focused?.itemId ?: (location as? LauncherLocation.ItemDetails)?.itemId
     val selectedItem = library.allItems.find { it.id == selectedItemId }
+    val collectionUpdating = pageStates[destination]?.searching == true
+    val searchCanClear = destination == LauncherDestination.SEARCH && searchPageActions?.hasQuery == true
     val primary = if (modalVisible) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select")
         else if (searchEditorActions != null) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Apply")
-        else focused?.descriptor?.copy(input = SemanticInputAction.CONFIRM)
+        else focused?.descriptor?.let { it.copy(input = SemanticInputAction.CONFIRM, enabled = it.enabled && !collectionUpdating) }
             ?: LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select", false)
     val footer = ControllerActionFooter(buildList {
         add(primary)
-        if (modalVisible || searchEditorActions != null || imeVisible || location !is LauncherLocation.Destination)
+        if (modalVisible || searchEditorActions != null || imeVisible || location !is LauncherLocation.Destination ||
+            destination == LauncherDestination.SETTINGS || destination == LauncherDestination.SEARCH)
             add(LauncherActionDescriptor(SemanticInputAction.BACK, LauncherActionMeaning.GO_BACK,
                 if (!modalVisible && searchEditorActions != null) "Cancel" else "Back"))
         if (!modalVisible && searchEditorActions == null) {
             add(LauncherActionDescriptor(SemanticInputAction.SECONDARY, LauncherActionMeaning.OPEN_SEARCH, "Search"))
-            if (selectedItem != null && location !is LauncherLocation.ItemDetails)
+            if (!searchCanClear && selectedItem != null && location !is LauncherLocation.ItemDetails)
                 add(LauncherActionDescriptor(SemanticInputAction.TERTIARY, LauncherActionMeaning.OPEN_DETAILS, "Details"))
             add(LauncherActionDescriptor(SemanticInputAction.MENU, LauncherActionMeaning.OPEN_MENU, "Menu"))
         }
+        if (!modalVisible && searchCanClear)
+            add(LauncherActionDescriptor(SemanticInputAction.TERTIARY, LauncherActionMeaning.CLEAR_SEARCH, "Clear"))
     })
     val actionPort = SemanticActionPort { descriptor ->
         if (!descriptor.enabled || descriptor !in footer.actions) false else {
@@ -274,7 +296,9 @@ fun LauncherApp(
                 else nativeConfirm()
                 SemanticInputAction.BACK -> { goBack(); true }
                 SemanticInputAction.SECONDARY -> { openSearch(); true }
-                SemanticInputAction.TERTIARY -> { selectedItemId?.let(::openDetails); selectedItemId != null }
+                SemanticInputAction.TERTIARY -> if (descriptor.meaning == LauncherActionMeaning.CLEAR_SEARCH) {
+                    searchPageActions?.clear?.invoke(); true
+                } else { selectedItemId?.let(::openDetails); selectedItemId != null }
                 SemanticInputAction.MENU -> { showMenu(); true }
                 else -> false
             }
@@ -294,6 +318,7 @@ fun LauncherApp(
             }
         }
         onSearchEditorActiveChanged(searchEditorActions != null && !modalVisible)
+        onSearchClearEnabledChanged(searchCanClear && !modalVisible)
         bindInput { action ->
             val enteringControllerMode = !controllerInput
             val changingDestination = action == SemanticInputAction.PREVIOUS_DESTINATION || action == SemanticInputAction.NEXT_DESTINATION
@@ -420,7 +445,9 @@ fun LauncherApp(
                                     listOf(LibraryCategory.GAME, LibraryCategory.EMULATOR, LibraryCategory.OTHER).map { category ->
                                         CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
                                     }, romSources, romEmulators, artworkSummary,
-                                    uiScalePercent = display.uiScalePercent, reduceMotion = display.reduceMotion), bounds, SettingsCallbacks(
+                                    uiScalePercent = display.uiScalePercent, reduceMotion = display.reduceMotion,
+                                    notificationAccessGranted = notificationAccessGranted), bounds, SettingsCallbacks(
+                                    onSetupNotificationAccess = onSetupNotificationAccess,
                                     onSetUiScalePercent = app::setUiScalePercent,
                                     onSetReduceMotion = app::setReduceMotion,
                                     onSetConfirmBackMapping = app::setMapping,
@@ -467,7 +494,8 @@ fun LauncherApp(
                                 val vm = pageModels.getValue(route)
                                 val current = pageStates.getValue(route)
                                 val callbacks = CollectionScreenCallbacks(vm::select,
-                                    onOpen = { container.launchCoordinator.submit(it, vm.state.value.snapshot().copy(selectedItemId = it)) },
+                                    onOpen = { if (vm.canOpenItem(it))
+                                        container.launchCoordinator.submit(it, vm.state.value.snapshot().copy(selectedItemId = it)) },
                                     onOpenDetails = ::openDetails, onFavorite = vm::setFavorite,
                                     onFilter = { vm.filter(it); pageActivationRequest++ }, onToggleSort = vm::toggleSort,
                                     onRememberAnchor = vm::rememberAnchor,
@@ -484,7 +512,8 @@ fun LauncherApp(
                                     LauncherDestination.SEARCH -> SearchScreen(current, bounds, callbacks, vm::query,
                                         searchableActions, container.iconLoader, queryFocusRequest,
                                         restoreFocusRequest = pageActivationRequest, allowFocusRequest = !modalVisible,
-                                        onEditorActionsChanged = { searchEditorActions = it })
+                                        onEditorActionsChanged = { searchEditorActions = it },
+                                        onPageActionsChanged = { searchPageActions = it }, onClearSearch = vm::clearSearch)
                                     else -> Unit
                                 }
                             }
@@ -631,6 +660,15 @@ private fun homeRoleSummary(held: Boolean, state: HomeRoleRequestState): String 
     else -> "Choose the app opened by the Home button"
 }
 
+private fun LauncherLocation.hasSearchSession(): Boolean = when (this) {
+    is LauncherLocation.ShortcutSearch -> true
+    is LauncherLocation.Destination -> destination == LauncherDestination.SEARCH
+    is LauncherLocation.ItemDetails -> when (val source = origin) {
+        is NavigationOrigin.ShortcutSearch -> true
+        is NavigationOrigin.Destination -> source.destination == LauncherDestination.SEARCH
+    }
+}
+
 private fun LaunchCoordinatorFailure.message(): String = when (this) {
     LaunchCoordinatorFailure.TARGET_UNAVAILABLE -> "The selected item is unavailable. Check its ROM folder or refresh the library and try again."
     LaunchCoordinatorFailure.REJECTED -> "Android rejected this launch. Check that the app or emulator is enabled."
@@ -677,5 +715,6 @@ private fun DeviceStatusSnapshot.toShellStatus(): LauncherShellStatus {
         reading("Wi-Fi", wifiEnabled.format { if (it) "Enabled" else "Disabled" }, ShellStatusGlyph.Wifi,
             if ((wifiEnabled as? StatusValue.Available)?.value == false) LauncherStatusGlyph.WifiOff else LauncherStatusGlyph.Wifi),
         reading("Battery", batteryPercent.format { "$it%" }, ShellStatusGlyph.Battery, batterySymbol),
-    ))
+    ), bluetoothEnabled = bluetoothEnabled == StatusValue.Available(true),
+        notificationsPresent = notificationsPresent == StatusValue.Available(true))
 }

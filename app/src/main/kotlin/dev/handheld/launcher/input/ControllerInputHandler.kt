@@ -21,9 +21,11 @@ class ControllerInputHandler(
     mapping: () -> ConfirmBackMapping,
     imeVisible: () -> Boolean,
     private val imeFaceActionsEnabled: () -> Boolean = { false },
+    onSearchClearEnabled: () -> Boolean = { false },
     dispatch: (SemanticInputAction) -> Boolean,
 ) {
-    private val engine = ControllerInputEngine(scope, mapping, imeVisible, imeFaceActionsEnabled, dispatch = dispatch)
+    private val engine = ControllerInputEngine(scope, mapping, imeVisible, imeFaceActionsEnabled,
+        onSearchClearEnabled = onSearchClearEnabled, dispatch = dispatch)
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         val button = event.keyCode.toControllerButton() ?: return false
@@ -100,6 +102,7 @@ internal class ControllerInputEngine(
     private val mapping: () -> ConfirmBackMapping,
     private val imeVisible: () -> Boolean,
     private val imeFaceActionsEnabled: () -> Boolean = { false },
+    private val onSearchClearEnabled: () -> Boolean = { false },
     private val monotonicTimeMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val dispatch: (SemanticInputAction) -> Boolean,
 ) {
@@ -155,11 +158,12 @@ internal class ControllerInputEngine(
         if (eventTimeMillis < (state.keyEventTimes[button] ?: Long.MIN_VALUE)) return state.downOwners[button] ?: true
         state.keyEventTimes[button] = eventTimeMillis
         // BUTTON_A/B are gamepad keycodes, distinct from keyboard letters, Enter and Backspace.
-        val editorFaceAction = (button == ControllerButton.A || button == ControllerButton.B) && imeFaceActionsEnabled()
+        val editorAction = (button == ControllerButton.A || button == ControllerButton.B) && imeFaceActionsEnabled() ||
+            button == ControllerButton.Y && onSearchClearEnabled()
         if (imeVisible()) {
             clearActiveState(clearDownOwnership = false)
             state.downOwners[button]?.let { return it }
-            if (!editorFaceAction) {
+            if (!editorAction) {
                 state.downOwners[button] = false
                 return false
             }

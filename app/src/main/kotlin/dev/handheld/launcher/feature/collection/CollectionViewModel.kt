@@ -99,6 +99,7 @@ class CollectionViewModel(
     private var previousIds = emptyList<ItemId>()
     private var previousIdSet: Set<ItemId> = emptySet()
     private var lastResolvedSelection: ItemId? = null
+    @Volatile private var settledCriteria: CollectionCriteria? = null
 
     // Selection/viewport changes must never rebuild a search index or re-sort thousands of games.
     private val index = combine(
@@ -140,9 +141,12 @@ class CollectionViewModel(
     val state: StateFlow<CollectionUiState> = combine(results, options, error) { result, current, message ->
         val data = result.index
         val matchesCriteria = result.criteria == current.criteria()
-        val ordered = if (matchesCriteria) result.items else emptyList()
-        val ids = if (matchesCriteria) result.ids else emptyList()
-        val idSet = if (matchesCriteria) result.idSet else emptySet()
+        // Keep ordinary collection cards attached while the next filter is computed, so
+        // native focus cannot jump to the header. Search must never show old-query matches.
+        val retainResults = matchesCriteria || destination != LauncherDestination.SEARCH
+        val ordered = if (retainResults) result.items else emptyList()
+        val ids = if (retainResults) result.ids else emptyList()
+        val idSet = if (retainResults) result.idSet else emptySet()
         val selected = current.selectedId?.takeIf { it in idSet } ?: run {
             val oldIndex = previousIds.indexOf(current.selectedId).takeIf { it >= 0 }
                 ?: previousIds.indexOf(lastResolvedSelection)
@@ -155,6 +159,7 @@ class CollectionViewModel(
             previousIdSet = idSet
             lastResolvedSelection = selected
         }
+        if (matchesCriteria && !result.searching) settledCriteria = result.criteria
         CollectionUiState(destination, ordered, data.allItems, data.favorites, data.overrides,
             data.recentIds, selected, current.query, if (matchesCriteria) result.filter else current.filter,
             current.sort, current.firstVisibleId, current.offset, loading = false,
@@ -184,7 +189,17 @@ class CollectionViewModel(
 
     fun select(id: ItemId) = update(userInitiated = false) { copy(selectedId = id) }
     fun query(value: String) = update { copy(query = value, firstVisibleId = null, offset = 0) }
-    fun filter(value: String) = update { copy(filter = value, firstVisibleId = null, offset = 0) }
+    /** A closed/cleared Search starts with the full catalog scope and no stale selection. */
+    fun clearSearch() {
+        if (destination != LauncherDestination.SEARCH) return
+        update { copy(query = "", filter = "all", selectedId = null, firstVisibleId = null, offset = 0) }
+    }
+    fun filter(value: String) = update {
+        if (filter == value) this else copy(filter = value, firstVisibleId = null, offset = 0)
+    }
+    /** Input can arrive again before Compose publishes a changed filter. Guard every launch. */
+    fun canOpenItem(id: ItemId): Boolean = options.value.criteria() == settledCriteria &&
+        !state.value.loading && !state.value.searching && state.value.items.any { it.id == id }
     fun toggleSort() = update { copy(sort = if (sort == "recent") "title" else "recent") }
     fun sort(value: String) = update { copy(sort = if (value == "title") "title" else "recent", firstVisibleId = null, offset = 0) }
     fun cycleFilter(delta: Int): Boolean {

@@ -15,6 +15,27 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControllerInputEngineTest {
     @Test
+    fun `Search Clear explicitly owns Y during ime without enabling other shortcuts`() = runTest {
+        var clearEnabled = true
+        val actions = mutableListOf<SemanticInputAction>()
+        val engine = ControllerInputEngine(this, { ConfirmBackMapping.Default }, { true },
+            onSearchClearEnabled = { clearEnabled }) { actions += it; true }
+        assertTrue(engine.onButtonDown(ControllerButton.Y, false, 1))
+        clearEnabled = false // The first Clear immediately empties the query.
+        assertTrue(engine.onButtonDown(ControllerButton.Y, true, 2))
+        assertTrue(engine.onButtonUp(ControllerButton.Y))
+        assertFalse(engine.onButtonDown(ControllerButton.Y, false, 3))
+        assertFalse(engine.onButtonUp(ControllerButton.Y))
+        assertFalse(engine.onButtonDown(ControllerButton.X, false, 4))
+        assertFalse(engine.onButtonUp(ControllerButton.X))
+        assertFalse(engine.onButtonDown(ControllerButton.DpadRight, false, 5))
+        assertFalse(engine.onButtonUp(ControllerButton.DpadRight))
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(listOf(SemanticInputAction.TERTIARY), actions)
+    }
+
+    @Test
     fun `search editor owns mapped face buttons during ime while navigation stays native`() = runTest {
         var editing = true
         var mapping = ConfirmBackMapping.Default

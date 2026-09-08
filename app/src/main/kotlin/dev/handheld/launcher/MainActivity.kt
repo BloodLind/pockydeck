@@ -34,6 +34,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import dev.handheld.launcher.contract.ActivityRequestAcknowledgement
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.domain.model.LauncherDestination
+import dev.handheld.launcher.core.data.android.status.NotificationStatusAccess
 import dev.handheld.launcher.di.LauncherAppViewModel
 import dev.handheld.launcher.di.LauncherApplication
 import dev.handheld.launcher.feature.home.HomeViewModel
@@ -51,9 +52,12 @@ class MainActivity : ComponentActivity() {
     private val homeViewModel: HomeViewModel by viewModels { container.homeViewModelFactory() }
     private var reducedMotion by mutableStateOf(false)
     private var homeRoleHeld by mutableStateOf(false)
+    private var notificationAccessGranted by mutableStateOf(false)
     private var dispatchSemantic: (SemanticInputAction) -> Boolean = { false }
     private var touchInput: () -> Unit = {}
     private var searchEditorActive = false
+    private var searchClearEnabled = false
+    private val notificationAccess by lazy { NotificationStatusAccess(this) }
     private lateinit var inputHost: FrameLayout
     private val nativeFocusFallback = ViewTreeObserver.OnGlobalFocusChangeListener { _, next ->
         if (next == null) inputHost.post { retainNativeInputFocus() }
@@ -70,7 +74,8 @@ class MainActivity : ComponentActivity() {
     private val controller by lazy {
         ControllerInputHandler(lifecycleScope, { appViewModel.mapping.value }, {
             ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        }, imeFaceActionsEnabled = { searchEditorActive }, dispatch = { dispatchSemantic(it) })
+        }, imeFaceActionsEnabled = { searchEditorActive },
+            onSearchClearEnabled = { searchClearEnabled }, dispatch = { dispatchSemantic(it) })
     }
     private val rolePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         roleHandler.completeCurrent(it.resultCode)
@@ -133,6 +138,9 @@ class MainActivity : ComponentActivity() {
                 bindTouchInput = { touchInput = it },
                 onImeVisibilityChanged = controller::onImeVisibilityChanged,
                 onSearchEditorActiveChanged = { searchEditorActive = it },
+                onSearchClearEnabledChanged = { searchClearEnabled = it },
+                notificationAccessGranted = notificationAccessGranted,
+                onSetupNotificationAccess = ::setupNotificationAccess,
                 onPickRomFolder = ::pickRomFolder,
                 onSetupStorageAccess = ::setupStorageAccess)
           }
@@ -194,6 +202,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
         homeRoleHeld = roleHandler.isHomeRoleHeld()
+        notificationAccessGranted = notificationAccess.isAccessGranted()
         container.androidCatalog.onResume()
         container.romController.refreshStorageAccess()
         container.romScanner.refresh()
@@ -241,6 +250,18 @@ class MainActivity : ComponentActivity() {
             catch (_: RuntimeException) {
                 appViewModel.error.value = "Android could not open storage access settings. You can still add ROM folders manually."
             }
+        }
+    }
+
+    private fun setupNotificationAccess() {
+        val intent = notificationAccess.settingsIntent()
+        if (intent == null) {
+            appViewModel.error.value = "Notification access settings are unavailable on this device."
+            return
+        }
+        try { startActivity(intent) }
+        catch (_: RuntimeException) {
+            appViewModel.error.value = "Android could not open Notification access settings."
         }
     }
 }

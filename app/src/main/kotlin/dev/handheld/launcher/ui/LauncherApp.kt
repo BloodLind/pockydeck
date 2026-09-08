@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.handheld.launcher.contract.*
+import dev.handheld.launcher.audio.ControllerSelectionFeedback
 import dev.handheld.launcher.core.data.android.status.DeviceStatusSnapshot
 import dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshState
 import dev.handheld.launcher.core.designsystem.contract.ModalFocusLifecycle
@@ -81,6 +82,8 @@ fun LauncherApp(
     onSetupNotificationAccess: () -> Unit = {},
     controllerSoundsEnabled: Boolean = true,
     onSetControllerSoundsEnabled: (Boolean) -> Unit = {},
+    onExpectItemSelection: () -> Unit = {},
+    onItemSelected: () -> Unit = {},
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
@@ -110,6 +113,11 @@ fun LauncherApp(
     val inputMode = LocalInputModeManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
+    val expectSelection by rememberUpdatedState(onExpectItemSelection)
+    val playSelection by rememberUpdatedState(onItemSelected)
+    val selectionFeedback = remember {
+        ControllerSelectionFeedback({ expectSelection() }, { playSelection() }, android.os.SystemClock::uptimeMillis)
+    }
     LaunchedEffect(container) { container.startArtwork() }
     val pageFocus = remember { FocusRequester() }
     val shellFocus = remember { FocusRequester() }
@@ -158,9 +166,19 @@ fun LauncherApp(
     LaunchedEffect(imeVisible) { onImeVisibilityChanged(imeVisible) }
     val modalVisible = menuVisible || filterMenuDestination != null || sortMenuDestination != null || errorMessage != null || romChoice != null || romProgress != null
 
+    fun publishFocus(value: FocusedControlAction?) {
+        focused = value
+        if (value != null) {
+            if (controllerInput && !modalVisible && location !is LauncherLocation.ItemDetails)
+                selectionFeedback.focus(value.itemId?.value)
+            else selectionFeedback.reset()
+        }
+    }
+
     fun snapshot(): DestinationSnapshot = if (destination == LauncherDestination.HOME) home.state.value.snapshot()
         else pageModels[destination]?.state?.value?.snapshot() ?: DestinationSnapshot(destination)
     fun selectDestination(value: LauncherDestination) {
+        selectionFeedback.reset()
         keyboard?.hide()
         dockFocusAllowed = false
         focusManager.clearFocus(force = true)
@@ -311,6 +329,7 @@ fun LauncherApp(
     }
     SideEffect {
         bindTouchInput {
+            selectionFeedback.reset()
             if (controllerInput) {
                 controllerInput = false
                 dockFocusAllowed = false
@@ -338,6 +357,12 @@ fun LauncherApp(
                 else -> null
             }
             if (direction != null && !enteringControllerMode && !modalVisible) dockFocusAllowed = true
+            val homeCardStep = destination == LauncherDestination.HOME &&
+                action in setOf(SemanticInputAction.PREVIOUS_FILTER, SemanticInputAction.NEXT_FILTER)
+            if (!enteringControllerMode && !modalVisible && searchEditorActions == null &&
+                location !is LauncherLocation.ItemDetails && (direction != null || homeCardStep))
+                selectionFeedback.navigate(fromItem = selectionFeedback.hasItemFocus)
+            else selectionFeedback.reset()
             when {
                 enteringControllerMode && !modalVisible && (direction != null || action == SemanticInputAction.CONFIRM) && searchEditorActions == null -> {
                     pageActivationRequest++; true
@@ -431,7 +456,7 @@ fun LauncherApp(
                                     onFavorite = { value, favorite -> dataActions.setFavorite(value.id, favorite) },
                                     onAppInfo = { if (!container.systemActions.openAppInfo(it.componentId.packageName)) showError("App info is unavailable.") },
                                     onCategoryChange = { value, category -> dataActions.setCategory(value.id, category) },
-                                    onFocusedAction = { focused = it },
+                                    onFocusedAction = ::publishFocus,
                                     onChooseRomConsole = { rememberModalOrigin(); container.romController.chooseItemPlatform(it) },
                                     onChooseRomEmulator = { rememberModalOrigin(); container.romController.chooseItemEmulator(it) },
                                     onOpenRomFolders = { openSystem("launcher-rom-folders") },
@@ -446,7 +471,7 @@ fun LauncherApp(
                                     onOpenDetails = ::openDetails,
                                     allowFocusRequest = !modalVisible && controllerInput,
                                     pageActivationRequest = pageActivationRequest,
-                                    onFocusedActionChanged = { focused = it?.let { value -> FocusedControlAction(value.descriptor, value.onActivate, value.itemId) } })
+                                    onFocusedActionChanged = { publishFocus(it?.let { value -> FocusedControlAction(value.descriptor, value.onActivate, value.itemId) }) })
                             }
                             LauncherDestination.SETTINGS -> SettingsScreen(
                                 SettingsScreenState(mapping, homeRoleSummary(homeRoleHeld, roleState),
@@ -478,7 +503,7 @@ fun LauncherApp(
                                         pageModels.getValue(categoryDestination).filter(when (category) {
                                             LibraryCategory.GAME -> "all"; LibraryCategory.EMULATOR -> "emulators"; else -> "other"
                                         }); selectDestination(categoryDestination)
-                                    }, onFocusedAction = { focused = it },
+                                    }, onFocusedAction = ::publishFocus,
                                     romSources = RomSourcesCallbacks(
                                         onAddSource = { keyboard?.hide(); onPickRomFolder() },
                                         onRescanSource = { container.romController.rescan() },
@@ -518,7 +543,7 @@ fun LauncherApp(
                                     onRetry = { vm.clearError(); container.androidCatalog.refresh(); container.romController.rescan() },
                                     onOpenSystemAction = ::openSystem,
                                     onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
-                                    onFocusedAction = { focused = it },
+                                    onFocusedAction = ::publishFocus,
                                     onOpenFilters = { rememberModalOrigin(); filterMenuDestination = route },
                                     onOpenSort = { rememberModalOrigin(); sortMenuDestination = route })
                                 when (route) {
@@ -551,9 +576,9 @@ fun LauncherApp(
                 onDestinationSelected = ::selectDestination,
                 onDestinationFocused = { value ->
                     focusedDock = value.takeIf { dockFocusAllowed }
-                    if (value != null && dockFocusAllowed) focused = FocusedControlAction(
+                    if (value != null && dockFocusAllowed) publishFocus(FocusedControlAction(
                         LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.CHANGE_DESTINATION,
-                            value.persistedKey.replaceFirstChar { it.uppercase() }), { selectDestination(value) })
+                            value.persistedKey.replaceFirstChar { it.uppercase() }), { selectDestination(value) }))
                 }, content = { registry.Render(location, it) }, overlay = {
                     val romModalLifecycle = ModalFocusLifecycle(
                         onModalShown = ::rememberModalOrigin,

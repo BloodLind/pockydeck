@@ -39,6 +39,20 @@ internal fun gridMoveTarget(index: Int, count: Int, columns: Int, direction: Foc
     }
 }
 
+/** A held repeat must not wait behind a longer decorative scroll animation. */
+internal fun animateGridMove(previousMoveNanos: Long?, moveNanos: Long): Boolean =
+    previousMoveNanos == null || moveNanos - previousMoveNanos >= 150_000_000L
+
+/** Prefer the newest placed destination, but keep focus progressing during a sustained hold. */
+internal fun gridFocusTarget(
+    requestedKey: String?,
+    scrolledKey: String,
+    placedKeys: Set<String>,
+    fullyVisibleKeys: Set<String>,
+    directionUnchanged: Boolean,
+): String? = requestedKey?.takeIf { it in fullyVisibleKeys }
+    ?: scrolledKey.takeIf { directionUnchanged && it in placedKeys }
+
 /** One scrolling worker owns focus. Repeats update its destination, never queue animations. */
 @Composable
 fun rememberGridNavigation(
@@ -58,14 +72,18 @@ fun rememberGridNavigation(
     val latestMoving by rememberUpdatedState(onMoving)
     val latestReducedMotion by rememberUpdatedState(reducedMotion)
     val pending = remember { arrayOfNulls<String>(1) }
+    val pendingDirection = remember { arrayOfNulls<FocusDirection>(1) }
+    val previousMoveNanos = remember { arrayOfNulls<Long>(1) }
+    val animateMove = remember { booleanArrayOf(true) }
     val moves = remember { Channel<Unit>(Channel.CONFLATED) }
     LaunchedEffect(enabled) {
-        if (!enabled) { pending[0] = null; return@LaunchedEffect }
+        if (!enabled) { pending[0] = null; previousMoveNanos[0] = null; return@LaunchedEffect }
         for (ignored in moves) {
           try {
             var attempts = 0
             while (isActive && latestEnabled && pending[0] != null && attempts++ < 8) {
                 val key = pending[0] ?: break
+                val direction = pendingDirection[0]
                 val target = latestKeys.indexOf(key)
                 if (target < 0) { pending[0] = null; break }
                 val layout = grid.layoutInfo
@@ -86,19 +104,31 @@ fun rememberGridNavigation(
                         else -> 0
                     }
                     if (delta != 0) {
-                        if (latestReducedMotion) grid.scroll { scrollBy(delta.toFloat()) }
+                        if (latestReducedMotion || !animateMove[0]) grid.scroll { scrollBy(delta.toFloat()) }
                         else grid.animateScrollBy(delta.toFloat(), tween(90))
                     }
                 }
                 withFrameNanos { }
-                if (pending[0] != key) { attempts = 0; continue }
-                if (grid.layoutInfo.visibleItemsInfo.any { it.index == target } &&
-                    requesters[key]?.let { runCatching { it.requestFocus() }.isSuccess } == true) {
+                val placedLayout = grid.layoutInfo
+                val contentStart = placedLayout.viewportStartOffset + placedLayout.beforeContentPadding
+                val contentEnd = placedLayout.viewportEndOffset - placedLayout.afterContentPadding
+                val focusKey = gridFocusTarget(
+                    pending[0], key,
+                    placedLayout.visibleItemsInfo.mapNotNullTo(mutableSetOf()) { it.key as? String },
+                    placedLayout.visibleItemsInfo.filter {
+                        it.offset.y >= contentStart && it.offset.y + it.size.height <= contentEnd
+                    }.mapNotNullTo(mutableSetOf()) { it.key as? String },
+                    directionUnchanged = pendingDirection[0] == direction,
+                )
+                if (focusKey != null &&
+                    requesters[focusKey]?.let { runCatching { it.requestFocus() }.isSuccess } == true) {
                     withFrameNanos { }
-                    if (latestFocused != key) continue
-                    pending[0] = null
-                    break
+                    if (latestFocused == focusKey && pending[0] == focusKey) {
+                        pending[0] = null
+                        break
+                    }
                 }
+                if (pending[0] != key) attempts = 0
             }
           } catch (cancelled: CancellationException) {
               // Another scroll mutation may interrupt an animation without disposing the page.
@@ -114,10 +144,16 @@ fun rememberGridNavigation(
             else {
                 val index = latestKeys.indexOf(current)
                 val target = gridMoveTarget(index, latestKeys.size, latestColumns, direction)
-                if (target == null) false else {
+                // An edge reached by the pending cursor is not yet the focused edge.
+                // Let the worker finish it before native focus may leave for header/dock.
+                if (target == null) pending[0] != null else {
                     if (target != index) {
                         latestMoving()
+                        val now = System.nanoTime()
+                        animateMove[0] = animateGridMove(previousMoveNanos[0], now)
+                        previousMoveNanos[0] = now
                         pending[0] = latestKeys[target]
+                        pendingDirection[0] = direction
                         moves.trySend(Unit)
                     }
                     true

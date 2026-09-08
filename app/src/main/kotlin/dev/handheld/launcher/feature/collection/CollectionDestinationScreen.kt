@@ -27,6 +27,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -481,6 +486,11 @@ private fun CollectionFilters(
 ) {
     if (options.isEmpty()) return
     val categories = remember(options) { options.filter { it.key != "all" } }
+    val spacing = LauncherTheme.spacing
+    val colors = LauncherTheme.colors
+    val geometry = filterChipGeometry()
+    val groupBandHeight = with(LocalDensity.current) { LauncherTheme.typography.controlLabel.lineHeight.toDp() } +
+        geometry.verticalPadding * 2f + spacing.xxs * 2f
     Row(modifier.heightIn(min = 48.dp).testTag("collection-filters"), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically) {
         FilterChip("All", state.filter == "all", { callbacks.onFilter("all") },
@@ -491,8 +501,19 @@ private fun CollectionFilters(
                 callbacks.focused("Filter All", LauncherActionMeaning.CHANGE_FILTER, { callbacks.onFilter("all") }, focused)
             })
         if (categories.isNotEmpty()) {
-            Box(Modifier.width(1.dp).height(20.dp).border(1.dp, LauncherTheme.colors.borderEmphasis))
-            FilterNavigationHint("L2", "L2: previous filter; hold to accelerate", Modifier.padding(horizontal = LauncherTheme.spacing.xs))
+            // Keep the fixed actions outside one compact console group. Its quiet
+            // visual band is centered on the pills without enlarging their targets.
+            Row(Modifier.weight(1f, fill = false).testTag("collection-console-group")
+                .drawBehind {
+                    val height = groupBandHeight.toPx().coerceAtMost(size.height)
+                    val topLeft = Offset(0f, (size.height - height) / 2f)
+                    val bandSize = Size(size.width, height)
+                    val radius = CornerRadius((geometry.cornerRadius + spacing.xxs).toPx())
+                    drawRoundRect(colors.surfaceDock.copy(alpha = .55f), topLeft, bandSize, radius)
+                    drawRoundRect(colors.borderEmphasis, topLeft, bandSize, radius, style = Stroke(1.dp.toPx()))
+                }.padding(horizontal = spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+            FilterNavigationHint("L2", "L2: previous filter; hold to accelerate", Modifier.testTag("collection-filter-previous-hint"))
             BoxWithConstraints(Modifier.weight(1f, fill = false)) {
             val density = LocalDensity.current
             val widthsPx = with(density) { controls.categoryWidths.map { it.roundToPx() } }
@@ -549,8 +570,9 @@ private fun CollectionFilters(
                 }
             }
             }
-            FilterNavigationHint("R2", "R2: next filter; hold to accelerate", Modifier.padding(horizontal = LauncherTheme.spacing.xs))
-        } else androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            FilterNavigationHint("R2", "R2: next filter; hold to accelerate", Modifier.testTag("collection-filter-next-hint"))
+            }
+        }
         callbacks.onOpenFilters?.let { open ->
             FilterChip("All filters", false, { open() }, Modifier.focusRequester(moreFocus).testTag("collection-all-filters"),
                 contentDescription = "Show all console filters in a grid",
@@ -592,10 +614,12 @@ private fun collectionControlWidths(
         val categories = options.filter { it.key != "all" }
         val categoryWidths = categories.map { chipWidth(it.label) }
         val moreWidth = if (hasMore) chipWidth("All filters", 16.dp, spacing.xs) else 0.dp
-        val minimumWidth = if (categories.isEmpty()) chipWidth("All") + moreWidth + spacing.xs
-            else chipWidth("All") + 1.dp +
-                textWidth("L2", hintStyle) + textWidth("R2", hintStyle) + hintGeometry.horizontalPadding * 4f + spacing.xs * 4f +
-                moreWidth + (categoryWidths.maxOrNull() ?: 48.dp) + spacing.xs * if (hasMore) 5f else 4f
+        // Console group: two hint/cell gaps + two outer inset gaps. Fixed All and
+        // All filters add one gap on each side of the group, using the same token.
+        val minimumWidth = if (categories.isEmpty()) chipWidth("All") + moreWidth + if (hasMore) spacing.xs else 0.dp
+            else chipWidth("All") + textWidth("L2", hintStyle) + textWidth("R2", hintStyle) +
+                hintGeometry.horizontalPadding * 4f + moreWidth + (categoryWidths.maxOrNull() ?: 48.dp) +
+                spacing.xs * if (hasMore) 6f else 5f
         CollectionControlWidths(categoryWidths, minimumWidth)
     }
 }

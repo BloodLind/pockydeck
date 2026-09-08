@@ -1,6 +1,6 @@
 # Handheld Launcher — design system and UI contract
 
-Planning baseline: 7 September 2026; current behavior reconciled through v0.10. Reference measurements remain distinct from native dimensions. Calibration and acceptance evidence are recorded in [implementation progress](implementation/progress.md).
+Planning baseline: 7 September 2026; current behavior reconciled through v0.10.1. Reference measurements remain distinct from native dimensions. Calibration and acceptance evidence are recorded in [implementation progress](implementation/progress.md).
 
 ## 1. Reference authority
 
@@ -41,7 +41,11 @@ The old Recent activity tracker is removed. The user-approved optional Shizuku i
 
 The v0.9.1 filter correction increases horizontal/vertical padding from 10/4 to 12/6 reference units and uses an 8-unit corner radius. Rendered controls and header measurement share the same geometry; native 48dp touch allocations remain. The settled strip sums exact pixel widths from its actual starting category, so later selections cannot expose a cut-off neighboring count. Touch scrolling remains continuous and settles on a complete cell without changing the selected filter. START alone is drawn at 85% inside its original footer hint allocation. Other legends and footer dimensions keep their existing size.
 
-Original short controller cues accompany handled navigation, confirmation, back and page/filter actions. They use media volume, stay within the foreground launcher and do not request audio focus or change system audio settings. Touch, ordinary text entry and unhandled input stay silent. Settings → Controls can disable all launcher controller sounds; held input retains the existing acceleration and de-duplication rules.
+The v0.10.1 filter row places fixed All first, a quiet rounded console group in the middle, and fixed All filters after it. L2 and R2 sit inside that group with equal spacing around the complete visible console cells. The loose divider is removed, and the row shares a common vertical center. D-pad navigation still exits at the visible strip edges; only triggers change categories while held.
+
+Continuous grid navigation keeps focus moving while repeats accelerate. Discrete steps retain their short scroll animation; repeats closer than 150ms move the viewport immediately so animation cannot trail a 55ms input cadence. Search derives header collapse from the actual scroll direction, loads only visible result artwork, and saves its scroll anchor once scrolling settles.
+
+Original controller cues use low tones and rounded attacks for movement, confirmation, back and page/filter actions. A changed controller selection of a game or app has a distinct warm cue. Playback is single-voice: input during a cue's duration is skipped without truncating it, queuing sounds, or slowing navigation. The cues use media volume, stay within the foreground launcher and do not request audio focus or change system audio settings. Touch, restoration, ordinary text entry and unhandled input stay silent. Settings → Controls can disable all launcher controller sounds; held input retains the existing acceleration and de-duplication rules.
 
 Wi-Fi is icon-only and crosses out only when its radio is disabled. Temperature is explicitly battery temperature: blue below 15°C, red at 45°C or above, otherwise neutral. Battery is green only for Android's CHARGING state; otherwise it is red at 10% or below, yellow below 15%, and neutral above that. Being plugged in or full does not imply charging. RAM uses a distinct cool tint. Storage reports internal free space and all mounted external volumes; external totals retain an unknown marker if only some readings are available.
 

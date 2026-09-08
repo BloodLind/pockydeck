@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -39,6 +39,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -69,6 +70,9 @@ import dev.handheld.launcher.ui.components.LibraryItemCard
 import dev.handheld.launcher.ui.components.LibraryItemCardVariant
 import dev.handheld.launcher.ui.presentation.toTileUiModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 
 class SearchEditorActions(val apply: () -> Unit, val cancel: () -> Unit)
 class SearchPageActions(val clear: () -> Unit, val hasQuery: Boolean)
@@ -100,6 +104,10 @@ fun SearchScreen(
 ) {
     val list = rememberLazyGridState()
     val laidOutItemCount by remember { derivedStateOf { list.layoutInfo.totalItemsCount } }
+    val visibleArtworkKeys by remember { derivedStateOf {
+        list.layoutInfo.visibleItemsInfo.map { it.key }.toSet()
+    } }
+    val artworkTargetPx = with(LocalDensity.current) { (72.dp * LauncherTheme.referenceScale).roundToPx() }
     val queryRequester = remember { FocusRequester() }
     val inputMode = LocalInputModeManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -339,7 +347,8 @@ fun SearchScreen(
     val rememberAnchor by rememberUpdatedState(callbacks.onRememberAnchor)
     LaunchedEffect(listHasLaidOutItems, list) {
         if (listHasLaidOutItems) {
-            snapshotFlow { list.firstVisibleItemIndex to list.firstVisibleItemScrollOffset }.collect { (index, offset) ->
+            snapshotFlow { Triple(list.isScrollInProgress, list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset) }
+                .filter { !it.first }.map { it.second to it.third }.distinctUntilChanged().collect { (index, offset) ->
                 val first = currentResults.getOrNull(index) as? SearchResult.Catalog
                 if (first != null) rememberAnchor(first.item.id, offset)
             }
@@ -367,8 +376,7 @@ fun SearchScreen(
     SideEffect { filterControlsVisible = !constrained && !headerCollapsed }
     val resultColumns = if (!constrained && maxWidth >= 720.dp) 2 else 1
     val navigator = rememberGridNavigation(renderedResultKeys, focusedResultKey, resultColumns, list, resultRequesters,
-        enabled = allowFocusRequest && controllerInput && !editing, reducedMotion = LauncherTheme.motion.reducedMotion,
-        onMoving = { if (list.firstVisibleItemIndex > 0) headerCollapsed = true })
+        enabled = allowFocusRequest && controllerInput && !editing, reducedMotion = LauncherTheme.motion.reducedMotion)
     RegisterPageNavigation(navigator::move)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
         if (!constrained && !headerCollapsed) Row(Modifier.fillMaxWidth().height(48.dp)) {
@@ -466,7 +474,12 @@ fun SearchScreen(
                 horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
                 verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
             ) {
-                items(results, key = SearchResult::key) { result ->
+                itemsIndexed(results, key = { _, result -> result.key }) { resultIndex, result ->
+                    val requester = remember(result.key) { FocusRequester() }
+                    DisposableEffect(result.key, requester) {
+                        resultRequesters[result.key] = requester
+                        onDispose { resultRequesters.remove(result.key, requester) }
+                    }
                     when (result) {
                         is SearchResult.Catalog -> {
                             val item = result.item
@@ -476,15 +489,16 @@ fun SearchScreen(
                                 model, LibraryItemCardVariant.SearchResult,
                                 selectedResultKey?.let { it == result.key } ?: (state.selectedItemId == item.id),
                                 activationEnabled = model.canOpen,
-                                modifier = Modifier.focusRequester(
-                                    resultRequesters.getOrPut(result.key) { FocusRequester() },
-                                ),
+                                modifier = Modifier.focusRequester(requester),
                                 iconLoader = iconLoader,
+                                artworkActive = result.key in visibleArtworkKeys,
+                                artworkTargetSizePx = artworkTargetPx,
+                                animateArtwork = !list.isScrollInProgress,
                                 onActivate = open,
                                 onFocusChanged = { focused -> if (focused) {
                                     focusedResultKey = result.key
                                     selectedResultKey = result.key
-                                    focusedResultIndex = results.indexOf(result)
+                                    focusedResultIndex = resultIndex
                                     callbacks.onSelect(item.id)
                                     callbacks.onFocusedAction(FocusedControlAction(
                                         LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, model.primaryActionLabel, model.canOpen),
@@ -506,9 +520,7 @@ fun SearchScreen(
                                 activationEnabled = true,
                                 selected = selectedResultKey == result.key,
                                 onActivate = { callbacks.onOpenSystemAction(action.key) },
-                                modifier = Modifier.fillMaxWidth().focusRequester(
-                                    resultRequesters.getOrPut(result.key) { FocusRequester() },
-                                ),
+                                modifier = Modifier.fillMaxWidth().focusRequester(requester),
                                 artwork = {
                                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                         LauncherGlyphIcon(LauncherGlyph.Settings, Modifier.size(32.dp * LauncherTheme.referenceScale),
@@ -519,7 +531,7 @@ fun SearchScreen(
                                 onFocusChanged = { focused -> if (focused) {
                                     focusedResultKey = result.key
                                     selectedResultKey = result.key
-                                    focusedResultIndex = results.indexOf(result)
+                                    focusedResultIndex = resultIndex
                                     callbacks.onFocusedAction(FocusedControlAction(
                                         LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, action.title),
                                         { callbacks.onOpenSystemAction(action.key) },

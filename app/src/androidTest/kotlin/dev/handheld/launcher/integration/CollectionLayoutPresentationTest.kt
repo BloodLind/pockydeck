@@ -97,7 +97,24 @@ class CollectionLayoutPresentationTest {
             }
             assertEquals("$percent% title and action centers align", actualBounds("collection-title").center.y,
                 actualBounds("collection-sort").center.y, 1f)
+            val all = actualBounds("collection-filter-all")
+            val group = actualBounds("collection-console-group")
+            val more = actualBounds("collection-all-filters")
             val strip = actualBounds("collection-filter-strip")
+            val previousHint = actualBounds("collection-filter-previous-hint")
+            val nextHint = actualBounds("collection-filter-next-hint")
+            assertTrue("$percent% fixed All stays before the bounded console group", all.right < group.left)
+            assertTrue("$percent% All filters stays outside and after the group", group.right < more.left)
+            assertEquals("$percent% fixed controls use equal compact gaps", group.left - all.right, more.left - group.right, 1f)
+            for (part in listOf(group, strip, previousHint, nextHint, more)) {
+                assertEquals("$percent% controls and hints share one baseline", all.center.y, part.center.y, 1f)
+            }
+            assertTrue(fits(strip, group) && fits(previousHint, group) && fits(nextHint, group))
+            assertTrue(previousHint.right < strip.left && strip.right < nextHint.left)
+            assertEquals("$percent% hint-to-cell spacing is symmetric", strip.left - previousHint.right,
+                nextHint.left - strip.right, 1f)
+            assertTrue("$percent% no stretched gap separates the hint and cells",
+                strip.left - previousHint.right <= group.left - all.right + 1f)
             val visibleChips = compose.onAllNodes(hasAnyAncestor(hasTestTag("collection-filter-strip")) and hasClickAction())
                 .fetchSemanticsNodes().map { node ->
                     Rect(node.positionInRoot.x, node.positionInRoot.y,

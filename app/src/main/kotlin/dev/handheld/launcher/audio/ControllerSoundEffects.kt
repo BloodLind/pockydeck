@@ -11,11 +11,11 @@ import dev.handheld.launcher.contract.SemanticInputAction
 internal class ControllerSoundEffects(context: Context, enabled: () -> Boolean) {
     private val context = context.applicationContext
     private val audioManager = this.context.getSystemService(AudioManager::class.java)
-    private val policy = ControllerSoundPolicy(enabled, ::mediaAudible, ::playLoaded)
+    private val policy = ControllerSoundPolicy(enabled, ::mediaAudible, play = ::playLoaded)
     private var pool: SoundPool? = null
     private val samples = mutableMapOf<ControllerSoundCue, Int>()
     private val loaded = mutableSetOf<Int>()
-    private val streams = ArrayDeque<Int>()
+    private var playingStream = 0
     private var released = false
 
     fun prepare() {
@@ -41,6 +41,10 @@ internal class ControllerSoundEffects(context: Context, enabled: () -> Boolean) 
     fun dispatch(action: SemanticInputAction, handle: (SemanticInputAction) -> Boolean): Boolean =
         policy.dispatch(action, handle)
 
+    fun expectItemSelection() = policy.expectItemSelection()
+
+    fun onItemSelected() = policy.onItemSelected()
+
     fun setActive(active: Boolean) {
         policy.setActive(active && !released)
         if (!active) stop()
@@ -48,11 +52,10 @@ internal class ControllerSoundEffects(context: Context, enabled: () -> Boolean) 
 
     /** Stop tails when paused, unfocused, or disabled. Old clips are never resumed. */
     fun stop() {
-        val current = pool
-        while (streams.isNotEmpty()) {
-            val stream = streams.removeFirst()
-            try { current?.stop(stream) } catch (_: RuntimeException) { }
-        }
+        policy.stop()
+        val stream = playingStream
+        playingStream = 0
+        if (stream != 0) try { pool?.stop(stream) } catch (_: RuntimeException) { }
     }
 
     fun release() {
@@ -76,20 +79,21 @@ internal class ControllerSoundEffects(context: Context, enabled: () -> Boolean) 
         // AudioAttributes also leaves DND, routing, and media attenuation with Android.
     } catch (_: RuntimeException) { false }
 
-    private fun playLoaded(cue: ControllerSoundCue) {
-        val current = pool ?: return
-        val sample = samples[cue]?.takeIf { it in loaded } ?: return
+    private fun playLoaded(cue: ControllerSoundCue): Boolean {
+        val current = pool ?: return false
+        val sample = samples[cue]?.takeIf { it in loaded } ?: return false
         // Never queue input behind asynchronous decoding. A missing cue simply stays silent.
-        if (streams.size == MAX_STREAMS) current.stop(streams.removeFirst())
         val stream = current.play(sample, GAIN, GAIN, 1, 0, 1f)
-        if (stream != 0) streams.addLast(stream)
+        if (stream != 0) playingStream = stream
+        return stream != 0
     }
 
     private companion object {
-        const val MAX_STREAMS = 3
-        const val GAIN = .55f
+        const val MAX_STREAMS = 1
+        const val GAIN = .5f
         val resources = mapOf(
             ControllerSoundCue.MOVE to R.raw.ui_move,
+            ControllerSoundCue.SELECT to R.raw.ui_select,
             ControllerSoundCue.CONFIRM to R.raw.ui_confirm,
             ControllerSoundCue.BACK to R.raw.ui_back,
             ControllerSoundCue.PAGE to R.raw.ui_page,

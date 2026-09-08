@@ -157,7 +157,9 @@ class MainActivity : ComponentActivity() {
                 onPickRomFolder = ::pickRomFolder,
                 onSetupStorageAccess = ::setupStorageAccess,
                 controllerSoundsEnabled = controllerSoundsEnabled,
-                onSetControllerSoundsEnabled = ::setControllerSoundsEnabled)
+                onSetControllerSoundsEnabled = ::setControllerSoundsEnabled,
+                onExpectItemSelection = controllerSounds::expectItemSelection,
+                onItemSelected = { controllerSounds.onItemSelected() })
           }
         }
         // The inner AndroidComposeView can emit a native DPAD click itself. Scope its

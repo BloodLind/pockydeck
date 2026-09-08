@@ -407,6 +407,95 @@ class MainActivityInputDeviceTest {
         }
     }
 
+    @Test fun sustainedDpadSearchReachesMaximumSpeedReversesAndStopsWithoutLosingCardFocus() {
+        // One physical-style DOWN/UP pair owns every repeat. Short press loops cannot
+        // exercise the 2.5-second acceleration ramp or reveal queued scroll/focus work.
+        val query = listOf("a", "e", "i").maxBy { needle ->
+            library.state.value.items.count { it.title.contains(needle, ignoreCase = true) }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_X)
+        waitForEditor()
+        compose.onNode(hasSetTextAction(), useUnmergedTree = true).performTextReplacement(query)
+        waitWithDiagnostics("A broad real-ROM Search must supply a long acceleration runway") {
+            search.state.value.let { it.query == query && !it.searching && it.items.size >= 300 }
+        }
+        applySearch()
+        val items = search.state.value.items
+        val indices = items.mapIndexed { index, item -> item.id to index }.toMap()
+        val changes = CopyOnWriteArrayList<Pair<Int, Long>>()
+        val observer = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        compose.runOnIdle {
+            observer.launch {
+                search.state.map { it.selectedItemId }.distinctUntilChanged().collect { id ->
+                    indices[id]?.let { changes += it to SystemClock.uptimeMillis() }
+                }
+            }
+        }
+        fun focusedResults() = compose.onAllNodes(
+            hasAnyAncestor(hasTestTag(SearchScreenTags.Results)) and isFocused() and hasClickAction(),
+        ).fetchSemanticsNodes()
+        fun renderFor(durationMillis: Long) {
+            val deadline = SystemClock.uptimeMillis() + durationMillis
+            // Android repeats use uptime, but Compose's test clock needs pumping.
+            // A thread sleep would freeze rendering for the entire hold and test a
+            // synthetic backlog instead of the live screen on the physical device.
+            compose.waitUntil(durationMillis + 5_000) { SystemClock.uptimeMillis() >= deadline }
+        }
+        fun assertSettled() {
+            waitWithDiagnostics("A single real result must own focus after accelerated movement") {
+                focusedResults().size == 1
+            }
+            val afterRelease = search.state.value.selectedItemId
+            renderFor(450)
+            compose.waitForIdle()
+            assertEquals("No deferred repeat may move selection after release", afterRelease, search.state.value.selectedItemId)
+            assertEquals("The focused result must match the footer's selected item", items.first { it.id == afterRelease }.title,
+                focusedResults().single().config[SemanticsProperties.ContentDescription].first())
+            assertTrue("Scrolling must not reopen Search editing", !imeIsVisible())
+        }
+        try {
+            waitWithDiagnostics("Applied Search must focus its first real result") { focusedResults().size == 1 }
+            changes.clear()
+            val began = SystemClock.uptimeMillis()
+            try {
+                keyDown(KeyEvent.KEYCODE_DPAD_DOWN)
+                renderFor(7_000)
+            } finally { keyUp(KeyEvent.KEYCODE_DPAD_DOWN) }
+            compose.waitForIdle()
+            assertSettled()
+            val forward = changes.toList()
+            assertTrue("Held Down must keep updating the selected card while scrolling: $forward", forward.size >= 40)
+            assertTrue("Held Down must move forward without focus jumping back", forward.zipWithNext().all { (a, b) -> b.first > a.first })
+            val early = forward.count { it.second - began in 500L..2_000L }
+            val fast = forward.count { it.second - began in 4_500L..6_000L }
+            assertTrue("Maximum-speed movement must visibly accelerate; early=$early fast=$fast", fast >= early + 3)
+            android.util.Log.i("HeldSearchTest", "query=$query results=${items.size} heldMs=7000 changes=${forward.size} early=$early fast=$fast final=${forward.lastOrNull()?.first}")
+
+            changes.clear()
+            val reversalStart = indices.getValue(requireNotNull(search.state.value.selectedItemId))
+            try {
+                keyDown(KeyEvent.KEYCODE_DPAD_UP)
+                renderFor(3_500)
+            } finally { keyUp(KeyEvent.KEYCODE_DPAD_UP) }
+            compose.waitForIdle()
+            assertSettled()
+            assertTrue("Immediate reversal must move only toward earlier results: $changes",
+                changes.size >= 20 && changes.first().first < reversalStart && changes.zipWithNext().all { (a, b) -> b.first < a.first })
+
+            // Traverse horizontal row boundaries at maximum cadence as well.
+            changes.clear()
+            try {
+                keyDown(KeyEvent.KEYCODE_DPAD_RIGHT)
+                renderFor(4_000)
+            } finally { keyUp(KeyEvent.KEYCODE_DPAD_RIGHT) }
+            compose.waitForIdle()
+            assertSettled()
+            assertTrue("Horizontal held navigation must progress through multiple rows", changes.size >= 25)
+            assertTrue(changes.zipWithNext().all { (a, b) -> b.first > a.first })
+            assertEquals("Navigation must retain the original query", query, search.state.value.query)
+        } finally { observer.cancel() }
+    }
+
     @Test fun slowTriggerReportsMergeAndAHeldTriggerAcceleratesThenStopsOnRelease() {
         assertTrue("Trigger hold coverage requires at least two detected console filters", filterKeys().size >= 3)
         val changes = CopyOnWriteArrayList<FilterChange>()

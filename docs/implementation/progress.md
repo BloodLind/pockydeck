@@ -52,6 +52,10 @@ The **0.10.0 (code 14)** revision adds a split List view with selected-item info
 
 **357 distinct checks pass** (289 JVM and 68 Android), with one existing Windows fixture skipped; lint has zero errors and debug/release builds pass. Physical debug-build samples reduced touch-scroll missed frame deadlines from 41–49% to 6–7%, controller samples from 31% to 15%, and average sampled scrolling PSS from 315 MiB to 240 MiB. These are repeatable device samples rather than a zero-stutter or universal no-leak claim. See [0.10 collection/performance evidence](evidence/F14/collection-performance-0100.md) for validation details, remaining limits and the final artifact.
 
+The **0.10.1 (code 15)** follow-up replaces the sharp cues with lower, rounder original sounds, adds changed-card selection feedback, and skips audio while a cue is playing. Fixed All and All filters now surround an aligned console group. The grid worker keeps focus moving during maximum-speed repeats, and Search receives visible-only artwork loading, requester cleanup and settled scroll persistence.
+
+**328 distinct checks pass** (303 JVM and 25 Android), with one existing Windows fixture skipped; lint has zero errors and debug/release builds pass. The physical Search regression holds D-pad Down for seven seconds through 3,778 results, reverses Up for 3.5 seconds, then holds Right for four seconds. It verifies continuous selection updates, observable acceleration, row traversal, and stable focus after release. The APK is installed on the Flip 2 with its checksum verified. See [0.10.1 sound and held-navigation evidence](evidence/F14/sound-navigation-0101.md).
+
 Full rich metadata import, manual artwork/match correction and the complete emulator/game-boot matrix remain later work. The large-catalog discovery/search work requested in this batch is implemented; no universal storage-scan time is promised.
 
 ## Baseline and authorization

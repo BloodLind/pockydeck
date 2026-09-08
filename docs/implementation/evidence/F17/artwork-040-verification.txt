@@ -1,0 +1,72 @@
+Missing artwork verification - 8 September 2026
+Version: 0.4.0 (code 7)
+
+Environment:
+  Android Studio JBR; Android SDK; ANDROID_SERIAL=89a34d44
+  Physical Retroid Pocket Flip 2, Android 13, landscape 1920x1080, 360dpi
+  System font scale: 1.0
+  No Android emulator used.
+  Main app's connected instrumentation suite intentionally not invoked.
+
+Initial integrated batch:
+  .\gradlew.bat :app:testDebugUnitTest :core:data:testDebugUnitTest :core:data:connectedDebugAndroidTest lintDebug :app:assembleDebug :app:assembleRelease --console=plain
+  BUILD SUCCESSFUL in 56s; 286 tasks, 92 executed, 194 up-to-date
+  App JVM: 62 passed
+  Data JVM: 76 passed, 1 Windows symlink fixture skipped
+  Physical data-module instrumentation: 65 passed, including 3 artwork tests
+
+Cache/retry refinement:
+  Same targets with -Pandroid.testInstrumentationRunnerArguments.class=dev.handheld.launcher.core.data.metadata.ArtworkRepositoryTest
+  BUILD SUCCESSFUL in 38s; 286 tasks, 66 executed, 220 up-to-date
+  Affected artwork instrumentation: 3 passed
+
+After device review (indexed local lookup, rejected local image recovery):
+  Same targets with -Pandroid.testInstrumentationRunnerArguments.class=dev.handheld.launcher.core.data.metadata.ArtworkRepositoryTest
+  BUILD SUCCESSFUL in 41s; 286 tasks, 66 executed, 220 up-to-date
+  App JVM: 62 passed, 0 failures/errors/skips
+  Data JVM: 77 passed, 0 failures/errors, 1 Windows symlink fixture skipped
+  Affected artwork instrumentation: 4 passed, 0 failures/errors/skips
+
+After repeated controller toggle correction:
+  .\gradlew.bat :app:testDebugUnitTest lintDebug :app:assembleDebug :app:assembleRelease --console=plain
+  BUILD SUCCESSFUL in 19s; 251 tasks, 25 executed, 226 up-to-date
+  App JVM: 62 passed
+  Data/cache code unchanged from preceding verification.
+
+Unique tests covered by this revision: 205 passed, 1 skipped.
+  62 app JVM + 77 data JVM + 66 data-module instrumentation
+  Repeated runs of the same test are not counted again.
+  Lint: 0 errors; app 74 warnings, data 2, design system 7
+  Debug and unsigned release APKs built successfully.
+
+Physical evidence:
+  User explicitly approved: Allow Libretro downloads and install
+  Final adb install -r: Success
+  Final Activity start: Status ok, TotalTime 830ms
+  versionName=0.4.0, versionCode=7
+  MANAGE_EXTERNAL_STORAGE: allow (previously authorized)
+  Catalog retained 3773 ROMs
+  ES-DE covers reused on Home and for all 6 PS2 / 1 PSP games
+  Actual Libretro cache/provenance verified for 22/22 Jaguar games
+  Also observed live arcade, Lynx and Atomiswave downloads
+  Before/after Jaguar screenshots retain six cards and first-card selection
+  Cold restart with Wi-Fi disabled loads downloaded Jaguar covers from cache
+    wifi_on observed 0 during check, restored to original 1 in finally
+    Offline check preceded the final footer-only correction
+  Pause survives a force-stop/restart; local covers remain available
+  D-pad selects Retry; A resets 136 unmatched rows to pending while preserving 3148 ready
+  Consecutive A presses toggle Paused/Automatic and Resume/Pause footer actions
+  Final mode: Automatic; Wi-Fi enabled; font_scale 1.0
+  No AndroidRuntime crash output observed
+  Direct screenshots used; no stale UiAutomator hierarchy used
+  No ROM/save/ES-DE file was modified
+
+Coverage limitations:
+  Full cancellation, HTTP rate-limit transport and cache-pressure stress matrices remain open
+  Complete physical-button/analog-axis and offline emulator game-boot matrices remain open
+  No PC shortcut import, full metadata import or manual match/artwork picker in this revision
+
+Stable debug APK:
+  .local/releases/handheld-launcher-0.4.0-debug.apk
+SHA-256:
+  1eed0982a0bab11dc137a5fb1d10f7b16ed51ca992947dda1715c7ea4e53dc55

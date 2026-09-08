@@ -6,6 +6,7 @@ class LauncherApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         dev.handheld.launcher.rom.RomReconciliationWorker.schedule(this)
+        dev.handheld.launcher.artwork.ArtworkWorker.schedule(this)
     }
     val appContainer: AppContainer by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         AppContainer(applicationContext)

@@ -2,6 +2,10 @@ package dev.handheld.launcher.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.semantics
@@ -13,6 +17,9 @@ import dev.handheld.launcher.core.designsystem.cards.AppIconTile
 import dev.handheld.launcher.core.designsystem.cards.ArtworkFallback
 import dev.handheld.launcher.core.designsystem.cards.CardVariant
 import dev.handheld.launcher.core.designsystem.cards.CoverTile
+import dev.handheld.launcher.core.designsystem.cards.CoverArtwork
+import dev.handheld.launcher.ui.artwork.enriched.rememberEnrichedArtwork
+import dev.handheld.launcher.ui.artwork.enriched.ArtworkPendingHint
 import dev.handheld.launcher.core.designsystem.cards.SearchResultCard
 import dev.handheld.launcher.core.designsystem.controls.PlatformBadge
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
@@ -145,10 +152,15 @@ private fun TileArtwork(
     model: TileUiModel,
     iconPainter: Painter?,
 ) {
-    when {
-        iconPainter != null -> AppIconArtwork(iconPainter)
-        model.artwork is TileArtwork.LocalReference -> ArtworkFallback(label = "Custom artwork unavailable")
-        else -> ArtworkFallback(label = model.typeLabel)
+    val enriched = rememberEnrichedArtwork(model)
+    Box(Modifier.fillMaxSize()) {
+        when {
+            enriched.painter != null -> CoverArtwork(enriched.painter)
+            iconPainter != null -> AppIconArtwork(iconPainter)
+            model.artwork is TileArtwork.LocalReference -> ArtworkFallback(label = "Custom artwork unavailable")
+            else -> ArtworkFallback(label = model.typeLabel)
+        }
+        if (enriched.pending) ArtworkPendingHint(Modifier.align(Alignment.TopEnd).padding(6.dp))
     }
 }
 

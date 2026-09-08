@@ -1,7 +1,7 @@
 # US-047 — Enrich metadata through a durable bounded provider queue
 
 - Parent: [F17 — Metadata and artwork enrichment](../features/F17-metadata-artwork.md)
-- Status: **Planned**
+- Status: **Implemented for artwork; acceptance coverage partial**
 - Type: **Enabler**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
@@ -28,10 +28,10 @@ Record the approved request, matching, authentication, rate-limit, attribution, 
 
 ## Verification
 
-- **AC-01:** Not run — offline/no-match/ambiguous/rate-limit job tests.
-- **AC-02:** Not run — cancellation, restart, retry-bound, and duplicate-request tests.
-- **AC-03:** Not run — migration/provenance preservation tests.
-- **AC-04:** Not run — credential-safe configuration and provider-contract review.
+- **AC-01:** Offline local reuse, transient retry state, deterministic edition/sequel matching and no-match behavior exercised. Live Libretro downloads verified on the Flip 2. Full HTTP 429/503 transport coverage remains open.
+- **AC-02:** Room restart preserves pause/retry/backoff state; physical restart and live WorkManager continuation inspected. Cancellation at every network/cache boundary and the complete duplicate-work matrix remain open.
+- **AC-03:** Artwork uses a separate version-1 database; the catalog schema is unchanged. Tests exercise local media preservation and ready-cache preservation on retry. Existing manual artwork takes precedence in presentation and is excluded from the automatic queue; full correction acceptance belongs to US-049.
+- **AC-04:** Reviewed allowlisted HTTPS GETs for console indexes and matched public filenames, with no credentials, request bodies, ROM/save files or local paths sent. User explicitly approved Libretro downloads and installation. See [0.4.0 evidence](../evidence/F17/artwork-040.md).
 
 ## Delivery notes
 

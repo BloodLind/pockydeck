@@ -49,6 +49,10 @@ import dev.handheld.launcher.core.domain.repository.SuccessfulOpenRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import dev.handheld.launcher.core.data.metadata.*
+import dev.handheld.launcher.artwork.ArtworkWorker
+import dev.handheld.launcher.ui.artwork.enriched.EnrichedArtworkLoader
+import java.io.File
 
 class AppContainer(
     context: Context,
@@ -105,6 +109,14 @@ class AppContainer(
     }
     val homeRoleRequests by lazy { HomeRoleRequestCoordinator(activityRequestPort) }
     val iconLoader by lazy { AndroidIconLoader(applicationContext) }
+    private val artworkDatabase by lazy { ArtworkDatabase.open(applicationContext) }
+    val artworkRepository by lazy {
+        val root = File(applicationContext.cacheDir, "artwork")
+        ArtworkRepository(artworkDatabase, romRepository, EsDeArtworkResolver(sharedStoragePaths), File(root, "images"),
+            LibretroArtworkProvider(File(root, "indexes"))) { ArtworkWorker.enqueue(applicationContext) }
+    }
+    val enrichedArtworkLoader by lazy { EnrichedArtworkLoader(applicationContext, artworkRepository) }
+    fun startArtwork() { artworkRepository.start(applicationScope, itemOverrideRepository) }
     val systemActions by lazy { SystemActionRegistry(applicationContext) }
     val deviceStatus by lazy { AndroidDeviceStatusSource(applicationContext) }
 

@@ -23,6 +23,8 @@ sealed interface TileArtwork {
         val reference: UserArtworkReference,
     ) : TileArtwork
 
+    data object Rom : TileArtwork
+
     data object Fallback : TileArtwork
 }
 
@@ -97,6 +99,7 @@ fun LibraryItem.toTileUiModel(
         supportedActions = presentation.supportedActions,
         artwork = overrides?.artworkReference?.let(TileArtwork::LocalReference) ?: when (this) {
             is LibraryItem.AndroidApp -> TileArtwork.AndroidIcon(componentId)
+            is LibraryItem.RomGame -> TileArtwork.Rom
             else -> TileArtwork.Fallback
         },
         platformId = (this as? LibraryItem.RomGame)?.platformId,

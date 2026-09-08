@@ -50,6 +50,9 @@ import dev.handheld.launcher.platform.system.SupportedSystemAction
 import dev.handheld.launcher.shell.*
 import kotlinx.coroutines.launch
 import java.util.Locale
+import dev.handheld.launcher.ui.artwork.enriched.LocalEnrichedArtworkLoader
+import dev.handheld.launcher.feature.settings.metadata.ArtworkSettingsCallbacks
+import dev.handheld.launcher.core.data.metadata.ArtworkSummary
 
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -77,6 +80,7 @@ fun LauncherApp(
     val romChoice by container.romController.choice.collectAsStateWithLifecycle()
     val romProgress by container.romController.progress.collectAsStateWithLifecycle()
     val romMessage by container.romController.message.collectAsStateWithLifecycle()
+    val artworkSummary by container.artworkRepository.summary.collectAsStateWithLifecycle(ArtworkSummary())
     val status by container.deviceStatus.status.collectAsStateWithLifecycle(DeviceStatusSnapshot())
     val pageModels = listOf(LauncherDestination.LIBRARY, LauncherDestination.APPS,
         LauncherDestination.FAVORITES, LauncherDestination.SEARCH).associateWith { destination ->
@@ -91,6 +95,7 @@ fun LauncherApp(
     val inputMode = LocalInputModeManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
+    LaunchedEffect(container) { container.startArtwork() }
     val pageFocus = remember { FocusRequester() }
     val shellFocus = remember { FocusRequester() }
     val saveablePages = rememberSaveableStateHolder()
@@ -114,6 +119,7 @@ fun LauncherApp(
             SupportedSystemAction("launcher-home", "Default Home launcher", "Choose which launcher opens with the Home button", "launcher:home"),
             SupportedSystemAction("launcher-rom-folders", "ROM folders", "Add, scan or restore your game folders and manage the extraction cache", "launcher:rom-folders"),
             SupportedSystemAction("launcher-emulators", "Emulators", "Choose a preferred emulator app and RetroArch core for each console", "launcher:emulators"),
+            SupportedSystemAction("launcher-artwork", "Artwork", "Manage automatic missing-artwork downloads and retry matches", "launcher:artwork"),
         )
     }
     val imeVisible = WindowInsets.isImeVisible
@@ -167,13 +173,21 @@ fun LauncherApp(
         container.romController.clearMessage()
         container.launchCoordinator.clearResult()
     }
+    fun artworkAction(action: suspend () -> Unit) {
+        scope.launch {
+            try { action() }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { showError("Could not update artwork settings. Try again.") }
+        }
+    }
     fun openSystem(key: String) {
         when (key) {
-            "launcher-controls", "launcher-home", "launcher-rom-folders", "launcher-emulators" -> {
+            "launcher-controls", "launcher-home", "launcher-rom-folders", "launcher-emulators", "launcher-artwork" -> {
                 settingsSection = when (key) {
                     "launcher-controls" -> "Controls"
                     "launcher-rom-folders" -> "ROM folders"
                     "launcher-emulators" -> "Emulators"
+                    "launcher-artwork" -> "Artwork"
                     else -> "Launcher"
                 }
                 selectDestination(LauncherDestination.SETTINGS)
@@ -350,8 +364,12 @@ fun LauncherApp(
                                 SettingsScreenState(mapping, homeRoleSummary(homeRoleHeld, roleState),
                                     listOf(LibraryCategory.GAME, LibraryCategory.EMULATOR, LibraryCategory.OTHER).map { category ->
                                         CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
-                                    }, romSources, romEmulators), bounds, SettingsCallbacks(
+                                    }, romSources, romEmulators, artworkSummary), bounds, SettingsCallbacks(
                                     onSetConfirmBackMapping = app::setMapping,
+                                    artwork = ArtworkSettingsCallbacks(
+                                        onSetPaused = { artworkAction { container.artworkRepository.setPaused(it) } },
+                                        onRetry = { artworkAction { container.artworkRepository.retryMissing() } },
+                                    ),
                                     onRequestDefaultHome = { container.homeRoleRequests.requestSelection() },
                                     onOpenSystemAction = ::openSystem,
                                     onOpenCategory = { category ->
@@ -414,7 +432,8 @@ fun LauncherApp(
                     }
                 }
             })
-            CompositionLocalProvider(LocalControlFocusRestoration provides { controlRestoreFocus = it }) {
+            CompositionLocalProvider(LocalControlFocusRestoration provides { controlRestoreFocus = it },
+                LocalEnrichedArtworkLoader provides container.enrichedArtworkLoader) {
             LauncherShell(metrics, LauncherShellState(destination, focusedDock, status.toShellStatus(), footer),
                 actionPort, mapping, LauncherShellInsets(imeBottom),
                 modifier = Modifier.focusRequester(shellFocus).focusGroup(),

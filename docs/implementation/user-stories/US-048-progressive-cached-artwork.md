@@ -1,7 +1,7 @@
 # US-048 — Show cached artwork progressively without moving items
 
 - Parent: [F17 — Metadata and artwork enrichment](../features/F17-metadata-artwork.md)
-- Status: **Planned**
+- Status: **Implemented; acceptance coverage partial**
 - Type: **Feature**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
@@ -28,10 +28,10 @@ Persist reusable metadata/artwork references in a bounded cache and decode near 
 
 ## Verification
 
-- **AC-01:** Not run — pending/failure fallback Compose fixtures.
-- **AC-02:** Not run — late-image focus, scroll, order, and dimension tests.
-- **AC-03:** Not run — offline cache reuse and bounded-eviction test.
-- **AC-04:** Not run — offline launch regression; record before/after card-geometry screenshots as integration evidence.
+- **AC-01:** Physical Jaguar cards show fallback content and a small pending hint before real downloads; failed/unmatched items retain fallback. A repository test verifies recovery after a local image is rejected by the loader.
+- **AC-02:** Before/after physical screenshots show the same six Jaguar cards, order, allocation and first-card selection as covers arrive. An exhaustive animated scroll/late-image Compose matrix remains open.
+- **AC-03:** Native tests verify cached image reuse without network calls. Private disk images and indexes have separate limits; decoded bitmaps use a bounded memory cache. A full cache-pressure/eviction stress test remains open.
+- **AC-04:** Launch code remains independent of artwork readiness; this revision does not certify the full offline emulator game-boot matrix. See [0.4.0 evidence](../evidence/F17/artwork-040.md) for the actual device checks.
 
 ## Delivery notes
 

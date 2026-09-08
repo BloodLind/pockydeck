@@ -1,10 +1,12 @@
 # F17 — Metadata and artwork enrichment
 
-- Status: **planned**.
+- Status: **Artwork implemented in 0.4.0; manual metadata/match correction and remaining acceptance checks are open**. See [artwork delivery evidence](../evidence/F17/artwork-040.md).
 - User stories: [US-047](../user-stories/US-047-durable-metadata-enrichment.md), [US-048](../user-stories/US-048-progressive-cached-artwork.md), [US-049](../user-stories/US-049-manual-metadata-and-artwork-correction.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: locally launchable items gain cached metadata/artwork progressively, with correction controls and reliable offline behavior.
 - Prerequisites: F16 accepted; one named provider chosen with terms/attribution, credential approach, data sent, limits and cost understood. Prepare concrete options and ask the user before a materially different provider/network/security choice; planning and existing offline functionality remain usable meanwhile.
+
+The user's integrated delivery workflow supersedes the former per-story dispatch gates. On 8 September the user explicitly approved: “Allow Libretro downloads and install.” Version 0.4.0 reuses ES-DE media and uses only Libretro's public thumbnail host for missing ROM artwork. The [request, cache and preservation contract](../evidence/F17/artwork-040.md) records the implemented bounds. This does not approve a second provider or close US-049.
 
 ## Ownership and contracts
 

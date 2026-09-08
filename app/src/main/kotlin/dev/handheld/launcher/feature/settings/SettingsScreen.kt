@@ -47,6 +47,9 @@ import dev.handheld.launcher.feature.settings.sources.RomSourcesCallbacks
 import dev.handheld.launcher.feature.settings.sources.RomSourcesScreen
 import dev.handheld.launcher.feature.settings.sources.RomSourcesScreenState
 import dev.handheld.launcher.platform.system.SupportedSystemAction
+import dev.handheld.launcher.core.data.metadata.ArtworkSummary
+import dev.handheld.launcher.feature.settings.metadata.ArtworkSettingsCallbacks
+import dev.handheld.launcher.feature.settings.metadata.ArtworkSettingsScreen
 
 data class CategorySummary(val category: LibraryCategory, val count: Int)
 data class SettingsScreenState(
@@ -55,6 +58,7 @@ data class SettingsScreenState(
     val categorySummaries: List<CategorySummary> = emptyList(),
     val romSources: RomSourcesScreenState = RomSourcesScreenState(),
     val emulators: EmulatorSettingsScreenState = EmulatorSettingsScreenState(),
+    val artwork: ArtworkSummary = ArtworkSummary(),
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -64,9 +68,10 @@ data class SettingsCallbacks(
     val onFocusedAction: OnFocusedAction = {},
     val romSources: RomSourcesCallbacks = RomSourcesCallbacks(),
     val emulators: EmulatorSettingsCallbacks = EmulatorSettingsCallbacks(),
+    val artwork: ArtworkSettingsCallbacks = ArtworkSettingsCallbacks(),
 )
 
-private val settingsSections = listOf("Controls", "Launcher", "ROM folders", "Emulators", "Android")
+private val settingsSections = listOf("Controls", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -114,7 +119,7 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
     val swapped = ConfirmBackMapping(state.confirmBackMapping.back, state.confirmBackMapping.confirm)
     val initial = remember { FocusRequester() }
     val hasInitialControl = when (section) {
-        "Controls", "Launcher", "ROM folders", "Emulators", "All" -> true
+        "Controls", "Launcher", "ROM folders", "Emulators", "Artwork", "All" -> true
         "Android" -> systemActions.isNotEmpty()
         else -> false
     }
@@ -169,6 +174,9 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
                 callbacks.emulators.copy(onFocusedAction = callbacks.onFocusedAction),
                 initialFocusRequester = initial.takeIf { section == "Emulators" },
             )
+        }
+        if (section == "All" || section == "Artwork") {
+            ArtworkSettingsScreen(state.artwork, callbacks.artwork, callbacks.onFocusedAction, initial.takeIf { section == "Artwork" })
         }
         if (section == "All" || section == "Android") {
             if (section != "All") PageHeading("Android")

@@ -154,5 +154,17 @@
     "variant": "wght200",
     "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/bluetooth/wght200/24px.svg",
     "sha256": "abd08594da9227ecad41dc67f5073b1812ccfd99ec592bb64bfebf08aa5ee642"
+  },
+  {
+    "name": "play_arrow",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/play_arrow/wght200/24px.svg",
+    "sha256": "9ebe65379fe815340738d83b78eceb3129cbf16c873dc1c69435d74242795ca9"
+  },
+  {
+    "name": "info",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/info/wght200/24px.svg",
+    "sha256": "392b4146a85d1d5f4a905637f799c7012a179a91c0928251b30a844bf66dd464"
   }
 ]

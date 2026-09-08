@@ -3,6 +3,8 @@ package dev.handheld.launcher.core.designsystem.controls
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
@@ -24,6 +26,9 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsFocused
@@ -143,6 +148,102 @@ class LauncherControlsTest {
             assertEquals("zelda", query)
             assertEquals(1, searches)
         }
+    }
+
+    @Test
+    fun actionButtonsPaintTheirWholeMinimumTargetAndFullWidthCallerAllocation() {
+        var activations = 0
+        compose.setContent {
+            LauncherTheme(referenceScale = 2f / 3f) {
+                Column(Modifier.width(280.dp).background(Color.Black)) {
+                    LauncherButton("Use", {}, Modifier.testTag("short-action"))
+                    LauncherButton("Scan", { activations++ }, Modifier.fillMaxWidth().testTag("wide-action"))
+                }
+            }
+        }
+        for (tag in listOf("short-action", "wide-action")) {
+            val button = compose.onNodeWithTag(tag)
+            button.assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(80.dp)
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+            val pixels = button.captureToImage().toPixelMap()
+            assertTrue("$tag paints the top of its touch target", pixels[pixels.width / 2, 2].red > .1f)
+            assertTrue("$tag paints the bottom of its touch target", pixels[pixels.width / 2, pixels.height - 3].red > .1f)
+            assertTrue("$tag paints the left side of its full allocation", pixels[2, pixels.height / 2].red > .1f)
+            assertTrue("$tag paints the right side of its full allocation", pixels[pixels.width - 3, pixels.height / 2].red > .1f)
+        }
+        compose.onNodeWithTag("wide-action").assertWidthIsAtLeast(280.dp)
+            .performTouchInput { click(Offset(8f, centerY)) }
+        compose.runOnIdle { assertEquals("The filled edge is part of the actual button", 1, activations) }
+    }
+
+    @Test
+    fun actionLabelsRemainCenteredAndReadableInsideAnExplicit48DpRow() {
+        var fontScale by mutableFloatStateOf(1f)
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
+                LauncherTheme(referenceScale = 2f / 3f) {
+                    Row(Modifier.height(48.dp)) {
+                        LauncherButton("Edit search", {}, Modifier.testTag("edit-action"))
+                        LauncherButton("Clear", {}, Modifier.testTag("clear-action"))
+                    }
+                }
+            }
+        }
+        for (scale in listOf(1f, 1.3f)) {
+            compose.runOnIdle { fontScale = scale }
+            for ((tag, label) in listOf("edit-action" to "Edit search", "clear-action" to "Clear")) {
+                val bounds = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+                val text = compose.onNodeWithText(label, useUnmergedTree = true)
+                val textBounds = text.fetchSemanticsNode().boundsInRoot
+                val layouts = mutableListOf<TextLayoutResult>()
+                text.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                val layout = layouts.single()
+                assertTrue("$scale $label fits a 48dp action row: target=$bounds text=$textBounds " +
+                    "size=${layout.size} paragraph=${layout.multiParagraph.width}x${layout.multiParagraph.height} " +
+                    "lines=${layout.lineCount} widthOverflow=${layout.didOverflowWidth} heightOverflow=${layout.didOverflowHeight}",
+                    !layout.hasVisualOverflow)
+                assertTrue("$scale $label stays inside its painted target", textBounds.top >= bounds.top && textBounds.bottom <= bounds.bottom)
+                assertEquals("$scale $label is vertically centered", bounds.center.y, textBounds.center.y, 1f)
+            }
+        }
+    }
+
+    @Test
+    fun iconFavoritePublishesCheckedSelectionAndActivatesOnlyOnce() {
+        var favorite by mutableStateOf(false)
+        var activations = 0
+        compose.setContent {
+            LauncherTheme {
+                Row {
+                    LauncherIconButton("Favorite", { favorite = !favorite; activations++ },
+                        Modifier.testTag("favorite-action"), selected = favorite, checked = favorite) {
+                        LauncherGlyphIcon(LauncherGlyph.Favorites, Modifier.size(24.dp), contentDescription = null)
+                    }
+                    LauncherIconButton("Play", {}, Modifier.testTag("play-action")) {
+                        LauncherGlyphIcon(LauncherGlyph.Play, Modifier.size(24.dp).testTag("play-glyph"), contentDescription = null)
+                    }
+                    LauncherIconButton("Information", {}, Modifier.testTag("info-action")) {
+                        LauncherGlyphIcon(LauncherGlyph.Info, Modifier.size(24.dp), contentDescription = null)
+                    }
+                }
+            }
+        }
+        val favoriteControl = compose.onNodeWithTag("favorite-action")
+        favoriteControl.assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Checkbox))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.Off))
+            .performClick()
+        favoriteControl.assertIsSelected()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On))
+        compose.onNodeWithTag("play-action").assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+        val playBounds = compose.onNodeWithTag("play-action").fetchSemanticsNode().boundsInRoot
+        val glyphBounds = compose.onNodeWithTag("play-glyph", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals("The glyph stays half the target width", playBounds.width / 2f, glyphBounds.width, 1f)
+        assertEquals("The glyph stays half the target height", playBounds.height / 2f, glyphBounds.height, 1f)
+        assertEquals(playBounds.center.x, glyphBounds.center.x, 1f)
+        assertEquals(playBounds.center.y, glyphBounds.center.y, 1f)
+        compose.onNodeWithTag("info-action").assertHeightIsAtLeast(48.dp)
+        compose.runOnIdle { assertEquals(1, activations) }
     }
 
     @Test

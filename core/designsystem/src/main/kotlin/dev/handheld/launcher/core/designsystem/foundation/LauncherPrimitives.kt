@@ -110,10 +110,15 @@ fun LauncherSurface(
     contentDescription: String? = null,
     shape: Shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
     compact: Boolean = false,
+    emphasized: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val colors = LauncherTheme.colors
-    val base = if (selected) colors.destinationSelected else colors.surfaceControl
+    val base = when {
+        selected -> colors.destinationSelected
+        emphasized -> colors.borderEmphasis.compositeOver(colors.surfaceControl)
+        else -> colors.surfaceControl
+    }
     val background by animateColorAsState(
         if (pressed) colors.borderEmphasis.compositeOver(base) else base,
         tween(LauncherTheme.motion.pressedDurationMillis), label = "control fill",
@@ -135,7 +140,12 @@ fun LauncherSurface(
             Modifier.heightIn(min = if (compact) 24.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale else 48.dp)
                 .background(background, shape)
                 .border(if (focused) 2.dp else if (compact) 1.dp * LauncherTheme.referenceScale else 1.dp,
-                    if (focused) colors.focus else if (compact) colors.borderSubtle else colors.borderEmphasis, shape),
+                    when {
+                        focused -> colors.focus
+                        emphasized -> colors.textSecondary.copy(alpha = .45f)
+                        compact -> colors.borderSubtle
+                        else -> colors.borderEmphasis
+                    }, shape),
             contentAlignment = Alignment.Center,
             propagateMinConstraints = true,
         ) {

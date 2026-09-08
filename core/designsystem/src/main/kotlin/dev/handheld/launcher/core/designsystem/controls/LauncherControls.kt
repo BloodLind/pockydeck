@@ -6,8 +6,11 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
@@ -32,8 +35,12 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -56,14 +63,14 @@ fun LauncherButton(
     unavailableReason: String = DefaultUnavailableReason,
     onFocusChanged: (Boolean) -> Unit = {},
     contentDescription: String? = label,
-    shape: Shape = RoundedCornerShape(50),
+    shape: Shape = RoundedCornerShape(12.dp),
 ) {
     val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier.focusRequester(restoration.requester)
+        modifier = modifier.widthIn(min = 80.dp).heightIn(min = 48.dp).focusRequester(restoration.requester)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 onFocusChanged(state.isFocused)
@@ -83,10 +90,15 @@ fun LauncherButton(
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
         shape = shape,
-        compact = true,
+        emphasized = true,
     ) {
-        LauncherText(label, Modifier.padding(horizontal = LauncherTheme.spacing.md, vertical = LauncherTheme.spacing.xs),
-            style = LauncherTheme.typography.controlLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.padding(horizontal = LauncherTheme.spacing.md.coerceAtLeast(16.dp), vertical = 6.dp),
+            contentAlignment = Alignment.Center) {
+            // Keep the centered paragraph and its accessibility bounds at the same width.
+            LauncherText(label, Modifier.width(IntrinsicSize.Max),
+                style = LauncherTheme.typography.settingValue.copy(textAlign = TextAlign.Center),
+                maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -101,6 +113,8 @@ fun LauncherIconButton(
     unavailableReason: String = DefaultUnavailableReason,
     onFocusChanged: (Boolean) -> Unit = {},
     shape: Shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
+    selected: Boolean = false,
+    checked: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
     val restoration = rememberControlFocusRestoration()
@@ -109,6 +123,7 @@ fun LauncherIconButton(
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
         modifier = modifier.focusRequester(restoration.requester)
+            .semantics { checked?.let { toggleableState = ToggleableState(it) } }
             .onFocusChanged { state ->
                 focused = state.isFocused
                 onFocusChanged(state.isFocused)
@@ -118,17 +133,21 @@ fun LauncherIconButton(
                 interactionSource = source,
                 indication = null,
                 enabled = enabled,
-                role = Role.Button,
+                role = if (checked == null) Role.Button else Role.Checkbox,
                 onClick = { restoration.record(); onActivate() },
             ),
         focused = focused && LocalControllerInput.current,
+        selected = selected,
         pressed = pressed,
         enabled = enabled,
         unavailable = unavailable,
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
         shape = shape,
-    ) { content() }
+    ) {
+        // The target fills the surface; its decorative glyph keeps the caller's size.
+        Box(contentAlignment = Alignment.Center) { content() }
+    }
 }
 
 /** Shared padding and width arithmetic for rendered filters and finite lazy strips. */

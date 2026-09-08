@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -26,13 +27,17 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.contract.LauncherActionDescriptor
 import dev.handheld.launcher.contract.LauncherActionMeaning
 import dev.handheld.launcher.contract.SemanticInputAction
-import dev.handheld.launcher.core.designsystem.controls.LauncherButton
+import dev.handheld.launcher.core.designsystem.controls.LauncherIconButton
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.Availability
 import dev.handheld.launcher.core.domain.model.LibraryItem
@@ -42,7 +47,7 @@ import dev.handheld.launcher.ui.components.LibraryItemCard
 import dev.handheld.launcher.ui.components.LibraryItemCardVariant
 import dev.handheld.launcher.ui.presentation.TileUiModel
 
-private enum class PreviewAction { Open, Details }
+private enum class PreviewAction { Open, Details, Favorite }
 
 /** Existing catalog metadata only. The selected preview never discovers or guesses game state. */
 @Composable
@@ -59,6 +64,7 @@ internal fun CollectionListPreview(
 ) {
     val currentItemId by rememberUpdatedState(item.id)
     val currentModel by rememberUpdatedState(model)
+    val currentFavorite by rememberUpdatedState(favorite)
     val currentCallbacks by rememberUpdatedState(callbacks)
     val open: () -> Unit = remember {
         {
@@ -70,13 +76,25 @@ internal fun CollectionListPreview(
         }
     }
     val details: () -> Unit = remember { { currentCallbacks.onOpenDetails(currentItemId) } }
+    val toggleFavorite: () -> Unit = remember { { currentCallbacks.onFavorite(currentItemId, !currentFavorite) } }
     var focusedAction by remember { mutableStateOf<PreviewAction?>(null) }
     fun publish(action: PreviewAction) {
-        val enabled = action == PreviewAction.Details || currentModel.canOpen
+        val enabled = action != PreviewAction.Open || currentModel.canOpen
         currentCallbacks.onFocusedAction(FocusedControlAction(
-            LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE,
-                if (action == PreviewAction.Open) currentModel.primaryActionLabel else "Details", enabled),
-            if (!enabled) null else if (action == PreviewAction.Open) open else details, currentItemId,
+            LauncherActionDescriptor(SemanticInputAction.CONFIRM, when (action) {
+                PreviewAction.Open -> LauncherActionMeaning.ACTIVATE
+                PreviewAction.Details -> LauncherActionMeaning.OPEN_DETAILS
+                PreviewAction.Favorite -> LauncherActionMeaning.TOGGLE_FAVORITE
+            }, when (action) {
+                PreviewAction.Open -> currentModel.primaryActionLabel
+                PreviewAction.Details -> "Details"
+                PreviewAction.Favorite -> favoriteActionLabel(currentFavorite)
+            }, enabled),
+            if (!enabled) null else when (action) {
+                PreviewAction.Open -> open
+                PreviewAction.Details -> details
+                PreviewAction.Favorite -> toggleFavorite
+            }, currentItemId,
         ))
     }
     fun focused(action: PreviewAction, hasFocus: Boolean) {
@@ -90,7 +108,7 @@ internal fun CollectionListPreview(
     }
     // Catalog replacement can keep the same native button focused. Refresh its
     // descriptor and Details/menu item ID even when no new focus event occurs.
-    LaunchedEffect(item.id, model.canOpen, model.primaryActionLabel, focusedAction) {
+    LaunchedEffect(item.id, model.canOpen, model.primaryActionLabel, favorite, focusedAction) {
         focusedAction?.let(::publish)
     }
     if (compact) {
@@ -98,8 +116,8 @@ internal fun CollectionListPreview(
             horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
             LauncherText(model.title, Modifier.weight(1f), style = LauncherTheme.typography.tileTitle,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            LauncherButton(model.primaryActionLabel, open, Modifier.focusRequester(openFocus).testTag("collection-preview-open"),
-                enabled = model.canOpen, onFocusChanged = { onOpenFocusChanged(it); focused(PreviewAction.Open, it) })
+            PreviewActionButtons(model, favorite, open, details, toggleFavorite, openFocus,
+                onOpenFocusChanged, ::focused, includeDetails = false)
         }
         return
     }
@@ -127,13 +145,45 @@ internal fun CollectionListPreview(
                         style = LauncherTheme.typography.tileSubtitle, color = LauncherTheme.colors.textSecondary)
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
-                LauncherButton(model.primaryActionLabel, open,
-                    Modifier.weight(1f).focusRequester(openFocus).testTag("collection-preview-open"), enabled = model.canOpen,
-                    onFocusChanged = { onOpenFocusChanged(it); focused(PreviewAction.Open, it) })
-                LauncherButton("Details", details, Modifier.weight(1f).testTag("collection-preview-details"),
-                    onFocusChanged = { focused(PreviewAction.Details, it) })
-            }
+            PreviewActionButtons(model, favorite, open, details, toggleFavorite, openFocus,
+                onOpenFocusChanged, ::focused)
+        }
+    }
+}
+
+private fun favoriteActionLabel(favorite: Boolean) = if (favorite) "Remove from favorites" else "Add to favorites"
+
+/** Compact controls retain full native targets; their glyphs are decorative. */
+@Composable
+private fun PreviewActionButtons(
+    model: TileUiModel,
+    favorite: Boolean,
+    open: () -> Unit,
+    details: () -> Unit,
+    toggleFavorite: () -> Unit,
+    openFocus: FocusRequester,
+    onOpenFocusChanged: (Boolean) -> Unit,
+    onFocused: (PreviewAction, Boolean) -> Unit,
+    includeDetails: Boolean = true,
+) {
+    Row(Modifier.testTag("collection-preview-actions"), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
+        LauncherIconButton(model.primaryActionLabel, open,
+            Modifier.size(48.dp).focusRequester(openFocus).testTag("collection-preview-open"),
+            enabled = model.canOpen, shape = CircleShape,
+            onFocusChanged = { onOpenFocusChanged(it); onFocused(PreviewAction.Open, it) }) {
+            LauncherGlyphIcon(LauncherGlyph.Play, Modifier.size(24.dp), contentDescription = null)
+        }
+        if (includeDetails) LauncherIconButton("Details", details,
+            Modifier.size(48.dp).testTag("collection-preview-details"), shape = CircleShape,
+            onFocusChanged = { onFocused(PreviewAction.Details, it) }) {
+            LauncherGlyphIcon(LauncherGlyph.Info, Modifier.size(24.dp), contentDescription = null)
+        }
+        LauncherIconButton(favoriteActionLabel(favorite), toggleFavorite,
+            Modifier.size(48.dp).testTag("collection-preview-favorite")
+                .semantics { stateDescription = if (favorite) "Favorite" else "Not favorited" },
+            shape = CircleShape, selected = favorite, checked = favorite,
+            onFocusChanged = { onFocused(PreviewAction.Favorite, it) }) {
+            LauncherGlyphIcon(LauncherGlyph.Favorites, Modifier.size(24.dp), contentDescription = null)
         }
     }
 }

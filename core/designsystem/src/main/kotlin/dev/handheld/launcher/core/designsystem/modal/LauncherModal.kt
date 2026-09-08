@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.core.designsystem.contract.ModalFocusLifecycle
 import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
-import dev.handheld.launcher.core.designsystem.controls.FilterChip
 import dev.handheld.launcher.core.designsystem.foundation.LauncherSurface
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
@@ -100,7 +99,7 @@ fun LauncherDialog(
                     content = content,
                 )
                 if (compactDismiss) Box(Modifier.fillMaxWidth()) {
-                    FilterChip("Close", false, { onDismissRequest() }, Modifier.align(Alignment.CenterEnd), visualScale = compactDismissScale)
+                    LauncherButton("Close", onDismissRequest, Modifier.align(Alignment.CenterEnd))
                 } else LauncherButton("Close", onDismissRequest, Modifier.fillMaxWidth())
             }
         }

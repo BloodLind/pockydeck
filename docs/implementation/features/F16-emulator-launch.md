@@ -1,10 +1,10 @@
 # F16 — Emulator selection and ROM launch
 
-- Status: **planned**.
+- Status: **implemented in the ROM batch; compatibility evidence remains specific to each adapter/version**. See [source/installed-version matrix](../evidence/F16/emulator-contracts.md) and [integrated batch](../evidence/F15/rom-feature-batch.md).
 - User stories: [US-044](../user-stories/US-044-supported-emulator-resolution.md), [US-045](../user-stories/US-045-supported-rom-launch.md), [US-046](../user-stories/US-046-emulator-default-and-item-choice.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: choose a supported external emulator and launch an indexed ROM, then return with correct item selection and recency.
-- Prerequisites: F15 accepted; exact first emulator apps/versions and supported platform/format combinations selected. Compatibility and URI strategy are material support choices; resolve them before dependent implementation.
+- Approved direction (8 September 2026): automatically detect compatible installed emulators, ask when several match, and provide a persistent console-level setting plus per-item override. Use verified content/tree URI contracts, explicit RetroArch core selection, and approved extraction when a prepared file is required. No broad filesystem permission or invented path bridge is introduced.
 
 ## Ownership and contracts
 

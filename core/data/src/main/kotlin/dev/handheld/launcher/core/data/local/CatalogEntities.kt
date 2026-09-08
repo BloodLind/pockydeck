@@ -20,6 +20,8 @@ internal data class CatalogItemEntity(
     @ColumnInfo(name = "category_code") val categoryCode: String,
     @ColumnInfo(name = "availability_code") val availabilityCode: String,
     @ColumnInfo(name = "unavailability_reason_code") val unavailabilityReasonCode: String?,
+    @ColumnInfo(name = "platform_id") val platformId: String? = null,
+    @ColumnInfo(name = "rom_format") val romFormat: String? = null,
 )
 
 @Entity(

@@ -20,6 +20,7 @@ import dev.handheld.launcher.contract.*
 import dev.handheld.launcher.core.data.android.status.DeviceStatusSnapshot
 import dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshState
 import dev.handheld.launcher.core.designsystem.contract.ModalFocusLifecycle
+import dev.handheld.launcher.core.designsystem.contract.LocalControlFocusRestoration
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.foundation.*
 import dev.handheld.launcher.core.designsystem.layout.EmptyState
@@ -36,6 +37,10 @@ import dev.handheld.launcher.feature.home.*
 import dev.handheld.launcher.feature.library.LibraryScreen
 import dev.handheld.launcher.feature.search.SearchScreen
 import dev.handheld.launcher.feature.settings.*
+import dev.handheld.launcher.feature.settings.sources.RomSourcesCallbacks
+import dev.handheld.launcher.feature.settings.emulators.EmulatorSettingsCallbacks
+import dev.handheld.launcher.feature.settings.emulators.RomChoiceDialog
+import dev.handheld.launcher.feature.settings.emulators.RomChoiceDialogCallbacks
 import dev.handheld.launcher.launch.*
 import dev.handheld.launcher.navigation.*
 import dev.handheld.launcher.platform.home.HomeRoleRequestState
@@ -55,6 +60,7 @@ fun LauncherApp(
     bindInput: ((SemanticInputAction) -> Boolean) -> Unit,
     nativeConfirm: () -> Boolean,
     onImeVisibilityChanged: (Boolean) -> Unit = {},
+    onPickRomFolder: () -> Unit = {},
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
@@ -62,6 +68,11 @@ fun LauncherApp(
     val homeState by home.state.collectAsStateWithLifecycle()
     val launchState by container.launchCoordinator.state.collectAsStateWithLifecycle()
     val roleState by container.homeRoleRequests.state.collectAsStateWithLifecycle()
+    val romSources by container.romController.sourcesState.collectAsStateWithLifecycle()
+    val romEmulators by container.romController.emulatorsState.collectAsStateWithLifecycle()
+    val romChoice by container.romController.choice.collectAsStateWithLifecycle()
+    val romProgress by container.romController.progress.collectAsStateWithLifecycle()
+    val romMessage by container.romController.message.collectAsStateWithLifecycle()
     val status by container.deviceStatus.status.collectAsStateWithLifecycle(DeviceStatusSnapshot())
     val pageModels = listOf(LauncherDestination.LIBRARY, LauncherDestination.APPS,
         LauncherDestination.FAVORITES, LauncherDestination.SEARCH).associateWith { destination ->
@@ -84,6 +95,9 @@ fun LauncherApp(
     var menuVisible by remember { mutableStateOf(false) }
     var menuItemId by remember { mutableStateOf<ItemId?>(null) }
     var modalOrigin by remember { mutableStateOf<LauncherLocation?>(null) }
+    var modalOriginWasDock by remember { mutableStateOf(false) }
+    var controlRestoreFocus by remember(location) { mutableStateOf<(() -> Unit)?>(null) }
+    var modalRestoreFocus by remember { mutableStateOf<(() -> Unit)?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var queryFocusRequest by remember { mutableIntStateOf(0) }
     var settingsSection by rememberSaveable { mutableStateOf("Launcher") }
@@ -91,11 +105,13 @@ fun LauncherApp(
         container.systemActions.actions + listOf(
             SupportedSystemAction("launcher-controls", "Confirm and Back buttons", "Choose the launcher's A/B controller mapping", "launcher:controls"),
             SupportedSystemAction("launcher-home", "Default Home launcher", "Choose which launcher opens with the Home button", "launcher:home"),
+            SupportedSystemAction("launcher-rom-folders", "ROM folders", "Add, scan or restore your game folders and manage the extraction cache", "launcher:rom-folders"),
+            SupportedSystemAction("launcher-emulators", "Emulators", "Choose a preferred emulator app and RetroArch core for each console", "launcher:emulators"),
         )
     }
     val imeVisible = WindowInsets.isImeVisible
     LaunchedEffect(imeVisible) { onImeVisibilityChanged(imeVisible) }
-    val modalVisible = menuVisible || errorMessage != null
+    val modalVisible = menuVisible || errorMessage != null || romChoice != null || romProgress != null
 
     fun snapshot(): DestinationSnapshot = if (destination == LauncherDestination.HOME) home.state.value.snapshot()
         else pageModels[destination]?.state?.value?.snapshot() ?: DestinationSnapshot(destination)
@@ -116,15 +132,42 @@ fun LauncherApp(
     }
     fun showError(message: String) {
         if (!modalVisible) {
+            pageFocus.saveFocusedChild()
             shellFocus.saveFocusedChild()
+            modalRestoreFocus = controlRestoreFocus
+            modalOriginWasDock = focusedDock != null
             modalOrigin = location
         }
         errorMessage = message
     }
+    fun rememberModalOrigin() {
+        if (modalOrigin == null) {
+            // The shell and page are separate focus groups. Save the page's child as well,
+            // otherwise restoring the shell re-enters the page at its first control.
+            pageFocus.saveFocusedChild()
+            shellFocus.saveFocusedChild()
+            modalRestoreFocus = controlRestoreFocus
+            modalOriginWasDock = focusedDock != null
+            modalOrigin = location
+        }
+        keyboard?.hide()
+    }
+    fun clearError() {
+        errorMessage = null
+        app.error.value = null
+        dataActions.clearError()
+        container.romController.clearMessage()
+        container.launchCoordinator.clearResult()
+    }
     fun openSystem(key: String) {
         when (key) {
-            "launcher-controls", "launcher-home" -> {
-                settingsSection = if (key == "launcher-controls") "Controls" else "Launcher"
+            "launcher-controls", "launcher-home", "launcher-rom-folders", "launcher-emulators" -> {
+                settingsSection = when (key) {
+                    "launcher-controls" -> "Controls"
+                    "launcher-rom-folders" -> "ROM folders"
+                    "launcher-emulators" -> "Emulators"
+                    else -> "Launcher"
+                }
                 selectDestination(LauncherDestination.SETTINGS)
             }
             else -> if (!container.systemActions.open(key)) showError("This Android setting is unavailable.")
@@ -133,7 +176,9 @@ fun LauncherApp(
     fun goBack() {
         when {
             imeVisible -> keyboard?.hide()
-            errorMessage != null -> { errorMessage = null; app.error.value = null; dataActions.clearError(); container.launchCoordinator.clearResult() }
+            romChoice != null -> container.romController.dismissChoice()
+            romProgress != null -> container.romController.cancelPreparation()
+            errorMessage != null -> clearError()
             menuVisible -> menuVisible = false
             else -> { focused = null; app.navigation.back() }
         }
@@ -147,7 +192,10 @@ fun LauncherApp(
         queryFocusRequest++
     }
     fun showMenu() {
+        pageFocus.saveFocusedChild()
         shellFocus.saveFocusedChild()
+        modalRestoreFocus = controlRestoreFocus
+        modalOriginWasDock = focusedDock != null
         menuItemId = focused?.itemId ?: (location as? LauncherLocation.ItemDetails)?.itemId
         modalOrigin = location
         menuVisible = true
@@ -200,7 +248,7 @@ fun LauncherApp(
                     selectDestination(order[(order.indexOf(activeDestination) + delta + order.size) % order.size]); true
                 }
                 action == SemanticInputAction.PREVIOUS_FILTER || action == SemanticInputAction.NEXT_FILTER -> {
-                    val filters = if (destination in pageModels) collectionFilterKeys(destination) else emptyList()
+                    val filters = pageModels[destination]?.let { collectionFilterKeys(destination, it.state.value.allItems) }.orEmpty()
                     if (filters.isEmpty()) false else {
                         val vm = pageModels.getValue(destination)
                         val delta = if (action == SemanticInputAction.NEXT_FILTER) 1 else -1
@@ -218,14 +266,29 @@ fun LauncherApp(
         if (homeState.refreshState is AndroidCatalogRefreshState.Ready) container.iconLoader.clear()
     }
     LaunchedEffect(library.error) { library.error?.let(::showError) }
+    LaunchedEffect(romMessage) { romMessage?.let(::showError) }
     LaunchedEffect(launchState) {
-        (launchState as? LaunchCoordinatorState.Failed)?.let { showError(it.reason.message()) }
+        (launchState as? LaunchCoordinatorState.Failed)?.let {
+            if (it.reason == LaunchCoordinatorFailure.CANCELLED) container.launchCoordinator.clearResult()
+            else showError(container.romController.message.value ?: it.reason.message())
+        }
     }
     LaunchedEffect(modalVisible) {
         if (!modalVisible && modalOrigin != null) {
             withFrameNanos { }
-            if (modalOrigin == location) runCatching { shellFocus.restoreFocusedChild() }
+            if (modalOrigin == location) {
+                inputMode.requestInputMode(InputMode.Keyboard)
+                // Compose 1.7 group restoration can stop at an implicit scroll target.
+                // The opener supplies its exact leaf requester; groups are only fallbacks
+                // for controls that have disappeared or do not publish a restoration hook.
+                val leafRestored = modalRestoreFocus?.let { runCatching(it).isSuccess } == true
+                if (!leafRestored) {
+                    val pageRestored = !modalOriginWasDock && runCatching { pageFocus.restoreFocusedChild() }.getOrDefault(false)
+                    if (!pageRestored) runCatching { shellFocus.restoreFocusedChild() }
+                }
+            }
             modalOrigin = null
+            modalRestoreFocus = null
         }
     }
 
@@ -250,6 +313,9 @@ fun LauncherApp(
                                     onAppInfo = { if (!container.systemActions.openAppInfo(it.componentId.packageName)) showError("App info is unavailable.") },
                                     onCategoryChange = { value, category -> dataActions.setCategory(value.id, category) },
                                     onFocusedAction = { focused = it },
+                                    onChooseRomConsole = { rememberModalOrigin(); container.romController.chooseItemPlatform(it) },
+                                    onChooseRomEmulator = { rememberModalOrigin(); container.romController.chooseItemEmulator(it) },
+                                    onOpenRomFolders = { openSystem("launcher-rom-folders") },
                                 ), container.iconLoader)
                             else EmptyState("Item unavailable", "This item is no longer in the catalog.", "Back", ::goBack, bounds)
                         } else when (route) {
@@ -262,7 +328,7 @@ fun LauncherApp(
                                 SettingsScreenState(mapping, homeRoleSummary(homeRoleHeld, roleState),
                                     listOf(LibraryCategory.GAME, LibraryCategory.EMULATOR, LibraryCategory.OTHER).map { category ->
                                         CategorySummary(category, library.allItems.count { it.availability == Availability.Available && (library.overrides[it.id]?.category ?: it.category) == category })
-                                    }), bounds, SettingsCallbacks(
+                                    }, romSources, romEmulators), bounds, SettingsCallbacks(
                                     onSetConfirmBackMapping = app::setMapping,
                                     onRequestDefaultHome = { container.homeRoleRequests.requestSelection() },
                                     onOpenSystemAction = ::openSystem,
@@ -271,6 +337,20 @@ fun LauncherApp(
                                             LibraryCategory.GAME -> "games"; LibraryCategory.EMULATOR -> "emulators"; else -> "other"
                                         }); selectDestination(LauncherDestination.APPS)
                                     }, onFocusedAction = { focused = it },
+                                    romSources = RomSourcesCallbacks(
+                                        onAddSource = { keyboard?.hide(); onPickRomFolder() },
+                                        onRescanSource = { container.romController.rescan() },
+                                        onRemoveSource = { rememberModalOrigin(); container.romController.removeSource(it) },
+                                        onRegrantSource = { keyboard?.hide(); onPickRomFolder() },
+                                        onChooseSourcePlatform = { rememberModalOrigin(); container.romController.chooseSourcePlatform(it) },
+                                        onChooseCacheLimit = { rememberModalOrigin(); container.romController.chooseCacheLimit() },
+                                        onClearCache = { rememberModalOrigin(); container.romController.clearCache() },
+                                    ),
+                                    emulators = EmulatorSettingsCallbacks(
+                                        onChooseEmulator = { rememberModalOrigin(); container.romController.chooseConsoleEmulator(it) },
+                                        onChooseCore = { rememberModalOrigin(); container.romController.chooseCore(it) },
+                                        onAddSource = { keyboard?.hide(); onPickRomFolder() },
+                                    ),
                                 ), container.systemActions.actions, initialSection = settingsSection)
                             else -> {
                                 val vm = pageModels.getValue(route)
@@ -280,7 +360,7 @@ fun LauncherApp(
                                     onOpenDetails = ::openDetails, onFavorite = vm::setFavorite,
                                     onFilter = vm::filter, onToggleSort = vm::toggleSort,
                                     onRememberAnchor = vm::rememberAnchor,
-                                    onRetry = { vm.clearError(); container.androidCatalog.refresh() },
+                                    onRetry = { vm.clearError(); container.androidCatalog.refresh(); container.romController.rescan() },
                                     onOpenSystemAction = ::openSystem,
                                     onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
                                     onFocusedAction = { focused = it })
@@ -297,6 +377,7 @@ fun LauncherApp(
                     }
                 }
             })
+            CompositionLocalProvider(LocalControlFocusRestoration provides { controlRestoreFocus = it }) {
             LauncherShell(metrics, LauncherShellState(destination, focusedDock, status.toShellStatus(), footer),
                 actionPort, mapping, LauncherShellInsets(imeBottom),
                 modifier = Modifier.focusRequester(shellFocus).focusGroup(),
@@ -307,22 +388,68 @@ fun LauncherApp(
                         LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.CHANGE_DESTINATION,
                             value.persistedKey.replaceFirstChar { it.uppercase() }), { selectDestination(value) })
                 }, content = { registry.Render(location, it) }, overlay = {
-                    if (menuVisible) LauncherDialog("Menu", { menuVisible = false }) {
+                    val romModalLifecycle = ModalFocusLifecycle(
+                        onModalShown = ::rememberModalOrigin,
+                        onModalDismissed = {},
+                    )
+                    when {
+                    romChoice != null -> romChoice?.let { choice ->
+                        RomChoiceDialog(
+                            choice,
+                            RomChoiceDialogCallbacks(
+                                onSelect = container.romController::selectChoice,
+                                onDismiss = container.romController::dismissChoice,
+                                onRememberSelection = container.romController::setChoiceRemember,
+                            ),
+                            lifecycle = romModalLifecycle,
+                        )
+                    }
+                    romProgress != null -> LauncherDialog(
+                        "Preparing game",
+                        container.romController::cancelPreparation,
+                        lifecycle = romModalLifecycle,
+                    ) {
+                        LauncherText(romProgress.orEmpty())
+                        LauncherButton("Cancel preparation", container.romController::cancelPreparation, Modifier.fillMaxWidth())
+                    }
+                    errorMessage != null -> errorMessage?.let { message ->
+                        LauncherDialog("Unable to complete action", ::clearError) {
+                            LauncherText(message)
+                            if (romMessage != null) LauncherButton("ROM folders", {
+                                clearError()
+                                openSystem("launcher-rom-folders")
+                            }, Modifier.fillMaxWidth())
+                        }
+                    }
+                    menuVisible -> LauncherDialog("Menu", { menuVisible = false }) {
                         library.allItems.find { it.id == menuItemId }?.let { item ->
                             LauncherButton(if (item.id in library.favorites) "Remove favorite" else "Add favorite", {
                                 dataActions.setFavorite(item.id, item.id !in library.favorites); menuVisible = false
                             }, Modifier.fillMaxWidth())
                             LauncherButton("Item details", { menuVisible = false; openDetails(item.id) }, Modifier.fillMaxWidth())
+                            if (item is LibraryItem.RomGame) {
+                                LauncherButton("Choose console", {
+                                    menuVisible = false
+                                    container.romController.chooseItemPlatform(item.id)
+                                }, Modifier.fillMaxWidth())
+                                LauncherButton("Choose emulator", {
+                                    menuVisible = false
+                                    container.romController.chooseItemEmulator(item.id)
+                                }, Modifier.fillMaxWidth())
+                            }
                         }
-                        LauncherButton("Refresh library", { container.androidCatalog.refresh(); menuVisible = false }, Modifier.fillMaxWidth())
+                        LauncherButton("Refresh library", {
+                            container.androidCatalog.refresh()
+                            container.romController.rescan()
+                            menuVisible = false
+                        }, Modifier.fillMaxWidth())
+                        LauncherButton("ROM folders", { menuVisible = false; openSystem("launcher-rom-folders") }, Modifier.fillMaxWidth())
+                        LauncherButton("Emulators", { menuVisible = false; openSystem("launcher-emulators") }, Modifier.fillMaxWidth())
                         LauncherButton("Settings", { menuVisible = false; selectDestination(LauncherDestination.SETTINGS) }, Modifier.fillMaxWidth())
                     }
-                    errorMessage?.let { message ->
-                        LauncherDialog("Unable to complete action", { errorMessage = null; app.error.value = null; dataActions.clearError(); container.launchCoordinator.clearResult() }) {
-                            LauncherText(message)
-                        }
                     }
                 })
+            }
         }
     }
 }
@@ -337,11 +464,11 @@ private fun homeRoleSummary(held: Boolean, state: HomeRoleRequestState): String 
 }
 
 private fun LaunchCoordinatorFailure.message(): String = when (this) {
-    LaunchCoordinatorFailure.TARGET_UNAVAILABLE -> "The selected app is unavailable. Refresh the library and try again."
-    LaunchCoordinatorFailure.REJECTED -> "Android rejected this launch. Check that the app is enabled."
+    LaunchCoordinatorFailure.TARGET_UNAVAILABLE -> "The selected item is unavailable. Check its ROM folder or refresh the library and try again."
+    LaunchCoordinatorFailure.REJECTED -> "Android rejected this launch. Check that the app or emulator is enabled."
     LaunchCoordinatorFailure.SNAPSHOT_FAILED -> "Could not save your position. The app was not opened."
     LaunchCoordinatorFailure.RECENCY_WRITE_FAILED -> "The app opened, but its launch history could not be saved."
-    else -> "Android could not open the app. Your library order was preserved."
+    else -> "Android could not open the item. Your library order was preserved."
 }
 
 private fun DeviceStatusSnapshot.toShellStatus(): LauncherShellStatus {

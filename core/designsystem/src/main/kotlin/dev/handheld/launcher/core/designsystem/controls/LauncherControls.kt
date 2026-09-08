@@ -21,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import dev.handheld.launcher.core.designsystem.contract.rememberControlFocusRestoration
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,21 +52,23 @@ fun LauncherButton(
     contentDescription: String? = label,
     shape: Shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
 ) {
+    val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier
+        modifier = modifier.focusRequester(restoration.requester)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 onFocusChanged(state.isFocused)
+                if (state.isFocused) restoration.record()
             }
             .clickable(
                 interactionSource = source,
                 indication = null,
                 enabled = enabled,
                 role = Role.Button,
-                onClick = onActivate,
+                onClick = { restoration.record(); onActivate() },
             ),
         focused = focused,
         pressed = pressed,
@@ -92,21 +96,23 @@ fun LauncherIconButton(
     shape: Shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
     content: @Composable () -> Unit,
 ) {
+    val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier
+        modifier = modifier.focusRequester(restoration.requester)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 onFocusChanged(state.isFocused)
+                if (state.isFocused) restoration.record()
             }
             .clickable(
                 interactionSource = source,
                 indication = null,
                 enabled = enabled,
                 role = Role.Button,
-                onClick = onActivate,
+                onClick = { restoration.record(); onActivate() },
             ),
         focused = focused,
         pressed = pressed,
@@ -131,14 +137,16 @@ fun FilterChip(
     onFocusChanged: (Boolean) -> Unit = {},
     contentDescription: String? = label,
 ) {
+    val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier
+        modifier = modifier.focusRequester(restoration.requester)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 onFocusChanged(state.isFocused)
+                if (state.isFocused) restoration.record()
             }
             .selectable(
                 selected = selected,
@@ -146,7 +154,7 @@ fun FilterChip(
                 role = Role.Checkbox,
                 interactionSource = source,
                 indication = null,
-                onClick = { onSelectedChange(!selected) },
+                onClick = { restoration.record(); onSelectedChange(!selected) },
             ),
         selected = selected,
         focused = focused,

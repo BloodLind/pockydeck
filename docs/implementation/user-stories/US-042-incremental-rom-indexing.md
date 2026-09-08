@@ -1,7 +1,7 @@
 # US-042 — Maintain the ROM index through complete incremental scans
 
 - Parent: [F15 — ROM sources and incremental indexing](../features/F15-rom-index.md)
-- Status: **Planned**
+- Status: **Implemented; durable scheduling and physical storage interruption acceptance remain partial**. See [batch evidence](../evidence/F15/rom-feature-batch.md).
 - Type: **Feature**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
@@ -10,6 +10,8 @@
 As a launcher user, I want copied and removed ROMs to reconcile automatically and safely, so that my catalog stays current without destructive results from interrupted storage access.
 
 ## Ready when
+
+The user authorized the integrated ROM batch and coordinator schema/WorkManager wiring. Original wave prerequisites below are historical; remaining device evidence is not waived.
 
 - [US-041 — Connect ROM folders and recover unavailable access](US-041-rom-folder-grants-and-recovery.md) is accepted.
 - F14 is accepted; F15’s published source/identity matrix and wave-10 lease are available.
@@ -29,11 +31,11 @@ Implement off-main-thread incremental enumeration, coalesced foreground/change t
 
 ## Verification
 
-- **AC-01:** Not run — copied/removed document-provider integration fixtures.
-- **AC-02:** Not run — cancelled and failed provider enumeration preservation tests.
-- **AC-03:** Not run — duplicate-root, grouping, and stable-ID rescan tests.
-- **AC-04:** Not run — ambiguity/correction persistence test.
-- **AC-05:** Not run — durable-work restart and cache-first browsing test.
+- **AC-01:** Partial — native Room fixtures verify that completed scans reconcile absent games; actual selected-folder smoke verifies discovery and grouped entries. Full physical copy/remove lifecycle remains pending.
+- **AC-02:** Passed at the repository boundary — incomplete enumeration, a failing later batch and source removal during an in-flight scan preserve retained data. Provider-level interruption procedures remain pending.
+- **AC-03:** Passed — planner fixtures and native Room tests verify grouping, distinct roots, stable rescans and exact-root reattachment. Native SAF smoke grouped CUE/BIN as one item.
+- **AC-04:** Passed — native Room test assigns a console during enumeration, then verifies it survives reconciliation and database reopen. An ambiguous ISO remains selectable in the native Library smoke.
+- **AC-05:** Partial — native later-batch failure retains committed rows without final omission reconciliation; stable identities survive reprocessing. WorkManager scheduling is implemented, but forced worker/process interruption and reboot timing are not claimed tested.
 
 ## Delivery notes
 

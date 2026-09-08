@@ -1,0 +1,93 @@
+package dev.handheld.launcher.core.data.rom.emulator
+
+import android.content.Intent
+import android.net.Uri
+import android.provider.DocumentsContract
+import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class AndroidEmulatorContractTest {
+    private val tree = DocumentsContract.buildTreeDocumentUri("example.documents", "primary:ROMs")
+    private fun input(platform: String, extension: String) = RomLaunchInput(
+        platform, extension,
+        DocumentsContract.buildDocumentUriUsingTree(tree, "primary:ROMs/Games/Test.$extension").toString(),
+        treeUri = tree.toString(), relativePath = "Games/Test.$extension",
+    )
+    private fun build(id: String, input: RomLaunchInput) = RomIntentFactory.build(
+        EmulatorRegistry.profiles.first { it.id == id }, input, tree,
+        "/data/user/0/com.retroarch.aarch64", "/storage/emulated/0",
+    )
+
+    @Test fun viewContractPreservesOpaqueContentUriAndUsesReadOnlyTemporaryGrant() {
+        val input = input("psp", "iso")
+        val intent = build("ppsspp", input)
+        assertEquals(Intent.ACTION_VIEW, intent.action)
+        assertEquals(input.documentUri, intent.dataString)
+        assertEquals("org.ppsspp.ppsspp.PpssppActivity", intent.component!!.className)
+        assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+        assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertEquals(0, intent.flags and (Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+        assertFalse(intent.hasExtra("IME"))
+    }
+
+    @Test fun ps2AndDuckStationUseVerifiedBootPathExtra() {
+        val input = input("ps2", "chd")
+        for (id in listOf("aethersx2", "nethersx2-turnip", "duckstation")) {
+            val intent = build(id, input)
+            assertEquals(Intent.ACTION_MAIN, intent.action)
+            assertEquals(input.documentUri, intent.getStringExtra("bootPath"))
+            assertFalse(intent.hasExtra("ROM_PATH"))
+        }
+    }
+
+    @Test fun melonDsCarriesBothFreshAndSavedStateUriContracts() {
+        val input = input("nds", "nds")
+        val intent = build("melonds", input)
+        assertEquals("me.magnum.melonds.LAUNCH_ROM", intent.action)
+        assertEquals(input.documentUri, intent.dataString)
+        assertEquals(input.documentUri, intent.getStringExtra("uri"))
+    }
+
+    @Test fun dolphinNeverReceivesPermissionOnlyTreeOrCompanionAsAnotherDisc() {
+        val input = input("gamecube", "rvz").copy(companionUris = listOf("content://example.documents/document/sidecar"))
+        val intent = build("dolphin", input)
+        assertEquals("org.dolphinemu.dolphinemu.ui.main.MainActivity", intent.component!!.className)
+        assertEquals(1, intent.clipData!!.itemCount)
+        assertEquals(input.documentUri, intent.clipData!!.getItemAt(0).uri.toString())
+        assertEquals(0, intent.flags and Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+    }
+
+    @Test fun retroArchUsesSafSerializationAndChosenCoreWithoutChangingIme() {
+        val input = input("snes", "sfc").copy(coreId = "snes9x")
+        val intent = build("retroarch-64", input)
+        assertEquals(RomLaunchPolicy.retroArchPath(tree.toString(), input.relativePath!!), intent.getStringExtra("ROM"))
+        assertEquals("/data/user/0/com.retroarch.aarch64/cores/snes9x_libretro_android.so", intent.getStringExtra("LIBRETRO"))
+        assertEquals("/storage/emulated/0/Android/data/com.retroarch.aarch64/files/retroarch.cfg", intent.getStringExtra("CONFIGFILE"))
+        assertEquals(tree, intent.clipData!!.getItemAt(1).uri)
+        assertTrue(intent.flags and Intent.FLAG_GRANT_PREFIX_URI_PERMISSION != 0)
+        assertFalse(intent.hasExtra("IME"))
+    }
+
+    @Test fun hierarchyValidationRejectsSpoofedProviderAndMismatchedDocument() {
+        val resolver = AndroidEmulatorResolver(ApplicationProvider.getApplicationContext())
+        val valid = input("nes", "nes")
+        assertNotNull(resolver.validatedTree(valid))
+        assertNull(resolver.validatedTree(valid.copy(relativePath = "../outside.nes")))
+        assertNull(resolver.validatedTree(valid.copy(relativePath = "other.nes")))
+        assertNull(resolver.validatedTree(valid.copy(documentUri = valid.documentUri.replace("example.documents", "another.documents"))))
+        assertNull(resolver.validatedTree(valid.copy(documentUri = "content://example.documents/document/opaque-id")))
+    }
+
+    @Test fun preparedCacheDocumentsUseTheSameValidatedTreeContract() {
+        val resolver = AndroidEmulatorResolver(ApplicationProvider.getApplicationContext())
+        val cacheTree = DocumentsContract.buildTreeDocumentUri("dev.handheld.launcher.romcache", "cache:abc123")
+        val prepared = RomLaunchInput("gba", "gba", DocumentsContract.buildDocumentUriUsingTree(cacheTree, "cache:abc123/Game.gba").toString(), treeUri = cacheTree.toString(), relativePath = "Game.gba")
+        assertEquals(cacheTree, resolver.validatedTree(prepared))
+        assertNull(resolver.validatedTree(prepared.copy(treeUri = Uri.parse("file:///storage/cache").toString())))
+    }
+}

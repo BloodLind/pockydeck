@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dev.handheld.launcher.core.domain.model.*
 import dev.handheld.launcher.core.domain.policy.LibraryItemOrdering
 import dev.handheld.launcher.core.domain.repository.*
+import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -73,6 +74,9 @@ class CollectionViewModel(
         recent.records, options,
     ) { catalogState, favoriteIds, overrideMap, records, current ->
         val active = catalogState.activeItems.filter { it.kind != LibraryItemKind.SYSTEM_ACTION }
+        val effectiveFilter = current.filter.takeUnless {
+            it.startsWith("console:") && it !in collectionFilterKeys(destination, active)
+        } ?: "all"
         val matching = active.filter { item ->
             val category = overrideMap[item.id]?.category ?: item.category
             val destinationMatches = when (destination) {
@@ -80,17 +84,22 @@ class CollectionViewModel(
                 LauncherDestination.FAVORITES -> item.id in favoriteIds
                 else -> true
             }
-            val filterMatches = when (current.filter) {
+            val filterMatches = when (effectiveFilter) {
                 "games" -> category == LibraryCategory.GAME
                 "emulators" -> category == LibraryCategory.EMULATOR
                 "other" -> category == LibraryCategory.OTHER
                 "android", "apps" -> item.kind == LibraryItemKind.ANDROID_APP
                 "roms" -> item.kind == LibraryItemKind.ROM_GAME
                 "system" -> false // Supported internal actions are provided by the root registry.
-                else -> true
+                else -> if (effectiveFilter.startsWith("console:")) {
+                    item is LibraryItem.RomGame && romConsoleFilterKey(item) == effectiveFilter
+                } else true
             }
-            destinationMatches && filterMatches && item.title.lowercase(Locale.ROOT)
-                .contains(current.query.trim().lowercase(Locale.ROOT))
+            val query = current.query.trim().lowercase(Locale.ROOT)
+            val consoleName = (item as? LibraryItem.RomGame)?.platformId
+                ?.let { RomPlatforms.byId(it)?.displayName }.orEmpty()
+            destinationMatches && filterMatches && (item.title.lowercase(Locale.ROOT).contains(query) ||
+                consoleName.lowercase(Locale.ROOT).contains(query))
         }
         val ordered = if (current.sort == "title") matching.sortedWith(LibraryItemOrdering.titleThenId)
             else LibraryItemOrdering.recentFirst(matching, records)
@@ -103,7 +112,7 @@ class CollectionViewModel(
         }
         previousIds = ids
         CollectionUiState(destination, ordered, catalogState.items, favoriteIds, overrideMap,
-            records.map { it.itemId }.toSet(), selected, current.query, current.filter,
+            records.map { it.itemId }.toSet(), selected, current.query, effectiveFilter,
             current.sort, current.firstVisibleId, current.offset, loading = false,
             inventoryIncomplete = catalogState.inventoryStatus is InventoryStatus.Incomplete)
     }.combine(error) { current, message -> current.copy(error = message) }

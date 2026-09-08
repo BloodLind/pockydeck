@@ -1,7 +1,7 @@
 # US-043 — Browse indexed ROMs through existing launcher destinations
 
 - Parent: [F15 — ROM sources and incremental indexing](../features/F15-rom-index.md)
-- Status: **Planned**
+- Status: **Implemented in the integrated ROM batch; final physical destination matrix remains partial**. See [batch evidence](../evidence/F15/rom-feature-batch.md).
 - Type: **Feature**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
@@ -10,6 +10,8 @@
 As a launcher user, I want indexed ROMs to appear in the same library and search flows, so that I can browse my games consistently before and after emulator setup.
 
 ## Ready when
+
+The user authorized implementation of F15/F16 together under the integrated batch workflow. The original prerequisites below remain historical planning context, not an unfulfilled coding gate.
 
 - [US-042 — Maintain the ROM index through complete incremental scans](US-042-incremental-rom-indexing.md) is accepted.
 - F14 is accepted and the coordinator has integrated ROM catalog/schema changes through existing destination contracts.
@@ -28,10 +30,10 @@ Integrate completed ROM catalog rows with Library, Search, Favorites, Home prese
 
 ## Verification
 
-- **AC-01:** Not run — integrated catalog fixtures across Library, Search, Favorites, and Home.
-- **AC-02:** Not run — Compose availability/recovery-state fixtures.
-- **AC-03:** Not run — rescan/unavailable preservation tests.
-- **AC-04:** Not run — native regression matrix and migration evidence review.
+- **AC-01:** Implemented through the shared catalog — JVM collection/tile fixtures and native SAF-to-Library smoke verify ROM rows and dynamic console filters. Full physical coverage of each destination is separate.
+- **AC-02:** Native smoke — an unassigned ISO remains selectable; opening a synthetic GBA game without an installed emulator gives an actionable message. No game boot or emulator support is inferred.
+- **AC-03:** Passed — native source removal/readdition, unavailable-source, rescan and migration fixtures retain stable identities and user references.
+- **AC-04:** Integrated JVM/native migration and Android catalog/dispatch regression results are recorded in the [batch evidence](../evidence/F15/rom-feature-batch.md). Physical controller/lid/HOME and real emulator game-boot cases remain explicitly separate.
 
 ## Delivery notes
 

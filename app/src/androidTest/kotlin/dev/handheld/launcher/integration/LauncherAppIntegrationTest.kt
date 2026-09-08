@@ -11,6 +11,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -57,7 +58,10 @@ class LauncherAppIntegrationTest {
             val inputMethodManager = compose.activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
             inputMethodManager.hideSoftInputFromWindow(compose.activity.window.decorView.windowToken, 0)
         }
-        compose.waitForIdle()
+        // Android's IME dismissal is asynchronous and is not part of Compose's idle clock.
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithText("System", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("System", useUnmergedTree = true).performClick()
         compose.waitForIdle()
         compose.onNode(hasSetTextAction(), useUnmergedTree = true).assertTextContains("query")

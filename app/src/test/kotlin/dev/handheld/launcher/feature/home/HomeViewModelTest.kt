@@ -61,6 +61,27 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun `cancelled emulator choice preserves order without an error notice`() = runTest(dispatcher) {
+        val items=listOf(homeAndroidItem('A'),homeAndroidItem('B'))
+        val catalog=HomeCatalog(items)
+        val opens=HomeOpens()
+        val snapshots=HomeSnapshots(null)
+        val coordinator=LaunchCoordinator(catalog,snapshots,object:LaunchDispatcher {
+            override suspend fun dispatch(request:LaunchRequest)=LaunchAcknowledgement.Failed(
+                request.operationId,dev.handheld.launcher.core.domain.model.LaunchFailureReason.CANCELLED)
+        },opens,this)
+        val viewModel=HomeViewModel(catalog,opens,HomeOverrides(),snapshots,coordinator,
+            MutableStateFlow(AndroidCatalogRefreshState.Idle),{},SavedStateHandle())
+        advanceUntilIdle()
+        assertTrue(viewModel.activate(items[1].id))
+        advanceUntilIdle()
+        assertEquals(items.map { it.id },viewModel.state.value.items.map { it.itemId })
+        assertTrue(opens.candidates.isEmpty())
+        assertEquals(null,viewModel.state.value.notice)
+        assertEquals(null,viewModel.state.value.pendingLaunchItemId)
+    }
+
+    @Test
     fun `cached home caps items and successful open preserves selected identity at front`() =
         runTest(dispatcher) {
             val items = ('A'..'M').map(::homeAndroidItem)

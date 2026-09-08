@@ -1,10 +1,10 @@
 # F15 — ROM sources and incremental indexing
 
-- Status: **planned**.
+- Status: **implemented in the broad ROM batch; integrated validation and physical-source acceptance are recorded separately**. See [batch evidence](../evidence/F15/rom-feature-batch.md).
 - User stories: [US-040](../user-stories/US-040-approved-rom-source-and-identity-contract.md), [US-041](../user-stories/US-041-rom-folder-grants-and-recovery.md), [US-042](../user-stories/US-042-incremental-rom-indexing.md), [US-043](../user-stories/US-043-rom-catalog-destination-integration.md). Dispatch one ready story; this packet remains the technical ownership and feature-gate reference.
 - Agent: `gpt-5.6-sol`, reasoning `high`.
 - Outcome: select ROM folders once, browse their indexed games, and retain recoverable data when storage disappears or a scan fails.
-- Prerequisites: F14 accepted; recorded first-platform/format scope and multi-file/disc grouping rules. If those choices remain materially ambiguous, prepare a small recommendation and obtain the user's decision before dependent implementation.
+- Approved direction (8 September 2026): the user requested broad popular formats, consoles detected from named folders containing ROMs, selectable game items, and automatic extraction where needed. This replaces the former single-platform proposal. The [format/grouping matrix](../evidence/F15/format-support.md) and [extraction contract](../evidence/F15/archive-extraction.md) define actual support and limits.
 
 ## Ownership and contracts
 

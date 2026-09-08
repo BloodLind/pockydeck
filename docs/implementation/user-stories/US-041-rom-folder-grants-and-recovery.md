@@ -1,7 +1,7 @@
 # US-041 — Connect ROM folders and recover unavailable access
 
 - Parent: [F15 — ROM sources and incremental indexing](../features/F15-rom-index.md)
-- Status: **Planned**
+- Status: **Implemented; physical reboot, grant-revocation and SD-removal acceptance remains pending**. See [batch evidence](../evidence/F15/rom-feature-batch.md).
 - Type: **Feature**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
@@ -10,6 +10,8 @@
 As a launcher user, I want to choose ROM folders once and understand source health, so that I can restore missing access without losing my library references or files.
 
 ## Ready when
+
+Implementation follows the user's approved integrated batch workflow; the original wave prerequisites below no longer block coding. Physical acceptance requirements remain applicable.
 
 - [US-040 — Establish the approved ROM identity and source contract](US-040-approved-rom-source-and-identity-contract.md) is accepted.
 - F14 is accepted and F15’s source/identity/reference-retention contract and wave-10 lease are published.
@@ -29,11 +31,11 @@ Implement acknowledged SAF tree selection and persist only accepted document gra
 
 ## Verification
 
-- **AC-01:** Not run — instrumented document-provider grant persistence test.
-- **AC-02:** Not run — acknowledged-cancellation no-replay test.
-- **AC-03:** Not run — revoked-grant, removed-storage, and provider-error fixtures.
-- **AC-04:** Not run — source-removal/reference-retention test.
-- **AC-05:** Not run — instrumented document-access test; physical reboot/grant and SD procedure remain pending device evidence.
+- **AC-01:** Native smoke — accepted the actual Android folder picker grant for a synthetic external-storage tree and indexed five games; access and the library survived application force-stop/restart. Physical reboot/grant persistence remains a separate check.
+- **AC-02:** Native smoke — opened the folder picker again, navigated Back through its folders and cancelled it; the original five-game source remained without another source being added. Activity result handling only adds a source for an accepted non-null tree; process-loss/recreation replay testing remains separate.
+- **AC-03:** Partial — native repository tests cover unavailable-source projection and prevention of accidental restoration by console correction. Actual provider failure, revoked-grant and removed-SD procedures remain pending.
+- **AC-04:** Passed — native Room tests retain identities, favorites, artwork and history across removal and exact-root reattachment. The removal path disables configuration and never deletes source documents.
+- **AC-05:** Passed for selected emulator storage — actual SAF enumeration and bounded descriptor reads indexed the synthetic tree. No raw-path conversion or broad storage permission is used. Physical reboot/grant and SD procedures remain pending.
 
 ## Delivery notes
 

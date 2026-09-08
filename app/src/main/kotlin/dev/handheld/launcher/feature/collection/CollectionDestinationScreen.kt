@@ -43,11 +43,15 @@ import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ItemId
 import dev.handheld.launcher.core.domain.model.LauncherDestination
+import dev.handheld.launcher.core.domain.model.Availability
+import dev.handheld.launcher.core.domain.model.LibraryItem
+import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
 import dev.handheld.launcher.platform.system.SupportedSystemAction
 import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
 import dev.handheld.launcher.ui.components.LibraryItemCard
 import dev.handheld.launcher.ui.components.LibraryItemCardVariant
 import dev.handheld.launcher.ui.presentation.toTileUiModel
+import dev.handheld.launcher.ui.presentation.TileArtwork
 
 data class CollectionScreenCallbacks(
     val onSelect: (ItemId) -> Unit,
@@ -64,13 +68,31 @@ data class CollectionScreenCallbacks(
 )
 
 /** Shared category vocabulary prevents controller routing and page filters diverging. */
-fun collectionFilterKeys(destination: LauncherDestination): List<String> = when (destination) {
-    LauncherDestination.LIBRARY -> listOf("all", "games", "emulators", "other", "system")
+fun collectionFilterKeys(
+    destination: LauncherDestination,
+    items: List<LibraryItem> = emptyList(),
+): List<String> = when (destination) {
+    LauncherDestination.LIBRARY -> listOf("all", "games") + detectedConsoleFilterKeys(items) + listOf("emulators", "other", "system")
     LauncherDestination.APPS -> listOf("all", "games", "emulators", "other")
     LauncherDestination.FAVORITES -> listOf("all", "games", "apps")
     LauncherDestination.SEARCH -> listOf("all", "games", "apps", "system")
     else -> listOf("all")
 }
+
+/** Source health controls which consoles are visible; emulator installation does not hide games. */
+fun detectedConsoleFilterKeys(items: List<LibraryItem>): List<String> = items
+    .filterIsInstance<LibraryItem.RomGame>()
+    .filter { it.availability == Availability.Available }
+    .map(::romConsoleFilterKey)
+    .distinct()
+    .sortedWith(compareBy<String> { it == "console:unassigned" }.thenBy { collectionFilterLabel(it) })
+
+internal fun romConsoleFilterKey(game: LibraryItem.RomGame): String =
+    "console:${game.platformId?.takeIf { RomPlatforms.byId(it) != null } ?: "unassigned"}"
+
+fun collectionFilterLabel(key: String): String = if (key.startsWith("console:")) {
+    RomPlatforms.byId(key.removePrefix("console:"))?.displayName ?: "Unassigned"
+} else key.replaceFirstChar { it.uppercase() }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -161,7 +183,7 @@ private fun CollectionBody(
                 Modifier.width(112.dp).height(48.dp),
                 onFocusChanged = { focused -> callbacks.focused("Sort", LauncherActionMeaning.CHANGE_FILTER, callbacks.onToggleSort, focused) })
         }
-        CollectionFilters(state.filter, collectionFilterKeys(state.destination), callbacks)
+        CollectionFilters(state.filter, collectionFilterKeys(state.destination, state.allItems), callbacks)
         if (state.inventoryIncomplete) InlineNotice("Catalog may be incomplete.", "Retry", callbacks.onRetry)
         state.error?.let { InlineNotice(it, "Retry", callbacks.onRetry) }
         when {
@@ -181,10 +203,15 @@ private fun CollectionBody(
                 items(state.items, key = { it.id.value }) { item ->
                     val model = item.toTileUiModel(state.overrides[item.id], item.id in state.recentIds)
                     val open = { callbacks.onOpen(item.id) }
+                    // CoverTile reserves a square image plus its title/console caption.
+                    // Only AppIconTile puts all of its content inside a square allocation.
+                    val allocation = Modifier.fillMaxWidth().let {
+                        if (model.artwork is TileArtwork.AndroidIcon) it.aspectRatio(1f) else it
+                    }
                     LibraryItemCard(
                         model, LibraryItemCardVariant.Collection, state.selectedItemId == item.id,
                         activationEnabled = model.canOpen,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                        modifier = allocation
                             .focusRequester(requesters.getOrPut(item.id) { FocusRequester() }),
                         iconLoader = iconLoader, onActivate = open,
                         onFocusChanged = { focused ->
@@ -217,8 +244,9 @@ private fun CollectionFilters(selected: String, filters: List<String>, callbacks
     horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically,
 ) {
     filters.forEach { filter ->
-        FilterChip(filter.replaceFirstChar { it.uppercase() }, filter == selected, { callbacks.onFilter(filter) },
-            onFocusChanged = { focused -> callbacks.focused("Filter ${filter.replaceFirstChar { it.uppercase() }}", LauncherActionMeaning.CHANGE_FILTER, { callbacks.onFilter(filter) }, focused) })
+        val label = collectionFilterLabel(filter)
+        FilterChip(label, filter == selected, { callbacks.onFilter(filter) },
+            onFocusChanged = { focused -> callbacks.focused("Filter $label", LauncherActionMeaning.CHANGE_FILTER, { callbacks.onFilter(filter) }, focused) })
     }
 }
 

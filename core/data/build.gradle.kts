@@ -40,6 +40,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
     ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)

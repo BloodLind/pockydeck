@@ -1,0 +1,64 @@
+# Emulator discovery and ROM dispatch contracts
+
+Implementation and source review: 2026-09-08. This is a compatibility record, not a claim that every emulator has booted a game on physical hardware.
+
+The resolver lists only recognized, installed, enabled current-user packages. A direct entry also needs its exact activity to exist, be enabled, be exported, and permit this caller. Console and file extension eligibility are checked before offering a target. One eligible app is automatic; multiple apps need the user's choice unless a still-eligible console default exists. A RetroArch app remains a choice while its core needs configuration.
+
+## Implemented coverage
+
+There are 37 unique package profiles: 27 standalone profiles with ROM dispatch, three RetroArch variants with core configuration, and seven detection-only profiles. The 43 curated RetroArch cores cover 45 console identifiers. Core choices describe available integrations; they are not a fabricated inventory of installed private cores.
+
+| Emulator family | Platform / representative formats | Contract and limits |
+| --- | --- | --- |
+| PPSSPP, Gold, Legacy | PSP: ISO, CSO, CHD, PBP, ELF, PRX | Explicit `PpssppActivity`, `ACTION_VIEW`, exact content URI. [Official frontend integration](https://www.ppsspp.org/docs/reference/front-end-integration/), [URI parsing](https://github.com/hrydgard/ppsspp/blob/master/android/src/org/ppsspp/ppsspp/PpssppActivity.java). |
+| Dolphin | GameCube / Wii: ISO, GCM, GCZ, CISO, WBFS, RVZ, WIA, DOL, ELF, TGC | Exported `ui.main.MainActivity` invokes `StartupHandler`. The private `EmulationActivity` is not used. Every ClipData entry is interpreted as a disc, so this adapter passes exactly the selected single image. M3U/multi-disc automatic boot is not claimed. [Startup handling](https://github.com/dolphin-emu/dolphin/blob/master/Source/Android/app/src/main/java/org/dolphinemu/dolphinemu/utils/StartupHandler.kt), [manifest](https://github.com/dolphin-emu/dolphin/blob/master/Source/Android/app/src/main/AndroidManifest.xml). |
+| Azahar | 3DS: CCI, CXI, APP, 3DSX | `activities.EmulationActivity` with `ACTION_VIEW` and content URI. The fragment handles external URI input. `.3ds` and `.cia` may be recognized by the catalog but are not advertised as direct Azahar inputs; installation, decryption and renaming are not performed by this adapter. [External URI handling](https://github.com/azahar-emu/azahar/blob/master/src/android/app/src/main/java/org/citra/citra_emu/fragments/EmulationFragment.kt), [manifest](https://github.com/azahar-emu/azahar/blob/master/src/android/app/src/main/AndroidManifest.xml). |
+| melonDS | Nintendo DS: NDS | Custom `me.magnum.melonds.LAUNCH_ROM`; data URI plus `uri` string for initial SavedStateHandle and subsequent intent handling. [Launch arguments](https://github.com/rafaelvcaetano/melonDS-android/blob/master/app/src/main/java/me/magnum/melonds/ui/emulator/model/LaunchArgs.kt), [manifest](https://github.com/rafaelvcaetano/melonDS-android/blob/master/app/src/main/AndroidManifest.xml). |
+| M64Plus FZ, FZ Pro, Mupen64Plus AE | N64: N64, V64, Z64, ZIP, 7Z | Exported `SplashActivity`, `ACTION_VIEW` content URI. Source hands externally selected URI into its gallery scan/launch flow. [Manifest](https://github.com/mupen64plus-ae/mupen64plus-ae/blob/master/app/src/main/AndroidManifest.xml), [ActivityHelper](https://github.com/mupen64plus-ae/mupen64plus-ae/blob/master/app/src/main/java/paulscode/android/mupen64plusae/ActivityHelper.java). |
+| DuckStation | PlayStation: CUE, BIN, ISO, IMG, CHD, PBP, M3U, CCD, EXE | Exported `EmulationActivity`, `ACTION_MAIN`, `bootPath` containing the content URI. Contract is verified against the last public Android source; newer installed builds remain subject to runtime and game compatibility checks. [Activity](https://github.com/stenzek/duckstation/blob/81da9be2d1040665ebfaf2db6d7fdb710a48a383/android/app/src/main/java/com/github/stenzek/duckstation/EmulationActivity.java), [ContentResolver helper](https://github.com/stenzek/duckstation/blob/81da9be2d1040665ebfaf2db6d7fdb710a48a383/android/app/src/main/java/com/github/stenzek/duckstation/FileHelper.java). |
+| AetherSX2 / NetherSX2 and Turnip variant | PS2: ISO, CHD, CSO, BIN, IMG, MDF, GZ, ELF | `xyz.aethersx2.android.EmulationActivity`, `ACTION_MAIN`, `bootPath` content URI. Installed Turnip build's exported activity and bytecode contract inspected directly, as recorded below. The normal package shares this frontend contract; BIOS/setup and actual core boot remain emulator responsibilities. |
+| Flycast | Dreamcast / Naomi / Atomiswave: GDI, CDI, CHD, CUE, ZIP, 7Z, BIN, LST, DAT, ELF | Exported `NativeGLActivity`, `ACTION_VIEW` content URI. Native arcade sets remain archives. [Activity input](https://github.com/flyinghead/flycast/blob/master/shell/android-studio/flycast/src/main/java/com/flycast/emulator/BaseGLActivity.java), [manifest](https://github.com/flyinghead/flycast/blob/master/shell/android-studio/flycast/src/main/AndroidManifest.xml). |
+| Cemu Android | Wii U: WUD, WUX, WUA, WUHB, ISO, ELF, RPX | Exported `emulation.EmulationActivity` accepts data URI as its game path. Multi-file RPX/content layouts still require their associated files. [Android-port activity](https://github.com/SSimco/Cemu/blob/android-port/src/android/app/src/main/java/info/cemu/cemu/emulation/EmulationActivity.kt), [manifest format list](https://github.com/SSimco/Cemu/blob/android-port/src/android/app/src/main/AndroidManifest.xml). |
+| Eden | Switch: XCI, NSP, NCA, NRO | Exported `org.yuzu.yuzu_emu.activities.EmulationActivity`, `ACTION_VIEW` content URI. NSZ and NSO are not claimed. [External URI handling](https://github.com/eden-emulator/mirror/blob/master/src/android/app/src/main/java/org/yuzu/yuzu_emu/fragments/EmulationFragment.kt), [supported extensions](https://github.com/eden-emulator/mirror/blob/master/src/android/app/src/main/java/org/yuzu/yuzu_emu/model/Game.kt). |
+| Robert Broglia / Imagine family | NES.emu, Snes9x EX+, GBC.emu, GBA.emu, MD.emu, PCE.emu, NEO.emu, MSX.emu, NGP.emu, C64.emu, 2600.emu, Saturn.emu | Exact package and exported `com.imagine.BaseActivity`; content URI via `ACTION_VIEW`. Platform-specific suffix sets are explicit. NEO.emu ZIP remains intact. [Shared URI handling](https://github.com/Rakashazi/emu-ex-plus-alpha/blob/master/imagine/src/base/android/imagine-v9/src/main/java/com/imagine/BaseActivity.java), [build metadata](https://github.com/Rakashazi/emu-ex-plus-alpha). |
+| RetroArch / 64-bit / 32-bit | 43 selectable cores for 45 console identifiers, with core-specific formats | Version 1.22.2 or newer; `RetroActivityFuture`, `ACTION_MAIN`, `ROM` SAF serialization and `LIBRETRO` selected core path. Requires a validated hierarchical document tree. See details below. |
+
+DraStic, redream, ePSXe, Pizza Boy GBA, My Boy!, My OldBoy!, and Vita3K are detected but do not claim a verified direct document launch. They have explanatory recovery text. Vita3K specifically requires installed game/title-ID handling, which is not equivalent to opening a Vita archive. These limitations never remove readable ROMs from the catalog.
+
+## RetroArch and storage
+
+RetroArch 1.22.2's native frontend consumes `ROM`, `LIBRETRO`, `DATADIR`, `SDCARD`, `EXTERNAL`, and `CONFIGFILE`. Its SAF VFS expects `saf://<percent-encoded-tree-uri>/<relative-path>`, rather than a bare Android content URI. The adapter validates that the game's document ID is exactly the tree ID plus the relative path and that `buildDocumentUriUsingTree` reproduces the original game URI. Traversal, absolute paths, mismatched authorities and opaque incompatible layouts are rejected. A launcher prepared-archive DocumentsProvider uses the same contract.
+
+The game document and required companions are opened read-only immediately before dispatch. Grants are temporary read grants carried by the launched intent. A prefix tree grant is included when the adapter needs sibling access. There are no persistable or write grants, no invented ROM filesystem locations, and no launcher All files permission. Dolphin receives only its selected boot URI because its ClipData semantics are different.
+
+The core filename comes from the curated core ID and the installed emulator's `ApplicationInfo.dataDir`. The emulator's standard external configuration location is derived from Android's primary storage directory. No private core/configuration files are read or modified by the launcher. The user must install the selected core in RetroArch; alternate private config arrangements and core-specific SAF/VFS behavior need validation. No input-method override is sent.
+
+Primary sources: [native intent extras, v1.22.2](https://github.com/libretro/RetroArch/blob/v1.22.2/frontend/drivers/platform_unix.c), [SAF path serialization](https://github.com/libretro/RetroArch/blob/v1.22.2/libretro-common/vfs/vfs_implementation_saf.c), [Java SAF reader](https://github.com/libretro/RetroArch/blob/v1.22.2/libretro-common/vfs/saf/src/com/libretro/common/vfs/VfsImplementationSaf.java), [default configuration locations](https://github.com/libretro/RetroArch/blob/v1.22.2/pkg/android/phoenix-common/src/com/retroarch/browser/preferences/util/UserPreferences.java), [official core extension metadata](https://github.com/libretro/libretro-core-info).
+
+## Installed-device read-only evidence
+
+Device: Retroid Pocket Flip 2, serial `89a34d44`. Inventory read only; none of the following is a successful game-boot claim.
+
+| Package | Observed version |
+| --- | --- |
+| `org.ppsspp.ppsspp` | `v1.20.4` |
+| `com.github.stenzek.duckstation` | `0.1-8969-g611bb8fb4` |
+| `xyz.aethersx2.cturnip` | `v2.2n-3668`, version code `15269` |
+| `org.dolphinemu.dolphinemu` | `2606` |
+| `org.azahar_emu.azahar` | `2125.1.3-vanilla` |
+| `me.magnum.melonds` | `2.0.1 GH` |
+| `info.cemu.cemu` | `0.5` |
+| `dev.eden.eden_emulator` | `1f6734c` |
+| `com.retroarch.aarch64` | `1.22.2_GIT` |
+
+The installed NetherSX2 APK was copied into an ignored research cache solely to inspect its manifest and launch-related classes. APK SHA-256: `057C028B07D4F2864F6263AA539DBFE7823DA4575539EB0108BA69FAA3DE4C63`. Android's `aapt2 dump xmltree` confirmed `xyz.aethersx2.android.EmulationActivity` is exported. The bundled Android Studio Smali reader showed the activity obtains a `bootPath` string and the file helper uses `Uri.parse` followed by `ContentResolver.openFileDescriptor`. The proprietary APK and disassembly are not committed or incorporated in application code. No user ROM contents were read during this research.
+
+The local Argosy Launcher `EmulatorRegistry.kt` was consulted to cross-check the PS2 family mapping and RetroArch conventions. Argosy's GPL-3.0 source implementation was not copied into this module; the code here is independently authored from the documented contract facts and direct installed-app inspection. Other upstream source licenses remain with their respective projects. This launcher does not distribute emulator binaries or cores.
+
+## Validation scope
+
+The 15 JVM tests cover platform/format boundaries, archive decisions, required companions, core validation, traversal rejection, SAF serialization and chooser/default behavior. Seven Android tests cover native intent construction, temporary read-only grants, Dolphin ClipData behavior, RetroArch configuration, and original/prepared-tree URI validation. All 15 JVM tests and all seven Android tests passed in the 2026-09-08 integrated batch; the Android tests ran on the API 33 emulator. These results validate the dispatch contract, not an external emulator's successful game boot. The coordinating task records the wider batch results separately.
+
+Native archive eligibility follows the selected core's official extension metadata. There is no universal ZIP override. For example, a PSX CUE/BIN ZIP or GBA ZIP is prepared before the resulting game is re-resolved; FBNeo and MAME ZIP sets stay intact. The preparable archive set comes directly from `ArchiveExtractor.supportedFormats`, including compound TAR formats. Recognized RAR remains explicit unsupported extraction.
+
+`RomDispatchResult.Started` means Android accepted the activity start. It does not certify BIOS availability, key setup, an installed RetroArch core, a valid dump, or successful emulation. Those conditions must be demonstrated with legitimate representative games on the intended emulator versions.

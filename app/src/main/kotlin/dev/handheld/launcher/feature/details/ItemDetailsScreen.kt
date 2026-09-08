@@ -32,6 +32,7 @@ import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.Availability
 import dev.handheld.launcher.core.domain.model.LibraryCategory
 import dev.handheld.launcher.core.domain.model.LibraryItem
+import dev.handheld.launcher.core.domain.model.ItemId
 import dev.handheld.launcher.core.domain.model.SupportedItemAction
 import dev.handheld.launcher.core.domain.model.UserItemOverrides
 import dev.handheld.launcher.feature.collection.FocusedControlAction
@@ -40,6 +41,7 @@ import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
 import dev.handheld.launcher.ui.components.LibraryItemCard
 import dev.handheld.launcher.ui.components.LibraryItemCardVariant
 import dev.handheld.launcher.ui.presentation.toTileUiModel
+import dev.handheld.launcher.ui.presentation.consoleLabel
 
 data class ItemDetailsCallbacks(
     val onOpen: (LibraryItem) -> Unit,
@@ -47,6 +49,9 @@ data class ItemDetailsCallbacks(
     val onAppInfo: (LibraryItem.AndroidApp) -> Unit,
     val onCategoryChange: (LibraryItem, LibraryCategory?) -> Unit,
     val onFocusedAction: OnFocusedAction = {},
+    val onChooseRomConsole: (ItemId) -> Unit = {},
+    val onChooseRomEmulator: (ItemId) -> Unit = {},
+    val onOpenRomFolders: () -> Unit = {},
 )
 
 /** Actual catalog identity and supported actions; unavailable entries never pretend to open. */
@@ -85,7 +90,11 @@ fun ItemDetailsScreen(
         verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
     ) {
         LauncherText(model.title, style = LauncherTheme.typography.pageTitle)
-        LauncherText(categoryLabel(effectiveCategory), color = LauncherTheme.colors.textSecondary)
+        LauncherText(
+            if (item is LibraryItem.RomGame) listOfNotNull(item.consoleLabel, item.format?.uppercase()).joinToString(" · ")
+            else categoryLabel(effectiveCategory),
+            color = LauncherTheme.colors.textSecondary,
+        )
         if (!wide) LibraryItemCard(
             model = model,
             variant = LibraryItemCardVariant.SearchResult,
@@ -111,7 +120,22 @@ fun ItemDetailsScreen(
             DetailAction("App info", true, LauncherActionMeaning.OPEN_DETAILS,
                 onActivate = { callbacks.onAppInfo(item) }, callbacks.onFocusedAction, item)
         }
-        if (item.category != LibraryCategory.SYSTEM) ChoiceRow(
+        if (item is LibraryItem.RomGame) {
+            ChoiceRow(
+                "Console", item.consoleLabel,
+                onSelect = { callbacks.onChooseRomConsole(item.id) },
+                supportingText = "Correct detection for this game",
+                onFocusChanged = { focused -> callbacks.onFocusedAction(if (focused) FocusedControlAction(
+                    LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.CHANGE_FILTER, "Choose console"),
+                    { callbacks.onChooseRomConsole(item.id) }, item.id,
+                ) else null) },
+            )
+            DetailAction("Choose emulator for this game", true, LauncherActionMeaning.OPEN_SETTINGS,
+                { callbacks.onChooseRomEmulator(item.id) }, callbacks.onFocusedAction, item)
+            DetailAction("ROM folders", true, LauncherActionMeaning.OPEN_SETTINGS,
+                callbacks.onOpenRomFolders, callbacks.onFocusedAction, item)
+        }
+        if (item is LibraryItem.AndroidApp) ChoiceRow(
             label = "Category",
             value = categoryLabel(effectiveCategory),
             supportingText = "Change how this item is grouped",

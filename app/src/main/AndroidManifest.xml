@@ -20,6 +20,14 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.HandheldLauncher">
+        <provider
+            android:name="dev.handheld.launcher.core.data.rom.archive.PreparedRomDocumentsProvider"
+            android:authorities="${applicationId}.romcache"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter><action android:name="android.content.action.DOCUMENTS_PROVIDER" /></intent-filter>
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"

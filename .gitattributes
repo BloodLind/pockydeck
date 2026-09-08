@@ -1,3 +1,6 @@
 * text=auto
 gradlew text eol=lf
 *.bat text eol=crlf
+
+# Preserve unmodified upstream license/notice bytes, including their trailing blank lines.
+app/src/main/assets/licenses/*.txt -text -whitespace

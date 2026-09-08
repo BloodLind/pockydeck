@@ -12,6 +12,8 @@ import dev.handheld.launcher.core.domain.model.LibraryItemKind
 import dev.handheld.launcher.core.domain.model.SupportedItemAction
 import dev.handheld.launcher.core.domain.model.UserArtworkReference
 import dev.handheld.launcher.core.domain.model.UserItemOverrides
+import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
+import java.util.Locale
 
 @Immutable
 sealed interface TileArtwork {
@@ -54,7 +56,7 @@ object DefaultItemToCardPresentationAdapter : ItemToCardPresentationAdapter {
         return LibraryItemCardPresentation(
             itemId = item.id,
             title = item.title,
-            subtitle = effectiveCategory.presentationLabel,
+            subtitle = if (item is LibraryItem.RomGame) item.consoleLabel else effectiveCategory.presentationLabel,
             typeLabel = item.kind.typeLabel,
             badges = buildList {
                 if (item.availability !is Availability.Available) add("Unavailable")
@@ -79,7 +81,7 @@ fun LibraryItem.toTileUiModel(
         typeLabel = presentation.typeLabel,
         platformLabel = when (kind) {
             LibraryItemKind.ANDROID_APP -> "ANDROID APP"
-            LibraryItemKind.ROM_GAME -> "GAME"
+            LibraryItemKind.ROM_GAME -> (this as LibraryItem.RomGame).consoleLabel.uppercase(Locale.ROOT)
             LibraryItemKind.SYSTEM_ACTION -> "SYSTEM"
         },
         primaryActionLabel = when {
@@ -100,6 +102,9 @@ fun LibraryItem.toTileUiModel(
         },
     )
 }
+
+val LibraryItem.RomGame.consoleLabel: String
+    get() = platformId?.let { RomPlatforms.byId(it)?.displayName } ?: "Unassigned console"
 
 private val LibraryCategory.presentationLabel: String
     get() = when (this) {

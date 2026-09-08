@@ -32,6 +32,7 @@ val LaunchTarget.itemId: ItemId
     }
 
 enum class LaunchFailureReason {
+    CANCELLED,
     TARGET_UNAVAILABLE,
     REJECTED,
     DISPATCH_FAILED,

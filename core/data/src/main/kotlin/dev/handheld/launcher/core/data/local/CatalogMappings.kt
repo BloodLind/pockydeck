@@ -74,6 +74,8 @@ internal fun LibraryItem.toStoredCatalogItem(): StoredCatalogItem {
             categoryCode = category.toPersistenceCode(),
             availabilityCode = availabilityCode,
             unavailabilityReasonCode = reasonCode,
+            platformId = (this as? LibraryItem.RomGame)?.platformId,
+            romFormat = (this as? LibraryItem.RomGame)?.format,
         ),
         provenance = provenanceEntity,
         actions = supportedActions
@@ -114,6 +116,8 @@ internal fun CatalogItemRecord.toDomain(): LibraryItem {
                 sourceId = CatalogSourceId(requireNotNull(storedProvenance.sourceId)),
                 availability = availability,
                 supportedActions = supportedActions,
+                platformId = item.platformId,
+                format = item.romFormat,
             )
         }
 

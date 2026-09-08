@@ -1,0 +1,34 @@
+ROM feature batch verification — 8 September 2026
+Baseline commit: 742678d; application 0.2.0, versionCode 2.
+
+Combined command:
+.\gradlew.bat --no-daemon --continue :app:assembleDebug :app:testDebugUnitTest :core:domain:test :core:data:testDebugUnitTest :core:designsystem:testDebugUnitTest :app:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest :core:designsystem:connectedDebugAndroidTest :app:lintDebug :app:processReleaseMainManifest
+
+The combined run passed all JVM, data Android and design-system Android checks. One existing Search instrumentation test raced native IME dismissal. It was changed to wait up to five seconds for the System filter after dismissal, preserving its focus/query assertions. Final targeted follow-up:
+.\gradlew.bat --no-daemon :app:assembleDebug :app:connectedDebugAndroidTest :app:lintDebug
+BUILD SUCCESSFUL in 40s; all 17 app Android tests passed.
+
+Final XML results (zero failures/errors/skips):
+JVM app: 42
+JVM domain: 44
+JVM data: 53
+JVM designsystem: 10
+Android app: 17
+Android data: 52
+Android designsystem: 16
+Total passed: 234
+Lint: 0 errors, 71 warnings, 8 informational findings.
+Release manifest: only production MainActivity; no debug preview/gallery Activity, MANAGE_EXTERNAL_STORAGE or QUERY_ALL_PACKAGES.
+
+APK bytes: 29536127
+APK SHA-256: a174ddc91f07158f310b39aaad20f77c451ab0fad0e2b04980a112a8bbcb83cb
+Stable local artifact: .local/releases/handheld-launcher-rom-debug.apk
+Packaged dependency notices: 11 assets/licenses entries verified.
+
+Android test device: API 33 x86_64 AVD, 1920x1080 at 360dpi.
+Native synthetic SAF smoke: selected Download/CodexRomSmoke through the actual system picker; five indexed games from NES, GBA, GBA ZIP, PSX CUE/BIN and one unassigned ISO; empty SNES folder produced no console. GBA filter showed two games. ROM titles and console captions visually inspected. Application force-stop/restart retained grant and five-game library. Back navigated out of picker directories and cancelled without adding a source; five-game source retained.
+No real game was booted. Synthetic bytes establish scanner/layout/file-access behavior, not ROM validity.
+
+Physical Flip 2 89a34d44: adb install -r succeeded, versionCode=2 and versionName=0.2.0 confirmed; original firstInstallTime retained. MainActivity start accepted and process remained running with no AndroidRuntime output for that PID. Device stayed in Dozing/keyguard state, so a fresh physical visual comparison is not claimed. No HOME-role or emulator preference change was performed.
+
+Pending: real emulator/core/game-boot compatibility rows, SD-removal/revoked-grant/reboot procedures, physical controller/lid/return matrix, and F17 metadata provider selection.

@@ -151,7 +151,7 @@ class HomeViewModel(
             )
             launch is LaunchCoordinatorState.Failed -> current.copy(
                 pendingLaunchItemId = null,
-                notice = HomeNotice.LaunchFailed(launch.reason),
+                notice = if(launch.reason == LaunchCoordinatorFailure.CANCELLED) localNotice.value else HomeNotice.LaunchFailed(launch.reason),
             )
             else -> current.copy(pendingLaunchItemId = null, notice = localNotice.value ?: current.notice)
         }

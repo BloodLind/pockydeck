@@ -20,6 +20,15 @@ import dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshCoordinato
 import dev.handheld.launcher.core.data.discovery.PackageManagerAndroidAppDiscovery
 import dev.handheld.launcher.core.data.local.LauncherDatabase
 import dev.handheld.launcher.core.data.local.LauncherPreferencesStore
+import dev.handheld.launcher.core.data.rom.repository.RoomRomLibraryRepository
+import dev.handheld.launcher.core.data.rom.source.SafRomSourceAccess
+import dev.handheld.launcher.core.data.rom.scan.RomScanCoordinator
+import dev.handheld.launcher.core.data.rom.archive.PreparedRomCache
+import dev.handheld.launcher.core.data.rom.emulator.AndroidEmulatorResolver
+import dev.handheld.launcher.core.data.rom.emulator.AndroidRomLauncher
+import dev.handheld.launcher.core.domain.model.LaunchTarget
+import dev.handheld.launcher.core.domain.model.LaunchRequest
+import dev.handheld.launcher.rom.RomFeatureController
 import dev.handheld.launcher.core.data.repository.DataStoreControllerPreferenceRepository
 import dev.handheld.launcher.core.data.repository.DataStoreNavigationSnapshotRepository
 import dev.handheld.launcher.core.data.repository.RoomCatalogRepository
@@ -69,8 +78,20 @@ class AppContainer(
         )
     }
     val launchDispatcher: LaunchDispatcher by lazy {
-        AndroidComponentLaunchDispatcher(applicationContext)
+        val android = AndroidComponentLaunchDispatcher(applicationContext)
+        object : LaunchDispatcher {
+            override suspend fun dispatch(request: LaunchRequest) = when(request.target) {
+                is LaunchTarget.ExternalContent -> romController.dispatch(request)
+                else -> android.dispatch(request)
+            }
+        }
     }
+    val romRepository by lazy { RoomRomLibraryRepository(database) }
+    val romSourceAccess by lazy { SafRomSourceAccess(applicationContext) }
+    val romScanner by lazy { RomScanCoordinator(romRepository,romSourceAccess,applicationScope) }
+    val romCache by lazy { PreparedRomCache(applicationContext) }
+    val romController by lazy { RomFeatureController(romRepository,romSourceAccess,romScanner,
+        AndroidEmulatorResolver(applicationContext),AndroidRomLauncher(applicationContext),romCache,applicationScope) }
     val launchCoordinator by lazy {
         LaunchCoordinator(catalogRepository, navigationSnapshotRepository, launchDispatcher,
             successfulOpenRepository, applicationScope)

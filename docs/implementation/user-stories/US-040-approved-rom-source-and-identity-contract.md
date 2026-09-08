@@ -1,15 +1,17 @@
 # US-040 — Establish the approved ROM identity and source contract
 
 - Parent: [F15 — ROM sources and incremental indexing](../features/F15-rom-index.md)
-- Status: **Planned**
+- Status: **Implemented in the approved broad ROM batch**. See [published contracts](../contracts.md#f15--f16-rom-sources-selection-and-launch) and [batch evidence](../evidence/F15/rom-feature-batch.md).
 - Type: **Enabler**
 - Implementation agent: `gpt-5.6-sol`, reasoning `high`
 
 ## User story
 
-As a developer, I want a concrete first-platform support and preservation contract, so that ROM indexing can be implemented without guessing file grouping or data behavior.
+As a developer, I want a concrete platform support and preservation contract, so that ROM indexing can be implemented without guessing file grouping or data behavior.
 
 ## Ready when
+
+The user's 8 September direction supersedes the former single-platform and wave-order prerequisites: recognize popular formats across named console folders, retain selectable unresolved games, and automatically extract supported archives where needed. The following prerequisites describe the original plan; implementation follows the approved batch workflow.
 
 - [US-039 — Verify native launch, lifecycle and catalog resilience together](US-039-native-lifecycle-and-catalog-gate.md) is accepted.
 - F14 is accepted; F15’s wave-10 lease applies, while final F15 acceptance follows all of its child stories.
@@ -29,11 +31,11 @@ Record the approved support matrix and unresolved-classification policy. Submit 
 
 ## Verification
 
-- **AC-01:** Not run — manual review of recorded user-approved support matrix.
-- **AC-02:** Not run — automated identity/grouping fixtures.
-- **AC-03:** Not run — contract and preservation test review.
-- **AC-04:** Not run — migration preservation tests.
-- **AC-05:** Not run — coordinator publication checklist.
+- **AC-01:** Recorded — [56-family recognition/grouping matrix](../evidence/F15/format-support.md), [archive contract](../evidence/F15/archive-extraction.md), and separate [emulator capability matrix](../evidence/F16/emulator-contracts.md).
+- **AC-02:** Passed — planner grouping fixtures and native Room tests for distinct source identities, rescans and exact-root reattachment.
+- **AC-03:** Passed — native source-removal/rescan tests retain favorites, artwork references and history; discovered and user-assigned console fields remain separate.
+- **AC-04:** Passed — native 2-to-3 Room migration retains catalog, user references, operation receipts and next recency order. Duplicate/overlap handling and moved-root semantics are published.
+- **AC-05:** Published — coordinator domain, schema, SAF, cache-provider and launch-cancellation contracts are recorded in [contracts](../contracts.md#f15--f16-rom-sources-selection-and-launch). This record does not assert full physical feature acceptance.
 
 ## Delivery notes
 

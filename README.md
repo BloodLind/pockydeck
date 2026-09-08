@@ -4,7 +4,9 @@ An Android HOME launcher for the Retroid Pocket Flip 2, built in Kotlin and Jetp
 
 The native application base includes Home, Library, Apps, Favorites, Search, Settings and item details in one persistent shell. It discovers installed Android apps, opens them through one acknowledged launch path, stores successful-open order, favorites and category overrides, and offers user-controlled default-HOME setup. The Home proportions, colors, typography, carousel, dock and controller footer follow the supplied design with real device content.
 
-ROM folder scanning, emulator launch configuration and metadata/cover providers remain later work. Installed emulators can already be opened as Android apps. No running/session state or demonstration artwork is presented as real data.
+The ROM feature batch adds granted folder scanning, console detection, selectable ROMs, emulator/core choices, and automatic archive preparation. Metadata and cover providers remain later work. No running/session state or demonstration artwork is presented as real data.
+
+See the [ROM setup and recovery guide](docs/rom-setup-guide.md), [recognized formats](docs/implementation/evidence/F15/format-support.md), and [emulator compatibility contracts](docs/implementation/evidence/F16/emulator-contracts.md). Recognizing a file format does not imply that every emulator can launch it.
 
 - [Implementation progress](docs/implementation/progress.md): current story status, ownership, evidence, and dependency gates.
 - [Foundation launch evidence](docs/implementation/evidence/F01/US-001-launch.md): Android 13 emulator smoke test and screenshot.

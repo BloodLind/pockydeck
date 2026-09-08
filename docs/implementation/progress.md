@@ -8,6 +8,8 @@ The user explicitly changed the workflow on 8 September: build the complete appl
 
 The native application batch replaces the foundation entry point with the production Home shell and all six destinations, shared catalog actions, native controller input, settings, status and HOME-role setup. See the [batch evidence and documentation reconciliation](evidence/F14/native-application-base.md) for actual verification and remaining physical checks.
 
+The subsequent ROM batch delivers version **0.2.0**: 56-family folder/format recognition, selectable ROMs, console-derived Library filters, emulator/core preferences and bounded automatic archive preparation. **234 tests pass** (149 JVM, 85 Android); lint has zero errors. The APK was installed on the connected Flip 2; its dozing/keyguard state prevented a fresh physical screen comparison. See [ROM batch evidence](evidence/F15/rom-feature-batch.md) for exact coverage, checksum and remaining physical/game-boot checks.
+
 ## Baseline and authorization
 
 - Planning baseline: `ad2b668`; accepted F01 baseline: `ce09ddc`; previous theme/catalog checkpoint: `b9e68d2`.
@@ -46,7 +48,9 @@ The native application batch replaces the foundation entry point with the produc
 | F09–F12 / US-026–035 | Implemented in native batch | Terra/high; coordinator integration | Library/Apps, Favorites/Details, Search/IME and Settings |
 | F13 / US-036–037 | Implemented in native batch | Sol/high review; coordinator integration | Actual lifecycle-bound device status |
 | F14 / US-038–039 | Integrated checks; physical matrix partial | Coordinator and Sol/high review | [Native application evidence](evidence/F14/native-application-base.md) |
-| F15–F18 / US-040–053 | Later work | Per feature packets | ROM support/emulator/provider decisions and final physical delivery gates remain |
+| F15 / US-040–043 | Implemented in broad ROM batch; physical source matrix pending | Parallel planner/UI work; coordinator storage/integration | [ROM batch](evidence/F15/rom-feature-batch.md), [format support](evidence/F15/format-support.md), [extraction](evidence/F15/archive-extraction.md) |
+| F16 / US-044–046 | Implemented adapters and emulator/core choice; actual game-boot matrix partial | Parallel contract research; coordinator launch integration | [Emulator contracts and versions](evidence/F16/emulator-contracts.md) |
+| F17–F18 / US-047–053 | Later work | Per feature packets | Metadata provider decision and final physical delivery gates remain |
 
 ## Ownership and handoff
 

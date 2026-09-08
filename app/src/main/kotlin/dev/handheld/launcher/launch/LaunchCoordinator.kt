@@ -49,6 +49,7 @@ sealed interface LaunchCoordinatorState {
 }
 
 enum class LaunchCoordinatorFailure {
+    CANCELLED,
     TARGET_UNAVAILABLE,
     REJECTED,
     DISPATCH_FAILED,
@@ -197,6 +198,7 @@ class LaunchCoordinator(
 }
 
 private fun LaunchFailureReason.toCoordinatorFailure(): LaunchCoordinatorFailure = when (this) {
+    LaunchFailureReason.CANCELLED -> LaunchCoordinatorFailure.CANCELLED
     LaunchFailureReason.TARGET_UNAVAILABLE -> LaunchCoordinatorFailure.TARGET_UNAVAILABLE
     LaunchFailureReason.REJECTED -> LaunchCoordinatorFailure.REJECTED
     LaunchFailureReason.DISPATCH_FAILED -> LaunchCoordinatorFailure.DISPATCH_FAILED

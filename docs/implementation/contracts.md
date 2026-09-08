@@ -11,7 +11,7 @@ Accepted implementation contracts for F01, F02 and F06. This file records code s
 `LibraryItem` has three variants:
 
 - `AndroidApp`: one current-user component, discovered title/category/availability/actions, Android provenance, and a matching Android target.
-- `RomGame`: a stable externally supplied `ItemId`, opaque `CatalogSourceId`, discovered fields, and an opaque external-content target. Paths, formats, disc grouping, emulators, and provider fields remain deferred to F15–F17.
+- `RomGame`: a stable generated `ItemId`, `CatalogSourceId`, discovered title/availability, optional canonical `platformId` and `format`, and an opaque external-content target. F15's document repository resolves that target; source identity is independent of emulator selection and extracted-copy paths. Metadata/provider fields remain deferred to F17.
 - `SystemAction`: a stable built-in action ID and internal target. It is never eligible for Home recency.
 
 Every item exposes `LibraryItemKind`, `LibraryCategory`, `Availability`, `SupportedItemAction`, `CatalogProvenance`, and a matching `LaunchTarget`. `LaunchRequest` verifies `itemId == target.itemId`; `LaunchRequest.forItem` is the preferred constructor.
@@ -25,7 +25,7 @@ Discovered item fields are replaceable catalog data. User-owned category and art
 Every `CatalogInventory` declares an `InventoryScope`:
 
 - `CurrentUserAndroid` means a complete enumeration of launchable Android components for the current user.
-- `UserSource(sourceId)` is only a generic later extension boundary; its scan meaning is not defined before F15.
+- `UserSource(sourceId)` scopes a complete source inventory. F15 uses separate revision-checked batch upserts and a final omission transaction rather than presenting each partial batch as a complete inventory.
 
 An inventory may contain only items belonging to its declared scope and may not contain duplicate IDs. A complete scoped result is rejected if an observed ID collides with a record retained outside that scope.
 
@@ -132,7 +132,7 @@ The measured allocation reserves frame padding plus lift/depth slack on both sid
 
 ## US-017 / US-018 persistence handoff
 
-`core.data.local.LauncherDatabase.open(context, databaseName)` opens the version-2 Room database (`handheld-launcher.db` by default). Share one application-owned instance among `RoomCatalogRepository(database)`, `RoomFavoriteRepository(database)`, `RoomItemOverrideRepository(database)`, and `RoomSuccessfulOpenRepository(database)`; their public contracts are the accepted domain interfaces. Observation reads the persisted cache before discovery completes. Catalog snapshots are read transactionally and sorted by the shared title/ID policy. Combine successful-open `records` with `LibraryItemOrdering.recentFirst` for recency order.
+`core.data.local.LauncherDatabase.open(context, databaseName)` opens the version-3 Room database (`handheld-launcher.db` by default). Share one application-owned instance among catalog, reference, successful-open and `RoomRomLibraryRepository` repositories. Observation reads the persisted cache before discovery completes. Catalog snapshots are read transactionally and sorted by the shared title/ID policy. Combine successful-open `records` with `LibraryItemOrdering.recentFirst` for recency order.
 
 Every valid completed inventory is reconciled in one Room transaction. Observed discovered fields/provenance/actions are updated, omissions are retained as unavailable, and the inventory status changes in that same commit. Large omission sets are divided into bounded SQL batches inside the transaction. Valid incomplete inventories only update status. F01's scoped, unique-ID validation remains in force for all inventory objects.
 
@@ -203,3 +203,19 @@ A missing/disabled target or `ActivityNotFoundException` yields `TARGET_UNAVAILA
 Debug `ControlGalleryActivity` computes one root snapshot and hosts `LauncherControlGallery(metrics, initialSection)` or content-only `HomeGalleryFixture(metrics, modifier, variant)`. The latter expects its modifier at `metrics.contentBounds`, subtracts those offsets internally, and intentionally lets the partial trailing card reach the screen edge. F04 embeds this content in its sole shell; production never uses the debug item list or artwork.
 
 Home title tracking is -0.025em and platform tracking is +0.05em at source scale; native letter spacing scales with the theme. The platform badge uses the source horizontal/dot spacing, and Home metadata reserves additional native line-box rounding so two title lines fit without shifting the normal card row. `ControllerGlyph` supplies the reference physical face-button circles and Start/shoulder pills; its semantic label remains caller-owned, and it does not choose Confirm/Back mapping.
+
+## F15 / F16 ROM sources, selection and launch
+
+`LocalControlFocusRestoration` is an optional presentation-only hook. Shared settings rows, buttons, filter controls and cards publish a callback for their own focus target on focus and before activation. The root retains the initiating control across a modal and restores it after keyboard/controller or touch dismissal; page/shell groups remain fallback paths. This avoids treating a scrolling container's non-semantic focus target as restored control focus. Without a provider, the hook is a no-op and primitive signatures are unchanged.
+
+The approved ROM batch adds optional `platformId` and `format` to `LibraryItem.RomGame`. A source has a generated `CatalogSourceId`; each source/document pair receives a generated `ItemId` retained across rescans and exact-root reattachment. Provider document IDs remain opaque. Relative names inform console detection and descriptor grouping; they never replace SAF access checks or become guessed filesystem paths.
+
+Room version 3 adds `rom_sources`, `rom_documents`, and `rom_preferences`, plus nullable console/format fields on the catalog projection. The explicit 2-to-3 migration preserves existing catalog, favorites, overrides, successful-open history and operation receipts. DataStore navigation data is unchanged. Removing a source disables its projection and retains identities and user references. Source revisions prevent an older scan from publishing after removal or reassignment. Enumeration/planning must finish before bounded upserts begin; only completion of all batches for the same revision may reconcile omissions. Failed or cancelled scans retain prior entries; loss of root access marks their projection unavailable.
+
+`RomScanPlanner` is provider-independent. Console folders and unambiguous formats determine assignments; ambiguous games remain selectable for manual correction. Valid descriptors/playlists own their transitive companions. Malformed or incomplete sets retain a separate repair requirement, which choosing a console cannot clear. Library console filters and emulator settings are derived from present games in available sources, so empty console folders do not create console rows. Foreground reconciliation, manual scans and an eight-hour WorkManager request refresh the inventory; no instant filesystem-monitor guarantee is made.
+
+`RomFeatureController` serializes ephemeral settings and launch choices. One compatible installed app is selected automatically; several require a chooser, with optional per-console preference. Details can persist a per-game override. Missing or incompatible saved apps require another explicit choice. RetroArch core selection records the user's installed-core choice; Android private core files are not inspected. Package profiles validate the specific enabled, exported activity and launch contract immediately before dispatch. Recognition does not imply an installed emulator supports a format.
+
+Supported archives are prepared only when the selected launch path requires unpacked content. Original files are read-only. Preparation enforces byte, entry, memory and storage limits; encrypted, nested, unsupported archive variants and unsafe entries produce actionable errors. Completed immutable copies live in quota-managed `noBackupFilesDir/rom-prepared`, not Android's disposable cache directory. A read-only DocumentsProvider exposes only explicitly granted completed trees. Successful dispatch reserves a copy across process restarts; failed dispatch releases only a newly created reservation. Automatic eviction and ordinary clearing preserve reserved copies. Clearing all copies requires the user to state that emulators are closed; the launcher never infers emulator liveness.
+
+The existing acknowledged launch coordinator owns origin snapshots, recency and operation deduplication. `CANCELLED` is an explicit non-success outcome: cancelling an emulator/core/archive choice neither records a successful open nor shows a launch error. No pending external launch is persisted or replayed after process loss. `Dispatched` still means only that Android accepted `startActivity`; gameplay and emulator-specific storage/core behavior require separate device evidence.

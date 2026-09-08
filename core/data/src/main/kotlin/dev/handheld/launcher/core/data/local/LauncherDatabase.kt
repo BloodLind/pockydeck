@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import dev.handheld.launcher.core.data.rom.repository.*
 
 @Database(
     entities = [
@@ -18,14 +19,18 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SuccessfulOpenReferenceEntity::class,
         SuccessfulOpenOperationEntity::class,
         SuccessfulOpenOrderStateEntity::class,
+        RomSourceEntity::class,
+        RomDocumentEntity::class,
+        RomPreferenceEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class LauncherDatabase : RoomDatabase() {
     internal abstract fun catalogDao(): CatalogDao
     internal abstract fun catalogReferenceDao(): CatalogReferenceDao
     internal abstract fun successfulOpenDao(): SuccessfulOpenDao
+    internal abstract fun romDao(): RomDao
 
     companion object {
         const val DEFAULT_DATABASE_NAME = "handheld-launcher.db"
@@ -83,5 +88,17 @@ internal object LauncherMigrations {
         }
     }
 
-    val all: Array<Migration> = arrayOf(migration1To2)
+    val migration2To3: Migration = object : Migration(2, 3) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE catalog_items ADD COLUMN platform_id TEXT")
+            database.execSQL("ALTER TABLE catalog_items ADD COLUMN rom_format TEXT")
+            database.execSQL("CREATE TABLE IF NOT EXISTS rom_sources (source_id TEXT NOT NULL PRIMARY KEY, tree_uri TEXT NOT NULL, root_document_id TEXT NOT NULL, name TEXT NOT NULL, enabled INTEGER NOT NULL, status TEXT NOT NULL, default_platform_id TEXT, last_scan_at INTEGER, error TEXT, revision INTEGER NOT NULL)")
+            database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_rom_sources_tree_uri ON rom_sources(tree_uri)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS rom_documents (item_id TEXT NOT NULL PRIMARY KEY, source_id TEXT NOT NULL, document_id TEXT NOT NULL, document_uri TEXT NOT NULL, relative_path TEXT NOT NULL, title TEXT NOT NULL, platform_id TEXT, platform_override TEXT, format TEXT NOT NULL, present INTEGER NOT NULL, issue TEXT, requires_repair INTEGER NOT NULL, companions TEXT NOT NULL, size_bytes INTEGER, scan_token TEXT NOT NULL)")
+            database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_rom_documents_source_id_document_id ON rom_documents(source_id, document_id)")
+            database.execSQL("CREATE TABLE IF NOT EXISTS rom_preferences (`key` TEXT NOT NULL PRIMARY KEY, value TEXT NOT NULL)")
+        }
+    }
+
+    val all: Array<Migration> = arrayOf(migration1To2, migration2To3)
 }

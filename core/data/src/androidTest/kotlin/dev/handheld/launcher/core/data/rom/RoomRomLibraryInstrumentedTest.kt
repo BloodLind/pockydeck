@@ -1,0 +1,204 @@
+package dev.handheld.launcher.core.data.rom
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.handheld.launcher.core.data.local.LauncherDatabase
+import dev.handheld.launcher.core.data.repository.RoomCatalogRepository
+import dev.handheld.launcher.core.data.repository.RoomFavoriteRepository
+import dev.handheld.launcher.core.data.repository.RoomItemOverrideRepository
+import dev.handheld.launcher.core.data.repository.RoomSuccessfulOpenRepository
+import dev.handheld.launcher.core.data.rom.repository.RoomRomLibraryRepository
+import dev.handheld.launcher.core.data.rom.repository.ScanSupersededException
+import dev.handheld.launcher.core.domain.model.*
+import dev.handheld.launcher.core.domain.rom.RomEntry
+import dev.handheld.launcher.core.domain.rom.RomSource
+import dev.handheld.launcher.core.domain.rom.RomSourceStatus
+import dev.handheld.launcher.core.domain.rom.scan.*
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class RoomRomLibraryInstrumentedTest {
+    private lateinit var context: Context
+    private lateinit var database: LauncherDatabase
+    private lateinit var repository: RoomRomLibraryRepository
+    private lateinit var catalog: RoomCatalogRepository
+    private lateinit var databaseName: String
+
+    @Before fun setUp() {
+        context = ApplicationProvider.getApplicationContext()
+        databaseName = "rom-integrity-${System.nanoTime()}.db"
+        database = LauncherDatabase.open(context, databaseName)
+        repository = RoomRomLibraryRepository(database)
+        catalog = RoomCatalogRepository(database)
+    }
+
+    @After fun tearDown() {
+        database.close()
+        context.deleteDatabase(databaseName)
+    }
+
+    @Test fun sourceRemovalReaddAndRenameRetainIdentityFavoritesArtworkAndHistory() = runBlocking {
+        val source = source("one")
+        val original = scan(source, doc("opaque-one", "GBA/First.gba")).single()
+        RoomFavoriteRepository(database).setFavorite(original.itemId, true)
+        val override = UserItemOverrides(artworkReference = UserArtworkReference("user-art:game"))
+        RoomItemOverrideRepository(database).setOverrides(original.itemId, override)
+        RoomSuccessfulOpenRepository(database).recordOnce(SuccessfulOpenCandidate(LaunchOperationId("rom-open"), original.itemId))
+        repository.setItemEmulator(original.itemId, "emulator:test")
+
+        repository.removeSource(source.id)
+        assertFalse(requireNotNull(repository.findSource(source.id)).enabled)
+        assertEquals(Availability.Unavailable(UnavailabilityReason.SOURCE_UNAVAILABLE), catalog.findItem(original.itemId)?.availability)
+        val readded = repository.addSource(source.treeUri, source.rootDocumentId, source.name)
+        assertEquals(source.id, readded)
+        assertEquals(original.itemId, scan(requireNotNull(repository.findSource(readded)), doc("opaque-one", "GBA/Renamed.gba")).single().itemId)
+
+        assertEquals("Renamed", catalog.findItem(original.itemId)?.title)
+        assertEquals(Availability.Available, catalog.findItem(original.itemId)?.availability)
+        assertEquals(setOf(original.itemId), RoomFavoriteRepository(database).favoriteItemIds.first())
+        assertEquals(override, RoomItemOverrideRepository(database).overridesByItemId.first()[original.itemId])
+        assertEquals(original.itemId, RoomSuccessfulOpenRepository(database).records.first().single().itemId)
+        assertEquals("emulator:test", repository.itemEmulatorOverrides.first()[original.itemId])
+        assertEquals(1, repository.sources.first().size)
+    }
+
+    @Test fun sameFilenameAndOpaqueIdInDifferentSourcesNeverMerge() = runBlocking {
+        val first = scan(source("one"), doc("shared-document-id", "GBA/Game.gba")).single()
+        val second = scan(source("two"), doc("shared-document-id", "GBA/Game.gba")).single()
+        assertNotEquals(first.itemId, second.itemId)
+        assertEquals(2, catalog.snapshot.first().activeItems.size)
+        repository.removeSource(first.sourceId)
+        assertEquals(listOf(second.itemId), catalog.snapshot.first().activeItems.map { it.id })
+    }
+
+    @Test fun onlyCompletedEnumerationMarksAbsentGamesMissing() = runBlocking {
+        val source = source("one")
+        val original = scan(source, doc("one", "GBA/One.gba"), doc("two", "GBA/Two.gba"))
+        val revision = requireNotNull(repository.beginScan(source.id))
+        repository.failScan(source.id, revision, "Fixture provider interrupted", unavailable = false)
+        assertEquals(2, catalog.snapshot.first().activeItems.size)
+        assertTrue(repository.entries.first().all { it.present })
+
+        val cancelledRevision = requireNotNull(repository.beginScan(source.id))
+        val cancelled = launch(start = CoroutineStart.UNDISPATCHED) {
+            currentCoroutineContext().cancel()
+            repository.commitScan(source, cancelledRevision, emptyList(), RomScanPlan(emptyList(), emptyList(), emptyList()))
+        }
+        cancelled.join()
+        repository.failScan(source.id, cancelledRevision, "Fixture cancellation", unavailable = false)
+        assertTrue(cancelled.isCancelled)
+        assertTrue(repository.entries.first().all { it.present })
+
+        scan(source, doc("one", "GBA/One.gba"))
+        val omitted = original.single { it.documentId == "two" }
+        assertFalse(requireNotNull(repository.findEntry(omitted.itemId)).present)
+        assertEquals(Availability.Unavailable(UnavailabilityReason.REMOVED), catalog.findItem(omitted.itemId)?.availability)
+        assertEquals(RomSourceStatus.READY, repository.findSource(source.id)?.status)
+    }
+
+    @Test fun unavailableSourceCannotBeMadeReadableByConsoleCorrection() = runBlocking {
+        val source = source("one")
+        val entry = scan(source, doc("one", "Game.iso")).single()
+        val revision = requireNotNull(repository.beginScan(source.id))
+        repository.failScan(source.id, revision, "Storage disconnected", unavailable = true)
+        repository.setItemPlatform(entry.itemId, "ps2")
+
+        assertEquals("ps2", repository.findEntry(entry.itemId)?.platformId)
+        assertEquals(RomSourceStatus.UNAVAILABLE, repository.findSource(source.id)?.status)
+        assertEquals(Availability.Unavailable(UnavailabilityReason.SOURCE_UNAVAILABLE), catalog.findItem(entry.itemId)?.availability)
+        assertTrue(catalog.snapshot.first().activeItems.isEmpty())
+    }
+
+    @Test fun removalInvalidatesInFlightScanWithoutReactivatingRows() = runBlocking {
+        val source = source("one")
+        val entry = scan(source, doc("one", "GBA/One.gba")).single()
+        val revision = requireNotNull(repository.beginScan(source.id))
+        repository.removeSource(source.id)
+        var superseded = false
+        try {
+            val docs = listOf(doc("one", "GBA/New title.gba"))
+            repository.commitScan(source, revision, docs, plan(source, docs))
+        } catch (_: ScanSupersededException) { superseded = true }
+        assertTrue(superseded)
+        assertFalse(requireNotNull(repository.findSource(source.id)).enabled)
+        assertEquals("One", catalog.findItem(entry.itemId)?.title)
+        assertTrue(catalog.snapshot.first().activeItems.isEmpty())
+    }
+
+    @Test fun userAssignmentDuringEnumerationSurvivesRescanAndDatabaseReopen() = runBlocking {
+        val source = source("one")
+        val docs = listOf(doc("one", "Game.iso"))
+        val entry = scan(source, *docs.toTypedArray()).single()
+        val revision = requireNotNull(repository.beginScan(source.id))
+        val stalePlan = plan(source, docs)
+        repository.setItemPlatform(entry.itemId, "ps2")
+        repository.commitScan(source, revision, docs, stalePlan)
+        repository.setConsoleEmulator("ps2", "emulator:ps2")
+        repository.setConsoleCore("ps2", "core:ps2")
+        repository.setCacheLimit(4 * RoomRomLibraryRepository.GIB)
+
+        database.close()
+        database = LauncherDatabase.open(context, databaseName)
+        repository = RoomRomLibraryRepository(database)
+        catalog = RoomCatalogRepository(database)
+        assertEquals("ps2", repository.findEntry(entry.itemId)?.platformId)
+        assertEquals("ps2", (catalog.findItem(entry.itemId) as LibraryItem.RomGame).platformId)
+        assertEquals("emulator:ps2", repository.consoleEmulatorDefaults.first()["ps2"])
+        assertEquals("core:ps2", repository.consoleCores.first()["ps2"])
+        assertEquals(4 * RoomRomLibraryRepository.GIB, repository.cacheLimitBytes.first())
+    }
+
+    @Test fun failedLaterBatchKeepsCompletedBatchAndNeverMarksOldRowsMissing() = runBlocking {
+        val source = source("one")
+        val original = scan(source, doc("original", "GBA/Original.gba")).single()
+        database.openHelper.writableDatabase.execSQL("""
+            CREATE TRIGGER rom_fixture_abort BEFORE INSERT ON rom_documents
+            WHEN NEW.title = 'Stop here' BEGIN SELECT RAISE(ABORT, 'fixture batch failure'); END
+        """.trimIndent())
+        val docs = (1..129).map { doc("new-$it", "GBA/New$it.gba") }
+        val entries = docs.mapIndexed { index, document ->
+            PlannedRomEntry(document.documentId, document.relativePath, if (index == 128) "Stop here" else "New $index", "gba", "gba", RomEntryKind.SINGLE_FILE)
+        }
+        val revision = requireNotNull(repository.beginScan(source.id))
+        var failed = false
+        try {
+            repository.commitScan(source, revision, docs, RomScanPlan(entries, emptyList(), emptyList()))
+        } catch (_: Exception) { failed = true }
+        assertTrue(failed)
+        repository.failScan(source.id, revision, "Fixture batch failed", unavailable = false)
+
+        assertTrue(requireNotNull(repository.findEntry(original.itemId)).present)
+        assertEquals(129, catalog.snapshot.first().activeItems.size)
+        assertEquals(129, repository.entries.first().count { it.present })
+        assertTrue(repository.entries.first().none { it.documentId == "new-129" })
+        assertTrue(catalog.snapshot.first().activeItems.all { SupportedItemAction.OPEN in it.supportedActions })
+        assertEquals(RomSourceStatus.ERROR, repository.findSource(source.id)?.status)
+    }
+
+    private suspend fun source(suffix: String): RomSource {
+        val id = repository.addSource("content://dev.fixture.documents/tree/$suffix", suffix, "ROMs $suffix")
+        return requireNotNull(repository.findSource(id))
+    }
+
+    private suspend fun scan(source: RomSource, vararg documents: RomDocument): List<RomEntry> {
+        val current = requireNotNull(repository.findSource(source.id))
+        repository.commitScan(current, requireNotNull(repository.beginScan(source.id)), documents.toList(), plan(current, documents.toList()))
+        return repository.entries.first().filter { it.sourceId == source.id && it.present }
+    }
+
+    private fun plan(source: RomSource, docs: List<RomDocument>) = RomScanPlanner().plan(
+        RomScanRequest(docs, source.name, source.defaultPlatformId),
+    )
+    private fun doc(id: String, path: String) = RomDocument(id, path, sizeBytes = 16L)
+}

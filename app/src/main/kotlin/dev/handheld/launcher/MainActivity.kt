@@ -50,6 +50,13 @@ class MainActivity : ComponentActivity() {
         roleHandler.completeCurrent(it.resultCode)
         homeRoleHeld = roleHandler.isHomeRoleHeld()
     }
+    private val romFolderPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.let { returned ->
+                returned.data?.let { uri -> container.romController.onTreeSelected(uri, returned.flags) }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,7 +82,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             LauncherApp(container, appViewModel, homeViewModel, reducedMotion, homeRoleHeld,
                 bindInput = { dispatchSemantic = it }, nativeConfirm = ::activateNativeFocusedControl,
-                onImeVisibilityChanged = controller::onImeVisibilityChanged)
+                onImeVisibilityChanged = controller::onImeVisibilityChanged,
+                onPickRomFolder = ::pickRomFolder)
         }
     }
 
@@ -103,12 +111,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() { super.onStart(); container.androidCatalog.start() }
+    override fun onStart() {
+        super.onStart()
+        container.androidCatalog.start()
+        container.romScanner.refresh()
+        container.romController.refreshEmulators()
+    }
     override fun onResume() {
         super.onResume()
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
         homeRoleHeld = roleHandler.isHomeRoleHeld()
         container.androidCatalog.onResume()
+        container.romScanner.refresh()
+        container.romController.refreshEmulators()
         immersiveWindow()
     }
     override fun onPause() { controller.reset(); super.onPause() }
@@ -122,6 +137,18 @@ class MainActivity : ComponentActivity() {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    private fun pickRomFolder() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                Intent.FLAG_GRANT_PREFIX_URI_PERMISSION,
+        )
+        try {
+            romFolderPicker.launch(intent)
+        } catch (_: RuntimeException) {
+            appViewModel.error.value = "Android could not open the folder picker. Try again from ROM folders."
         }
     }
 }

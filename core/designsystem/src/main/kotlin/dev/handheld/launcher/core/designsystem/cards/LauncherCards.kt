@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import dev.handheld.launcher.core.designsystem.contract.rememberControlFocusRestoration
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
@@ -104,15 +106,17 @@ private fun CardActivation(
     focusLift: Dp,
     content: @Composable () -> Unit,
 ) {
+    val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier.onFocusChanged {
+        modifier = modifier.focusRequester(restoration.requester).onFocusChanged {
             focused = it.isFocused
             onFocusChanged(it.isFocused)
+            if (it.isFocused) restoration.record()
         }.clickable(source, indication = null, enabled = activationEnabled,
-            role = Role.Button, onClick = onActivate),
+            role = Role.Button, onClick = { restoration.record(); onActivate() }),
         selected = selected, focused = focused, pressed = pressed,
         enabled = activationEnabled, unavailable = unavailable,
         unavailableReason = unavailableReason, contentDescription = title,

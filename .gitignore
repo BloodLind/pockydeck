@@ -2,6 +2,8 @@
 .gradle/
 **/build/
 build/
+*.hprof
+hs_err_pid*.log
 
 # Android Studio and machine-local Android SDK configuration
 .idea/

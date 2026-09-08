@@ -5,6 +5,7 @@ import dev.handheld.launcher.core.domain.model.Availability
 import dev.handheld.launcher.core.domain.model.CatalogInventory
 import dev.handheld.launcher.core.domain.model.CatalogReconciliation
 import dev.handheld.launcher.core.domain.model.CatalogSnapshot
+import dev.handheld.launcher.core.domain.model.CatalogSourceId
 import dev.handheld.launcher.core.domain.model.CurrentUserAndroidComponentId
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
 import dev.handheld.launcher.core.domain.model.InventoryStatus
@@ -18,6 +19,7 @@ import dev.handheld.launcher.core.domain.model.SuccessfulOpenRecord
 import dev.handheld.launcher.core.domain.model.SuccessfulOpenWriteResult
 import dev.handheld.launcher.core.domain.model.SupportedItemAction
 import dev.handheld.launcher.core.domain.model.UserItemOverrides
+import dev.handheld.launcher.core.domain.model.UnavailabilityReason
 import dev.handheld.launcher.core.domain.repository.CatalogRepository
 import dev.handheld.launcher.core.domain.repository.FavoriteRepository
 import dev.handheld.launcher.core.domain.repository.ItemOverrideRepository
@@ -38,6 +40,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 
@@ -99,14 +102,74 @@ class CollectionViewModelTest {
         assertEquals("other", viewModel.state.value.filter)
         assertEquals(listOf(items[1].id), viewModel.state.value.items.map { it.id })
     }
+
+    @Test
+    fun `console filters contain only readable detected games and keep unresolved games selectable`() = runTest(dispatcher) {
+        val gba = collectionRom("gba-game", "gba")
+        val ambiguous = collectionRom("unassigned-game", null)
+        val removed = collectionRom("removed-psx", "psx").copy(
+            availability = Availability.Unavailable(UnavailabilityReason.SOURCE_UNAVAILABLE),
+        )
+        val items = collectionItems() + listOf(gba, ambiguous, removed)
+        val snapshots = DelayedCollectionSnapshots(DestinationSnapshot(LauncherDestination.LIBRARY)).apply { release() }
+        val viewModel = collectionViewModel(items, snapshots)
+        advanceUntilIdle()
+
+        assertEquals(listOf("console:gba", "console:unassigned"), detectedConsoleFilterKeys(items))
+        assertFalse(collectionFilterKeys(LauncherDestination.APPS, items).any { it.startsWith("console:") })
+        viewModel.filter("console:gba")
+        advanceUntilIdle()
+        assertEquals(listOf(gba.id), viewModel.state.value.items.map { it.id })
+
+        viewModel.filter("console:unassigned")
+        advanceUntilIdle()
+        assertEquals(listOf(ambiguous.id), viewModel.state.value.items.map { it.id })
+        assertEquals("console:unassigned", viewModel.state.value.snapshot().filterKey?.value)
+    }
+
+    @Test
+    fun `console loss falls back to all without retaining an empty unavailable filter`() = runTest(dispatcher) {
+        val game = collectionRom("gba-game", "gba")
+        val items = collectionItems() + game
+        val catalog = CollectionCatalog(items)
+        val snapshots = DelayedCollectionSnapshots(DestinationSnapshot(LauncherDestination.LIBRARY)).apply { release() }
+        val viewModel = collectionViewModel(items, snapshots, catalog)
+        advanceUntilIdle()
+        viewModel.filter("console:gba")
+        advanceUntilIdle()
+
+        catalog.replaceItems(collectionItems() + game.copy(
+            availability = Availability.Unavailable(UnavailabilityReason.SOURCE_UNAVAILABLE),
+        ))
+        advanceUntilIdle()
+
+        assertEquals("all", viewModel.state.value.filter)
+        assertEquals(collectionItems().map { it.id }, viewModel.state.value.items.map { it.id })
+        assertFalse(collectionFilterKeys(LauncherDestination.LIBRARY, viewModel.state.value.allItems).contains("console:gba"))
+    }
+
+    @Test
+    fun `console display names can be searched without changing game titles`() = runTest(dispatcher) {
+        val game = collectionRom("n64-game", "n64")
+        val items = collectionItems() + listOf(game, collectionRom("gba-game", "gba"))
+        val snapshots = DelayedCollectionSnapshots(DestinationSnapshot(LauncherDestination.LIBRARY)).apply { release() }
+        val viewModel = collectionViewModel(items, snapshots)
+        advanceUntilIdle()
+        viewModel.query("Nintendo 64")
+        advanceUntilIdle()
+
+        assertEquals(listOf(game.id), viewModel.state.value.items.map { it.id })
+        assertEquals("n64-game", viewModel.state.value.items.single().title)
+    }
 }
 
 private fun TestScope.collectionViewModel(
     items: List<LibraryItem>,
     snapshots: NavigationSnapshotRepository,
+    catalog: CollectionCatalog = CollectionCatalog(items),
 ) = CollectionViewModel(
     LauncherDestination.LIBRARY,
-    CollectionCatalog(items),
+    catalog,
     EmptyFavorites,
     EmptyOverrides,
     EmptyOpens,
@@ -132,6 +195,7 @@ private class CollectionCatalog(items: List<LibraryItem>) : CatalogRepository {
     override val snapshot: Flow<CatalogSnapshot> = state
     override suspend fun findItem(id: ItemId): LibraryItem? = state.value.items.find { it.id == id }
     override suspend fun applyInventory(inventory: CatalogInventory): CatalogReconciliation = error("Not used")
+    fun replaceItems(items: List<LibraryItem>) { state.value = state.value.copy(items = items) }
 }
 
 private data object EmptyFavorites : FavoriteRepository {
@@ -164,4 +228,14 @@ private fun collectionItem(
     category = category,
     availability = Availability.Available,
     supportedActions = setOf(SupportedItemAction.OPEN),
+)
+
+private fun collectionRom(id: String, platform: String?) = LibraryItem.RomGame(
+    id = ItemId("rom:$id"),
+    title = id,
+    sourceId = CatalogSourceId("rom:source"),
+    availability = Availability.Available,
+    supportedActions = setOf(SupportedItemAction.OPEN, SupportedItemAction.VIEW_DETAILS, SupportedItemAction.TOGGLE_FAVORITE),
+    platformId = platform,
+    format = "rom",
 )

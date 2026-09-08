@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import dev.handheld.launcher.core.designsystem.contract.rememberControlFocusRestoration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,17 +42,19 @@ private fun SettingSurface(
     onActivate: () -> Unit,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().focusRequester(restoration.requester)
             .onFocusChanged {
                 focused = it.isFocused
                 onFocusChanged(it.isFocused)
+                if (it.isFocused) restoration.record()
             }
             .clickable(source, indication = null, enabled = enabled, role = Role.Button,
-                onClick = onActivate),
+                onClick = { restoration.record(); onActivate() }),
         focused = focused,
         pressed = pressed,
         enabled = enabled,
@@ -113,17 +117,20 @@ fun ToggleRow(
     modifier: Modifier = Modifier,
     onFocusChanged: (Boolean) -> Unit = {},
 ) {
+    val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth().focusRequester(restoration.requester)
             .onFocusChanged {
                 focused = it.isFocused
                 onFocusChanged(it.isFocused)
+                if (it.isFocused) restoration.record()
             }
             .toggleable(value = checked, enabled = enabled, role = Role.Switch,
-                interactionSource = source, indication = null, onValueChange = onCheckedChange),
+                interactionSource = source, indication = null,
+                onValueChange = { restoration.record(); onCheckedChange(it) }),
         focused = focused,
         pressed = pressed,
         enabled = enabled,

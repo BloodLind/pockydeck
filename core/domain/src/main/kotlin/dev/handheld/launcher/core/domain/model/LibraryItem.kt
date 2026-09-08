@@ -88,6 +88,8 @@ sealed interface LibraryItem {
         val sourceId: CatalogSourceId,
         override val availability: Availability,
         override val supportedActions: Set<SupportedItemAction>,
+        val platformId: String? = null,
+        val format: String? = null,
     ) : LibraryItem {
         init {
             require(title.isNotBlank()) { "Item titles must not be blank" }

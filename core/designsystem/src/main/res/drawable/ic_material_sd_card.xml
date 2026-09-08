@@ -2,6 +2,6 @@
 <!-- Google Material Symbols, Apache-2.0. Source: docs/references/material-symbols/sources.json. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="960" android:viewportHeight="960">
     <group android:translateY="960">
-        <path android:fillColor="#FF000000" android:pathData="M240-80q-33 0-56.5-23.5T160-160v-480l240-240h320q33 0 56.5 23.5T800-800v640q0 33-23.5 56.5T720-80H240Zm120-440h80v-160h-80v160Zm120 0h80v-160h-80v160Zm120 0h80v-160h-80v160Z" />
+        <path android:fillColor="#FF000000" android:pathData="M383.08-529.23h40v-136.92h-40v136.92Zm112.3 0h40v-136.92h-40v136.92Zm112.31 0h40v-136.92h-40v136.92ZM264.62-120q-27.62 0-46.12-18.5Q200-157 200-184.62v-438.46L416.92-840h278.46q27.62 0 46.12 18.5Q760-803 760-775.38v590.76q0 27.62-18.5 46.12Q723-120 695.38-120H264.62Zm0-40h430.76q9.24 0 16.93-7.69 7.69-7.69 7.69-16.93v-590.76q0-9.24-7.69-16.93-7.69-7.69-16.93-7.69H434L240-606v421.38q0 9.24 7.69 16.93 7.69 7.69 16.93 7.69Zm0 0H240h480-455.38Z" />
     </group>
 </vector>

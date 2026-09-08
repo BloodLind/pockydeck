@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +52,11 @@ import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.controls.FilterChip
+import dev.handheld.launcher.core.designsystem.controls.SortSelector
+import dev.handheld.launcher.core.designsystem.controls.PlatformBadge
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
+import dev.handheld.launcher.input.RegisterPageNavigation
+import dev.handheld.launcher.input.rememberGridNavigation
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.feature.collection.CollectionScreenCallbacks
 import dev.handheld.launcher.feature.collection.CollectionUiState
@@ -86,19 +92,23 @@ fun SearchScreen(
     onEditorActionsChanged: (SearchEditorActions?) -> Unit = {},
 ) {
     val list = rememberLazyGridState()
+    val laidOutItemCount by remember { derivedStateOf { list.layoutInfo.totalItemsCount } }
     val queryRequester = remember { FocusRequester() }
     val inputMode = LocalInputModeManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
-    val query = state.query.trim()
+    val controllerInput = LocalControllerInput.current
+    val currentControllerInput by rememberUpdatedState(controllerInput)
+    var editQuery by rememberSaveable { mutableStateOf(state.query) }
+    val query = editQuery.trim()
     val matchingSystemActions = systemActions.filter { action ->
         query.isNotEmpty() && "${action.title} ${action.description}".contains(query, ignoreCase = true)
     }.filter { state.filter == "all" || state.filter == "system" }
     val results = remember(query, state.items, matchingSystemActions) {
         buildList<SearchResult> {
             if (query.isNotEmpty()) {
-                addAll(state.items.map(SearchResult::Catalog))
+                if (state.query == editQuery) addAll(state.items.map(SearchResult::Catalog))
                 addAll(matchingSystemActions.map(SearchResult::System))
             }
         }
@@ -106,7 +116,7 @@ fun SearchScreen(
     // Result composition is virtualized. Requesters remain stable by result key and are only
     // invoked after the corresponding lazy item is in the placed viewport.
     val resultRequesters = remember { mutableMapOf<String, FocusRequester>() }
-    val renderedResultKeys = results.map(SearchResult::key)
+    val renderedResultKeys = remember(results) { results.map(SearchResult::key) }
     var focusedResultKey by remember { mutableStateOf<String?>(null) }
     var focusedResultIndex by remember { mutableStateOf(0) }
     var selectedResultKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -114,6 +124,7 @@ fun SearchScreen(
     var handledQueryFocusRequest by rememberSaveable { mutableStateOf(0) }
     var queryHasFocus by remember { mutableStateOf(false) }
     var editing by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(state.query) { if (!editing) editQuery = state.query }
     var editEntryQuery by rememberSaveable { mutableStateOf(state.query) }
     var headerCollapsed by rememberSaveable { mutableStateOf(false) }
     var pendingResultsFocusQuery by remember { mutableStateOf<String?>(null) }
@@ -125,7 +136,8 @@ fun SearchScreen(
     fun finishEditing(cancel: Boolean) {
         if (!editing) return
         editing = false
-        val nextQuery = if (cancel) editEntryQuery else state.query
+        val nextQuery = if (cancel) editEntryQuery else editQuery
+        editQuery = nextQuery
         pendingResultsFocusQuery = nextQuery
         headerCollapsed = true
         keyboard?.hide()
@@ -146,7 +158,7 @@ fun SearchScreen(
     val editorActions = remember { SearchEditorActions({ currentApply.value() }, { currentCancel.value() }) }
     // Observe focus/session state during composition. Reads made only inside SideEffect do
     // not invalidate this scope, leaving the Activity's controller routing stale on focus.
-    val activeEditorActions = editorActions.takeIf { queryHasFocus && editing && allowFocusRequest }
+    val activeEditorActions = editorActions.takeIf { editing && allowFocusRequest }
     SideEffect { onEditorActionsChanged(activeEditorActions) }
     suspend fun restoreAnchor() {
         automaticScrollCount++
@@ -175,29 +187,31 @@ fun SearchScreen(
         val targetIndex = rememberedIndex.takeIf { it >= 0 } ?: selectedIndex.takeIf { it >= 0 }
             ?: anchorIndex.takeIf { it >= 0 } ?: results.indices.firstOrNull() ?: return false
         if (targetIndex >= 0) {
-            list.scrollToItem(targetIndex, if (targetIndex == anchorIndex) state.firstVisibleOffsetPx else 0)
+            if (list.layoutInfo.visibleItemsInfo.none { it.index == targetIndex })
+                list.scrollToItem(targetIndex, if (targetIndex == anchorIndex) state.firstVisibleOffsetPx else 0)
             withFrameNanos { }
             if (list.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) return false
             val requester = resultRequesters[results[targetIndex].key] ?: return false
             inputMode.requestInputMode(InputMode.Keyboard)
-            return runCatching { requester.requestFocus() }.isSuccess
+            return runCatching { requester.requestFocus() }.isSuccess && focusedResultKey == results[targetIndex].key
         }
         return false
         } finally { automaticScrollCount-- }
     }
     // A page activation is consumed exactly once. Later query/catalog updates cannot steal
     // the editor's focus; the Search shortcut is a separate explicit request to type.
-    LaunchedEffect(restoreFocusRequest, queryFocusRequest, state.loading, renderedResultKeys, allowFocusRequest, list.layoutInfo.totalItemsCount) {
+    LaunchedEffect(restoreFocusRequest, queryFocusRequest, state.loading, renderedResultKeys, allowFocusRequest, controllerInput, laidOutItemCount) {
         if (!allowFocusRequest) return@LaunchedEffect
         if (queryFocusRequest > handledQueryFocusRequest) {
             headerCollapsed = false
             inputMode.requestInputMode(InputMode.Keyboard)
             withFrameNanos { }
-            runCatching { queryRequester.requestFocus() }
-            handledQueryFocusRequest = queryFocusRequest
-            handledPageActivation = restoreFocusRequest
-            keyboard?.show()
-        } else if (restoreFocusRequest > 0 && restoreFocusRequest != handledPageActivation && !state.loading) {
+            if (runCatching { queryRequester.requestFocus() }.isSuccess && queryHasFocus) {
+                handledQueryFocusRequest = queryFocusRequest
+                handledPageActivation = restoreFocusRequest
+                keyboard?.show()
+            }
+        } else if (controllerInput && restoreFocusRequest > 0 && restoreFocusRequest != handledPageActivation && !state.loading) {
             if (results.isNotEmpty()) {
                 if (restoreResultFocus()) handledPageActivation = restoreFocusRequest
             } else {
@@ -210,9 +224,10 @@ fun SearchScreen(
             keyboard?.hide()
         }
     }
-    LaunchedEffect(pendingResultsFocusQuery, state.query, renderedResultKeys, list.layoutInfo.totalItemsCount, allowFocusRequest) {
+    LaunchedEffect(pendingResultsFocusQuery, state.query, renderedResultKeys, laidOutItemCount, allowFocusRequest) {
         val expectedQuery = pendingResultsFocusQuery ?: return@LaunchedEffect
-        if (!allowFocusRequest || state.loading || state.query != expectedQuery) return@LaunchedEffect
+        if (!controllerInput) { pendingResultsFocusQuery = null; return@LaunchedEffect }
+        if (!allowFocusRequest || state.loading || state.query != expectedQuery || (state.searching && results.isEmpty())) return@LaunchedEffect
         withFrameNanos { }
         val restored = if (results.isNotEmpty()) restoreResultFocus() else {
             inputMode.requestInputMode(InputMode.Keyboard)
@@ -235,7 +250,7 @@ fun SearchScreen(
                 if (scrolling && automaticScrollCount == 0 && direction > 0) {
                     if (queryHasFocus) {
                         editing = false
-                        focusAfterScroll = true
+                        focusAfterScroll = currentControllerInput
                         focusManager.clearFocus(force = true)
                         keyboard?.hide()
                     }
@@ -246,7 +261,7 @@ fun SearchScreen(
             }
     }
     LaunchedEffect(focusAfterScroll, list.isScrollInProgress) {
-        if (focusAfterScroll && !list.isScrollInProgress) {
+        if (controllerInput && focusAfterScroll && !list.isScrollInProgress) {
             val key = list.layoutInfo.visibleItemsInfo.firstOrNull()?.key as? String
             val requester = key?.let { resultRequesters[it] }
             if (requester != null) {
@@ -257,22 +272,25 @@ fun SearchScreen(
             focusAfterScroll = false
         }
     }
-    LaunchedEffect(state.loading, results) {
-        if (!state.loading && results.isNotEmpty() && handledPageActivation == restoreFocusRequest) restoreAnchor()
+    var anchorRestored by remember { mutableStateOf(false) }
+    LaunchedEffect(state.loading, renderedResultKeys) {
+        if (!anchorRestored && !state.loading && results.isNotEmpty()) { restoreAnchor(); anchorRestored = true }
     }
-    LaunchedEffect(list.layoutInfo.totalItemsCount) {
-        if (list.layoutInfo.totalItemsCount > 0) listHasLaidOutItems = true
+    LaunchedEffect(laidOutItemCount) {
+        if (laidOutItemCount > 0) listHasLaidOutItems = true
     }
-    LaunchedEffect(listHasLaidOutItems, list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset, results) {
+    val currentResults by rememberUpdatedState(results)
+    val rememberAnchor by rememberUpdatedState(callbacks.onRememberAnchor)
+    LaunchedEffect(listHasLaidOutItems, list) {
         if (listHasLaidOutItems) {
-            val first = results.getOrNull(list.firstVisibleItemIndex) as? SearchResult.Catalog
-            if (first != null) {
-                callbacks.onRememberAnchor(first.item.id, list.firstVisibleItemScrollOffset)
+            snapshotFlow { list.firstVisibleItemIndex to list.firstVisibleItemScrollOffset }.collect { (index, offset) ->
+                val first = currentResults.getOrNull(index) as? SearchResult.Catalog
+                if (first != null) rememberAnchor(first.item.id, offset)
             }
         }
     }
     LaunchedEffect(renderedResultKeys) {
-        if (allowFocusRequest && !queryHasFocus && focusedResultKey != null && results.isNotEmpty() && results.none { it.key == focusedResultKey }) {
+        if (controllerInput && allowFocusRequest && !queryHasFocus && focusedResultKey != null && results.isNotEmpty() && results.none { it.key == focusedResultKey }) {
             focusedResultKey = null
             val replacementIndex = focusedResultIndex.coerceIn(0, results.lastIndex)
             results.getOrNull(replacementIndex)?.let { replacement ->
@@ -291,13 +309,18 @@ fun SearchScreen(
     BoxWithConstraints(modifier.fillMaxSize()) {
     val constrained = maxHeight < 240.dp
     val resultColumns = if (!constrained && maxWidth >= 720.dp) 2 else 1
+    val navigator = rememberGridNavigation(renderedResultKeys, focusedResultKey, resultColumns, list, resultRequesters,
+        enabled = allowFocusRequest && controllerInput && !editing, reducedMotion = LauncherTheme.motion.reducedMotion,
+        onMoving = { if (list.firstVisibleItemIndex > 0) headerCollapsed = true })
+    RegisterPageNavigation(navigator::move)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
         if (!constrained && !headerCollapsed) Row(Modifier.fillMaxWidth().height(48.dp)) {
             PageHeading("Search", "${results.size} results", Modifier.weight(1f))
-            LauncherButton(if (state.sort == "recent") "Recent" else "Title", callbacks.onToggleSort,
+            val sort = callbacks.onOpenSort ?: callbacks.onToggleSort
+            SortSelector(if (state.sort == "recent") "Recent" else "Title", listOf("Recent", "Title"), sort,
                 Modifier.width(112.dp).height(48.dp),
                 onFocusChanged = { focused -> if (focused) callbacks.onFocusedAction(FocusedControlAction(
-                    LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.CHANGE_FILTER, "Sort"), callbacks.onToggleSort,
+                    LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.CHANGE_FILTER, "Sort"), sort,
                 )) else callbacks.onFocusedAction(null) })
         }
         if (headerCollapsed) Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
@@ -309,10 +332,11 @@ fun SearchScreen(
                 )) })
             LauncherText("${results.size} results", color = LauncherTheme.colors.textSecondary)
         } else SearchField(
-            query = state.query,
+            query = editQuery,
             onQueryChange = {
                 handledPageActivation = restoreFocusRequest
-                if (!editing) { editEntryQuery = state.query; editing = true }
+                if (!editing) { editEntryQuery = editQuery; editing = true }
+                editQuery = it
                 onQuery(it)
             },
             modifier = Modifier.focusRequester(queryRequester).fillMaxWidth(),
@@ -325,8 +349,8 @@ fun SearchScreen(
                 if (entersEditing) {
                     headerCollapsed = false
                     focusedResultKey = null
-                    if (!editing) { editEntryQuery = state.query; editing = true }
-                } else if (!focused) editing = false
+                    if (!editing) { editEntryQuery = editQuery; editing = true }
+                }
                 onSearchFocus(focused)
                 if (entersEditing) callbacks.onFocusedAction(FocusedControlAction(
                     LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Apply"),
@@ -356,7 +380,7 @@ fun SearchScreen(
         if (results.isEmpty()) {
             Column(Modifier.fillMaxWidth().padding(LauncherTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
-                LauncherText(if (query.isEmpty()) "Search your library" else "No matches",
+                LauncherText(if (query.isEmpty()) "Search your library" else if (state.searching) "Searching…" else "No matches",
                     style = LauncherTheme.typography.pageTitle)
                 LauncherText(if (query.isEmpty()) "Enter a game, app or setting name." else "Try a different search or category.",
                     color = LauncherTheme.colors.textSecondary)
@@ -383,6 +407,7 @@ fun SearchScreen(
                                     resultRequesters.getOrPut(result.key) { FocusRequester() },
                                 ),
                                 iconLoader = iconLoader,
+                                statusLabel = callbacks.activityLabels[item.id],
                                 onActivate = open,
                                 onFocusChanged = { focused -> if (focused) {
                                     focusedResultKey = result.key
@@ -418,6 +443,7 @@ fun SearchScreen(
                                             contentDescription = null, tint = LauncherTheme.colors.textPrimary)
                                     }
                                 },
+                                badge = { PlatformBadge("SYSTEM") },
                                 onFocusChanged = { focused -> if (focused) {
                                     focusedResultKey = result.key
                                     selectedResultKey = result.key

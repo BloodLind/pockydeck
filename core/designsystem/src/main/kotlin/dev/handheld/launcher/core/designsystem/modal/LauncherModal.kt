@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.core.designsystem.contract.ModalFocusLifecycle
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.foundation.LauncherSurface
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
@@ -62,6 +63,7 @@ fun LauncherDialog(
     val currentLifecycle by rememberUpdatedState(lifecycle)
     val initialFocus = remember { FocusRequester() }
     val inputMode = LocalInputModeManager.current
+    val controllerInput = LocalControllerInput.current
     DisposableEffect(Unit) {
         currentLifecycle.onModalShown()
         onDispose { currentLifecycle.onModalDismissed() }
@@ -99,7 +101,8 @@ fun LauncherDialog(
         }
     }
     // Request the group's first enabled descendant once; Close is always its fallback.
-    LaunchedEffect(Unit) {
+    LaunchedEffect(controllerInput) {
+        if (!controllerInput) return@LaunchedEffect
         inputMode.requestInputMode(InputMode.Keyboard)
         withFrameNanos { }
         initialFocus.requestFocus()

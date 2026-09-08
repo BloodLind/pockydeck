@@ -30,6 +30,7 @@ class RomFeatureController(
     private val scope:CoroutineScope,
     private val sharedStorage:SharedStoragePaths,
     private val discovery:AndroidSharedRomDiscovery,
+    private val onGameDispatched: (itemId: ItemId, packageName: String, emulatorLabel: String) -> Unit = { _, _, _ -> },
 ) : LaunchDispatcher {
     private val interaction=Mutex()
     private val decisionGuard=Any()
@@ -103,7 +104,12 @@ class RomFeatureController(
 
     fun onTreeSelected(uri:Uri,grantedFlags:Int) = action {
         val selected=access.acceptTree(uri,grantedFlags,repository.sources.first())
-        repository.addSource(selected.uri,selected.documentId,selected.name)
+        val id=repository.addSource(selected.uri,selected.documentId,selected.name)
+        val source=repository.findSource(id)
+        if(source?.defaultPlatformId==null && RomPlatforms.matchingFolder(selected.name)==null) {
+            val platform=choosePlatform("Console for ${selected.name}",null,true)
+            if(platform!=null && platform!="automatic") repository.setSourcePlatform(id,platform)
+        }
         scanner.refresh()
     }
     fun removeSource(id:CatalogSourceId)=action {
@@ -121,6 +127,19 @@ class RomFeatureController(
         val entry=repository.findEntry(id) ?: return@action
         val selected=choosePlatform("Console for ${entry.title}",entry.platformId,true) ?: return@action
         repository.setItemPlatform(id,selected.takeUnless { it=="automatic" }); scanner.refresh()
+    }
+    fun identifySourceItems(id:CatalogSourceId)=action {
+        val source=repository.findSource(id)?.takeIf { it.enabled } ?: return@action
+        val choices=RomIdentificationChoices.forSource(repository.entries.first(),id)
+        if(choices.total==0) { mutableMessage.value="All games in ${source.name} have a console."; return@action }
+        val shown=choices.entries
+        val selected=ask(RomChoiceDialogState("Identify games in ${source.name}",shown.map { RomChoiceOption(it.itemId.value,it.title,it.relativePath) },
+            if(choices.total>shown.size) "Showing ${shown.size} of ${choices.total} unidentified games. Assigned games leave this list; reopen it to continue with the next games."
+            else "Choose a game and its console. Original files, favorites and history are kept.")) ?: return@action
+        val entry=shown.firstOrNull { it.itemId.value==selected.id } ?: return@action
+        val platform=choosePlatform("Console for ${entry.title}",null,false) ?: return@action
+        repository.setItemPlatform(entry.itemId,platform)
+        scanner.refresh()
     }
     fun chooseConsoleEmulator(platform:String)=action {
         val installed=resolver.installedForPlatform(platform)
@@ -213,7 +232,10 @@ class RomFeatureController(
             val result=try { launcher.dispatch(input,selected.id).also { dispatched=it===RomDispatchResult.Started } }
                 finally { if(!dispatched && preparedKey!=null) withContext(NonCancellable) { cache.releaseFailedReservation(preparedKey!!,newlyReserved) } }
             return when(result) {
-                RomDispatchResult.Started -> LaunchAcknowledgement.Dispatched(request.operationId)
+                RomDispatchResult.Started -> {
+                    runCatching { onGameDispatched(request.itemId,selected.packageName,selected.displayName) }
+                    LaunchAcknowledgement.Dispatched(request.operationId)
+                }
                 else -> { mutableMessage.value=result.message(); LaunchAcknowledgement.Failed(request.operationId,LaunchFailureReason.DISPATCH_FAILED) }
             }
         } catch(_:UserCancelled) { return LaunchAcknowledgement.Failed(request.operationId,LaunchFailureReason.CANCELLED) }

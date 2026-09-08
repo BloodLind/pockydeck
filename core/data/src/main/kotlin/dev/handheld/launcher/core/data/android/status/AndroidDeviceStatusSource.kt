@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.StatFs
 import dev.handheld.launcher.core.domain.model.StatusValue
@@ -29,6 +30,7 @@ data class DeviceStatusSnapshot(
     val totalMemoryBytes: StatusValue<Long> = StatusValue.Unavailable,
     val freeStorageBytes: StatusValue<Long> = StatusValue.Unavailable,
     val wifiConnected: StatusValue<Boolean> = StatusValue.Unavailable,
+    val wifiEnabled: StatusValue<Boolean> = StatusValue.Unavailable,
 )
 
 /** Starts callbacks and modest off-main sampling only while the foreground UI collects. */
@@ -38,6 +40,7 @@ class AndroidDeviceStatusSource(context: Context) {
     val status: Flow<DeviceStatusSnapshot> = callbackFlow {
         val current = AtomicReference(DeviceStatusSnapshot())
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        val wifiManager = context.getSystemService(WifiManager::class.java)
 
         fun update(transform: (DeviceStatusSnapshot) -> DeviceStatusSnapshot) {
             synchronized(current) { trySend(current.updateAndGet(transform)) }
@@ -56,6 +59,17 @@ class AndroidDeviceStatusSource(context: Context) {
                 StatusValue.Unavailable
             }
             update { it.copy(wifiConnected = wifi) }
+        }
+
+        fun readWifiRadio() {
+            val enabled = readWifiRadioEnabled(wifiManager?.let { manager -> { manager.isWifiEnabled } })
+            update { it.copy(wifiEnabled = enabled) }
+        }
+
+        val wifiReceiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context?, intent: Intent?) {
+                if (intent?.action == WifiManager.WIFI_STATE_CHANGED_ACTION) readWifiRadio()
+            }
         }
 
         val batteryReceiver = object : BroadcastReceiver() {
@@ -119,11 +133,17 @@ class AndroidDeviceStatusSource(context: Context) {
         } catch (_: RuntimeException) {
             false
         }
+        val wifiRegistered = try {
+            context.registerReceiver(wifiReceiver, IntentFilter(WifiManager.WIFI_STATE_CHANGED_ACTION))
+            true
+        } catch (_: RuntimeException) { false }
         readNetwork()
+        readWifiRadio()
 
         val sampling = launch(Dispatchers.IO) {
             while (isActive) {
                 if (!networkRegistered) readNetwork()
+                if (!wifiRegistered) readWifiRadio()
                 val memory = ActivityManager.MemoryInfo()
                 val memoryPair = try {
                     val manager = context.getSystemService(ActivityManager::class.java)
@@ -162,6 +182,7 @@ class AndroidDeviceStatusSource(context: Context) {
             if (networkRegistered && connectivity != null) {
                 runCatching { connectivity.unregisterNetworkCallback(networkCallback) }
             }
+            if (wifiRegistered) runCatching { context.unregisterReceiver(wifiReceiver) }
         }
     }.buffer(Channel.CONFLATED)
 

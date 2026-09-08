@@ -24,7 +24,8 @@ fun collectionDestinationItems(
     overrides: Map<ItemId, UserItemOverrides> = emptyMap(),
     favoriteIds: Set<ItemId> = emptySet(),
 ): List<LibraryItem> = items.filter { item ->
-    item.availability == Availability.Available && item.kind != LibraryItemKind.SYSTEM_ACTION && when (destination) {
+    item.availability == Availability.Available && item.kind != LibraryItemKind.SYSTEM_ACTION &&
+        (item !is LibraryItem.RomGame || item.platformId?.let(RomPlatforms::byId) != null) && when (destination) {
         LauncherDestination.LIBRARY -> collectionCategory(item, overrides) == LibraryCategory.GAME
         LauncherDestination.APPS -> item.kind == LibraryItemKind.ANDROID_APP &&
             collectionCategory(item, overrides) != LibraryCategory.GAME
@@ -87,7 +88,7 @@ internal fun collectionFilterMatches(
 /** Source health controls which consoles are visible; emulator installation does not hide games. */
 fun detectedConsoleFilterKeys(items: List<LibraryItem>): List<String> = items
     .filterIsInstance<LibraryItem.RomGame>()
-    .filter { it.availability == Availability.Available }
+    .filter { it.availability == Availability.Available && it.platformId?.let(RomPlatforms::byId) != null }
     .map(::romConsoleFilterKey)
     .distinct()
     .sortedWith(compareBy<String> {

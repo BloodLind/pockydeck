@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,18 +24,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import dev.handheld.launcher.core.designsystem.contract.rememberControlFocusRestoration
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
@@ -81,19 +78,16 @@ fun ArtworkFallback(
     }
 }
 
-/** Reserves two title lines and one subtitle line, including when the subtitle is absent. */
+/** Two readable title lines; list results may reserve a subtitle line to keep rows aligned. */
 @Composable
-fun TileCaption(title: String, subtitle: String? = null, modifier: Modifier = Modifier, subtitleColor: Color? = null) {
-    val density = LocalDensity.current
+fun TileCaption(title: String, subtitle: String? = null, modifier: Modifier = Modifier, subtitleColor: Color? = null,
+    reserveSubtitle: Boolean = true) {
     val type = LauncherTheme.typography
-    val titleHeight = with(density) { type.tileTitle.lineHeight.toDp() * 2f }
-    val subtitleHeight = with(density) { type.tileSubtitle.lineHeight.toDp() }
     Column(modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth().height(titleHeight)) {
-            LauncherText(title, style = type.tileTitle, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        Box(Modifier.fillMaxWidth().height(subtitleHeight)) {
-            if (subtitle != null) LauncherText(subtitle, style = type.tileSubtitle,
+        LauncherText(title, Modifier.fillMaxWidth(), style = type.tileTitle,
+            minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (subtitle != null || reserveSubtitle) {
+            LauncherText(subtitle.orEmpty(), Modifier.fillMaxWidth(), style = type.tileSubtitle,
                 color = subtitleColor ?: LauncherTheme.colors.textSecondary, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
@@ -102,7 +96,6 @@ fun TileCaption(title: String, subtitle: String? = null, modifier: Modifier = Mo
 
 /** One real focus target and one activation path for every card variant. */
 @Composable
-@OptIn(ExperimentalComposeUiApi::class)
 private fun CardActivation(
     title: String,
     activationEnabled: Boolean,
@@ -120,7 +113,7 @@ private fun CardActivation(
 ) {
     val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
-    val inputMode = LocalInputModeManager.current
+    val controllerInput = LocalControllerInput.current
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     Column(
@@ -131,10 +124,7 @@ private fun CardActivation(
             if (it.isFocused) restoration.record()
         }.clickable(source, indication = null, enabled = activationEnabled,
             role = Role.Button, onClick = {
-                // A completed touch click establishes the same active item as controller focus.
-                // click cancellation during scrolling never reaches this callback.
-                inputMode.requestInputMode(InputMode.Keyboard)
-                restoration.requester.requestFocus()
+                if (controllerInput) restoration.requester.requestFocus()
                 restoration.record()
                 onActivate()
             }).semantics(mergeDescendants = true) {
@@ -144,13 +134,20 @@ private fun CardActivation(
                 if (unavailable) stateDescription = unavailableReason
             },
     ) {
-        FocusFrame(
-            modifier = if (caption != null) Modifier.fillMaxWidth().aspectRatio(1f) else Modifier,
-            focused = focused, pressed = pressed,
-            enabled = activationEnabled, unavailable = unavailable,
-            unavailableReason = unavailableReason,
-            shape = shape, focusFrameWidth = focusFrameWidth, focusLift = focusLift,
-        ) { content() }
+        val frame: @Composable (Modifier) -> Unit = { frameModifier ->
+            FocusFrame(
+                modifier = frameModifier,
+                focused = focused && controllerInput, pressed = pressed,
+                enabled = activationEnabled, unavailable = unavailable,
+                unavailableReason = unavailableReason,
+                shape = shape, focusFrameWidth = focusFrameWidth, focusLift = focusLift,
+            ) { content() }
+        }
+        if (caption != null) {
+            BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                frame(Modifier.size(minOf(maxWidth, 176.dp * LauncherTheme.referenceScale)))
+            }
+        } else frame(Modifier)
         caption?.invoke()
     }
 }
@@ -173,6 +170,7 @@ fun CoverTile(
     focusFrameWidth: Dp = LauncherTheme.depth.focusedElevation / 2f,
     focusLift: Dp = LauncherTheme.depth.focusLift,
     subtitleColor: Color? = null,
+    status: (@Composable () -> Unit)? = null,
 ) {
     require(variant != CardVariant.AppIcon) { "Use AppIconTile for the app variant" }
     val isCollection = variant == CardVariant.CollectionCover
@@ -180,9 +178,9 @@ fun CoverTile(
         onActivate, onFocusChanged, modifier,
         RoundedCornerShape(if (isCollection) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
-        caption = if (isCollection) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), subtitleColor) }) else null,
+        caption = if (isCollection) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), subtitleColor, reserveSubtitle = false) }) else null,
     ) {
-        CardArtwork(Modifier.fillMaxSize(), artwork, badge,
+        CardArtwork(Modifier.fillMaxSize(), artwork, badge, status,
             shape = RoundedCornerShape(if (isCollection) (LauncherTheme.shapes.collectionOuter - 2.dp).coerceAtLeast(2.dp) else LauncherTheme.shapes.homeInner))
     }
 }
@@ -192,13 +190,16 @@ private fun CardArtwork(
     modifier: Modifier,
     artwork: @Composable () -> Unit,
     badge: (@Composable () -> Unit)?,
+    status: (@Composable () -> Unit)? = null,
     shape: Shape = RoundedCornerShape(LauncherTheme.shapes.homeInner),
+    badgePadding: Dp = LauncherTheme.spacing.xs,
 ) {
     Box(modifier.clip(shape)) {
         artwork()
-        if (badge != null) Box(Modifier.align(Alignment.BottomStart).padding(LauncherTheme.spacing.xs)) {
+        if (badge != null) Box(Modifier.align(Alignment.BottomStart).padding(badgePadding)) {
             badge()
         }
+        if (status != null) Box(Modifier.align(Alignment.TopEnd).padding(LauncherTheme.spacing.xs)) { status() }
     }
 }
 
@@ -218,6 +219,8 @@ fun AppIconTile(
     focusFrameWidth: Dp = LauncherTheme.depth.focusedElevation / 2f,
     focusLift: Dp = LauncherTheme.depth.focusLift,
     showCaption: Boolean = false,
+    badge: (@Composable () -> Unit)? = null,
+    status: (@Composable () -> Unit)? = null,
 ) {
     val scale = LauncherTheme.referenceScale
     val type = LauncherTheme.typography
@@ -228,8 +231,9 @@ fun AppIconTile(
         onActivate, onFocusChanged, modifier,
         RoundedCornerShape(if (showCaption) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
-        caption = if (showCaption) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp)) }) else null,
+        caption = if (showCaption) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), reserveSubtitle = false) }) else null,
     ) {
+      Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(LauncherTheme.spacing.sm), contentAlignment = Alignment.Center) {
             if (showCaption) {
                 Box(Modifier.size(minOf(56.dp, maxWidth * .4f, maxHeight * .4f))
@@ -260,6 +264,9 @@ fun AppIconTile(
                 }
             }
         }
+        if (badge != null) Box(Modifier.align(Alignment.BottomStart).padding(LauncherTheme.spacing.xs)) { badge() }
+        if (status != null) Box(Modifier.align(Alignment.TopEnd).padding(LauncherTheme.spacing.xs)) { status() }
+      }
     }
 }
 
@@ -279,13 +286,14 @@ fun SearchResultCard(
     focusFrameWidth: Dp = LauncherTheme.depth.focusedElevation / 2f,
     focusLift: Dp = LauncherTheme.depth.focusLift,
     subtitleColor: Color? = null,
+    status: (@Composable () -> Unit)? = null,
 ) {
     val imageSize = 72.dp * LauncherTheme.referenceScale
     CardActivation(title, activationEnabled, unavailable, unavailableReason, selected,
         onActivate, onFocusChanged, modifier, RoundedCornerShape(LauncherTheme.shapes.smallControl),
         focusFrameWidth, focusLift) {
         Row(Modifier.fillMaxWidth().padding(LauncherTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-            CardArtwork(Modifier.size(imageSize), artwork, badge)
+            CardArtwork(Modifier.size(imageSize), artwork, badge, status, badgePadding = LauncherTheme.spacing.xxs / 2)
             TileCaption(title, subtitle, Modifier.weight(1f).padding(start = LauncherTheme.spacing.sm), subtitleColor)
         }
     }

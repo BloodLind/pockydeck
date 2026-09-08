@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import dev.handheld.launcher.core.designsystem.contract.rememberControlFocusRestoration
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,7 +57,7 @@ private fun SettingSurface(
             }
             .clickable(source, indication = null, enabled = enabled, role = Role.Button,
                 onClick = { restoration.record(); onActivate() }),
-        focused = focused,
+        focused = focused && LocalControllerInput.current,
         pressed = pressed,
         enabled = enabled,
         contentDescription = label,
@@ -134,7 +135,7 @@ fun ToggleRow(
             .toggleable(value = checked, enabled = enabled, role = Role.Switch,
                 interactionSource = source, indication = null,
                 onValueChange = { restoration.record(); onCheckedChange(it) }),
-        focused = focused,
+        focused = focused && LocalControllerInput.current,
         pressed = pressed,
         enabled = enabled,
         contentDescription = label,

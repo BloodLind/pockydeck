@@ -8,6 +8,9 @@ import dev.handheld.launcher.core.domain.policy.LibraryItemOrdering
 import dev.handheld.launcher.core.domain.repository.*
 import dev.handheld.launcher.ui.presentation.RomPlatformLabels
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -30,6 +33,7 @@ data class CollectionUiState(
     val loading: Boolean = true,
     val inventoryIncomplete: Boolean = false,
     val error: String? = null,
+    val searching: Boolean = false,
 ) {
     val selectedItem: LibraryItem? get() = items.find { it.id == selectedItemId }
     fun snapshot() = DestinationSnapshot(destination, selectedItemId, firstVisibleItemId,
@@ -45,7 +49,31 @@ private data class CollectionOptions(
     val offset: Int = 0,
 )
 
+private data class CollectionCriteria(val query: String, val filter: String, val sort: String)
+private fun CollectionOptions.criteria() = CollectionCriteria(query, filter, sort)
+private data class CollectionIndex(
+    val allItems: List<LibraryItem>,
+    val scoped: List<LibraryItem>,
+    val favorites: Set<ItemId>,
+    val overrides: Map<ItemId, UserItemOverrides>,
+    val records: List<SuccessfulOpenRecord>,
+    val terms: Map<ItemId, String>,
+    val filters: List<String>,
+    val incomplete: Boolean,
+) { val recentIds = records.map { it.itemId }.toSet() }
+private data class CollectionResults(
+    val index: CollectionIndex,
+    val criteria: CollectionCriteria,
+    val filter: String,
+    val items: List<LibraryItem>,
+    val searching: Boolean = false,
+) {
+    val ids = items.map { it.id }
+    val idSet = ids.toHashSet()
+}
+
 /** Each destination has its own small state; every page reads the same persisted catalog. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class CollectionViewModel(
     private val destination: LauncherDestination,
     catalog: CatalogRepository,
@@ -54,6 +82,7 @@ class CollectionViewModel(
     recent: SuccessfulOpenRepository,
     private val snapshots: NavigationSnapshotRepository,
     private val savedState: SavedStateHandle,
+    private val computationDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     private val options = MutableStateFlow(CollectionOptions(
         selectedId = savedState.get<String>("selected")?.let(::ItemId),
@@ -68,37 +97,70 @@ class CollectionViewModel(
     private var userChangedState = false
     private var persistJob: Job? = null
     private var previousIds = emptyList<ItemId>()
+    private var previousIdSet: Set<ItemId> = emptySet()
+    private var lastResolvedSelection: ItemId? = null
 
-    val state: StateFlow<CollectionUiState> = combine(
+    // Selection/viewport changes must never rebuild a search index or re-sort thousands of games.
+    private val index = combine(
         catalog.snapshot, favorites.favoriteItemIds, overrides.overridesByItemId,
-        recent.records, options,
-    ) { catalogState, favoriteIds, overrideMap, records, current ->
+        recent.records,
+    ) { catalogState, favoriteIds, overrideMap, records ->
         val scoped = collectionDestinationItems(destination, catalogState.items, overrideMap, favoriteIds)
-        val effectiveFilter = current.filter.takeIf {
-            it in collectionFilterKeys(destination, scoped, overrideMap, favoriteIds)
-        } ?: "all"
-        val query = current.query.trim().lowercase(Locale.ROOT)
-        val matching = if (destination == LauncherDestination.SEARCH && query.isEmpty()) emptyList() else scoped.filter { item ->
+        val terms = scoped.associate { item ->
             val consoleTerms = (item as? LibraryItem.RomGame)?.let { RomPlatformLabels.searchTerms(it.platformId) }.orEmpty()
-            collectionFilterMatches(item, effectiveFilter, overrideMap) &&
-                (item.title.lowercase(Locale.ROOT).contains(query) ||
-                    consoleTerms.any { it.lowercase(Locale.ROOT).contains(query) })
+            item.id to (listOf(item.title) + consoleTerms).joinToString("\n").lowercase(Locale.ROOT)
         }
-        val ordered = if (current.sort == "title") matching.sortedWith(LibraryItemOrdering.titleThenId)
-            else LibraryItemOrdering.recentFirst(matching, records)
-        val ids = ordered.map { it.id }
-        val selected = current.selectedId?.takeIf { it in ids } ?: run {
-            val oldIndex = previousIds.indexOf(current.selectedId)
-            if (oldIndex >= 0) previousIds.withIndex().filter { it.value in ids }
+        CollectionIndex(catalogState.items, scoped, favoriteIds, overrideMap, records, terms,
+            collectionFilterKeys(destination, scoped, overrideMap, favoriteIds),
+            catalogState.inventoryStatus is InventoryStatus.Incomplete)
+    }.flowOn(computationDispatcher)
+
+    private val results = combine(index, options.map { it.criteria() }.distinctUntilChanged()) { data, criteria ->
+        val filter = criteria.filter.takeIf { it in data.filters } ?: "all"
+        val query = criteria.query.trim().lowercase(Locale.ROOT)
+        val matching = if (destination == LauncherDestination.SEARCH && query.isEmpty()) emptyList() else data.scoped.filter { item ->
+            collectionFilterMatches(item, filter, data.overrides) &&
+                (query.isEmpty() || data.terms[item.id]?.contains(query) == true)
+        }
+        val ordered = if (criteria.sort == "title") matching.sortedWith(LibraryItemOrdering.titleThenId)
+            else LibraryItemOrdering.recentFirst(matching, data.records)
+        CollectionResults(data, criteria, filter, ordered)
+    }.transformLatest { result ->
+        if (destination == LauncherDestination.SEARCH && result.items.size > 128) {
+            var count = 128
+            while (count < result.items.size) {
+                emit(result.copy(items = result.items.take(count), searching = true))
+                delay(24)
+                count += 256
+            }
+        }
+        emit(result)
+    }.flowOn(computationDispatcher)
+
+    val state: StateFlow<CollectionUiState> = combine(results, options, error) { result, current, message ->
+        val data = result.index
+        val matchesCriteria = result.criteria == current.criteria()
+        val ordered = if (matchesCriteria) result.items else emptyList()
+        val ids = if (matchesCriteria) result.ids else emptyList()
+        val idSet = if (matchesCriteria) result.idSet else emptySet()
+        val selected = current.selectedId?.takeIf { it in idSet } ?: run {
+            val oldIndex = previousIds.indexOf(current.selectedId).takeIf { it >= 0 }
+                ?: previousIds.indexOf(lastResolvedSelection)
+            if (oldIndex >= 0) previousIds.withIndex().filter { it.value in idSet }
                 .minByOrNull { kotlin.math.abs(it.index - oldIndex) }?.value ?: ids.firstOrNull()
             else ids.firstOrNull()
         }
-        previousIds = ids
-        CollectionUiState(destination, ordered, catalogState.items, favoriteIds, overrideMap,
-            records.map { it.itemId }.toSet(), selected, current.query, effectiveFilter,
+        if (matchesCriteria && (!result.searching || ids.isNotEmpty())) {
+            previousIds = ids
+            previousIdSet = idSet
+            lastResolvedSelection = selected
+        }
+        CollectionUiState(destination, ordered, data.allItems, data.favorites, data.overrides,
+            data.recentIds, selected, current.query, if (matchesCriteria) result.filter else current.filter,
             current.sort, current.firstVisibleId, current.offset, loading = false,
-            inventoryIncomplete = catalogState.inventoryStatus is InventoryStatus.Incomplete)
-    }.combine(error) { current, message -> current.copy(error = message) }
+            inventoryIncomplete = data.incomplete, error = message,
+            searching = !matchesCriteria || result.searching)
+    }
         .stateIn(viewModelScope, SharingStarted.Eagerly, CollectionUiState(destination))
 
     init {
@@ -124,8 +186,15 @@ class CollectionViewModel(
     fun query(value: String) = update { copy(query = value, firstVisibleId = null, offset = 0) }
     fun filter(value: String) = update { copy(filter = value, firstVisibleId = null, offset = 0) }
     fun toggleSort() = update { copy(sort = if (sort == "recent") "title" else "recent") }
+    fun sort(value: String) = update { copy(sort = if (value == "title") "title" else "recent", firstVisibleId = null, offset = 0) }
+    fun cycleFilter(delta: Int) {
+        val current = state.value
+        val keys = collectionFilterKeys(destination, current.allItems, current.overrides, current.favorites)
+        if (keys.isNotEmpty()) filter(keys[Math.floorMod(keys.indexOf(options.value.filter).coerceAtLeast(0) + delta, keys.size)])
+    }
     fun rememberAnchor(id: ItemId?, offset: Int) = update(userInitiated = false) {
-        copy(firstVisibleId = id, offset = offset.coerceAtLeast(0))
+        copy(selectedId = selectedId?.takeIf { it in previousIdSet } ?: state.value.selectedItemId,
+            firstVisibleId = id, offset = offset.coerceAtLeast(0))
     }
     fun clearError() { error.value = null }
 
@@ -155,7 +224,9 @@ class CollectionViewModel(
         change: CollectionOptions.() -> CollectionOptions,
     ) {
         if (userInitiated) userChangedState = true
-        options.value = options.value.change()
+        val next = options.value.change()
+        if (next == options.value) return
+        options.value = next
         val current = options.value
         savedState["selected"] = current.selectedId?.value
         savedState["query"] = current.query

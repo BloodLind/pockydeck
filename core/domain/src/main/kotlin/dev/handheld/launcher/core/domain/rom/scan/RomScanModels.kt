@@ -17,6 +17,10 @@ data class RomScanRequest(
     val folderPlatformOverrides: Map<String, String> = emptyMap(),
     /** Bounded, complete descriptor content keyed by opaque document ID. Never pass truncated text. */
     val descriptorText: Map<String, String> = emptyMap(),
+    /** Explicit item assignments outrank source, folder and metadata inference. */
+    val documentPlatformOverrides: Map<String, String> = emptyMap(),
+    /** Exact document/path or content identity evidence only; never pass title-only matches. */
+    val metadataPlatformCandidates: Map<String, Set<String>> = emptyMap(),
 )
 
 enum class RomEntryKind { SINGLE_FILE, ARCHIVE, DISC_DESCRIPTOR, PLAYLIST, FOLDER_PACKAGE }
@@ -48,6 +52,7 @@ enum class RomScanIssueCode {
     INVALID_DOCUMENT_PATH, DUPLICATE_DOCUMENT_PATH, EMPTY_FILE, UNKNOWN_PLATFORM,
     PLATFORM_FORMAT_MISMATCH, MISSING_DESCRIPTOR_TEXT, INVALID_DESCRIPTOR, MISSING_COMPANION,
     AMBIGUOUS_COMPANION, CROSS_PLATFORM_PLAYLIST, CYCLIC_PLAYLIST, INCOMPLETE_PACKAGE,
+    CONFLICTING_METADATA,
 }
 
 data class RomScanIssue(

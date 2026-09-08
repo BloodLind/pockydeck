@@ -33,6 +33,7 @@ fun PlatformBadge(
     contentDescription: String? = label,
     homeAccent: Boolean = false,
     accentColor: Color? = null,
+    compact: Boolean = false,
 ) {
     val colors = LauncherTheme.colors
     val accent = accentColor ?: colors.focus
@@ -43,8 +44,9 @@ fun PlatformBadge(
             if (contentDescription != null) this.contentDescription = contentDescription
         }.background(if (homeAccent) accent.copy(alpha = .14f) else colors.surfaceDock, shape)
             .then(if (homeAccent) Modifier.border(1.dp * scale, accent.copy(alpha = .45f), shape) else Modifier)
-            .padding(horizontal = LauncherTheme.spacing.xs + if (homeAccent) LauncherTheme.spacing.xxs / 2 else 0.dp,
-                vertical = LauncherTheme.spacing.xxs),
+            .padding(horizontal = if (compact) LauncherTheme.spacing.xxs else
+                LauncherTheme.spacing.xs + if (homeAccent) LauncherTheme.spacing.xxs / 2 else 0.dp,
+                vertical = if (compact) LauncherTheme.spacing.xxs / 2 else LauncherTheme.spacing.xxs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (homeAccent) {
@@ -52,7 +54,7 @@ fun PlatformBadge(
             Spacer(Modifier.width(LauncherTheme.spacing.xxs * 1.5f))
         }
         LauncherText(label, style = if (homeAccent) LauncherTheme.typography.platformLabel else LauncherTheme.typography.badgeLabel,
-            color = if (homeAccent) accent else colors.textPrimary,
+            color = accentColor ?: if (homeAccent) accent else colors.textPrimary,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

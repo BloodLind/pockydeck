@@ -26,12 +26,13 @@ class LauncherShellLayoutPolicyTest {
     }
 
     @Test
-    fun tallLandscapeKeyboardPreservesQueryAndResultsBeforeChrome() {
+    fun tallLandscapeKeyboardPreservesQueryResultsAndTouchEditingActions() {
         val layout = LauncherShellLayoutPolicy.calculate(physicalMetrics, LauncherShellInsets(280.dp))
         assertEquals(0.dp, layout.dockBounds.height)
-        assertEquals(0.dp, layout.footerBounds.height)
-        assertTrue(layout.contentBounds.height >= 180.dp)
-        assertTrue(layout.contentBounds.bottom <= 200.dp)
+        assertEquals(48.dp, layout.footerBounds.height)
+        assertTrue(layout.contentBounds.height >= 128.dp)
+        assertTrue(layout.contentBounds.bottom < layout.footerBounds.top)
+        assertEquals(200.dp, layout.footerBounds.bottom)
         assertEquals(physicalMetrics.contentBounds,
             LauncherShellLayoutPolicy.calculate(physicalMetrics).contentBounds)
     }

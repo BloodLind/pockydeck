@@ -13,6 +13,8 @@ import dev.handheld.launcher.core.domain.model.InventoryStatus
 import dev.handheld.launcher.core.domain.model.ItemId
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.core.domain.model.LibraryItemKind
+import dev.handheld.launcher.core.domain.model.LibraryItem
+import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
 import dev.handheld.launcher.core.domain.policy.HomeItemOrdering
 import dev.handheld.launcher.core.domain.repository.CatalogRepository
 import dev.handheld.launcher.core.domain.repository.ItemOverrideRepository
@@ -23,6 +25,8 @@ import dev.handheld.launcher.launch.LaunchCoordinatorFailure
 import dev.handheld.launcher.launch.LaunchCoordinatorState
 import dev.handheld.launcher.ui.presentation.TileUiModel
 import dev.handheld.launcher.ui.presentation.toTileUiModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -30,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
@@ -74,6 +79,12 @@ private data class HomePosition(
     val focusRequestSequence: Long = 0,
 )
 
+private data class HomeCatalogPresentation(
+    val items: List<TileUiModel>,
+    val orderedIds: List<ItemId>,
+    val inventoryIncomplete: Boolean,
+)
+
 class HomeViewModel(
     private val catalogRepository: CatalogRepository,
     successfulOpenRepository: SuccessfulOpenRepository,
@@ -83,6 +94,7 @@ class HomeViewModel(
     refreshState: StateFlow<AndroidCatalogRefreshState>,
     private val refreshCatalog: () -> Unit,
     private val savedStateHandle: SavedStateHandle,
+    computationDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     private val position = MutableStateFlow(
         HomePosition(
@@ -93,47 +105,69 @@ class HomeViewModel(
     )
     private val localNotice = MutableStateFlow<HomeNotice?>(null)
     private var priorOrderedIds: List<ItemId> = emptyList()
+    private var lastResolvedPosition = position.value
     private val restoredFromSavedState = savedStateHandle.contains(SELECTED_KEY)
     private var userChangedPosition = false
     private var persistJob: Job? = null
 
-    val state: StateFlow<HomeUiState> = combine(
+    // Only catalog inputs can rebuild the ordered cards. Focus, scrolling, and refresh
+    // progress reuse this presentation, and its full-catalog work stays off Main.
+    private val catalogPresentation = combine(
         catalogRepository.snapshot,
         successfulOpenRepository.records,
         itemOverrideRepository.overridesByItemId,
-        refreshState,
-        position,
-    ) { catalog, recentRecords, overrides, refresh, currentPosition ->
-        val active = catalog.activeItems.filter { it.kind != LibraryItemKind.SYSTEM_ACTION }
+    ) { catalog, recentRecords, overrides ->
+        val active = catalog.activeItems.filter {
+            it.kind != LibraryItemKind.SYSTEM_ACTION &&
+                (it !is LibraryItem.RomGame || it.platformId?.let(RomPlatforms::byId) != null)
+        }
         val recentIds = recentRecords.mapTo(hashSetOf()) { it.itemId }
-        val ordered = HomeItemOrdering.order(active, recentRecords, overrides)
-        val orderedIds = ordered.map { it.id }
-        val selected = currentPosition.selectedItemId?.takeIf { it in orderedIds }
-            ?: nearestRemainingId(currentPosition.selectedItemId, priorOrderedIds, orderedIds)
-            ?: orderedIds.firstOrNull()
-        val anchor = currentPosition.firstVisibleItemId?.takeIf { it in orderedIds }
-            ?: nearestRemainingId(currentPosition.firstVisibleItemId, priorOrderedIds, orderedIds)
-            ?: selected
-        val selectedWasRemoved = currentPosition.selectedItemId != null &&
-            currentPosition.selectedItemId !in orderedIds && priorOrderedIds.isNotEmpty()
-        priorOrderedIds = orderedIds
-        HomeUiState(
+        val ordered = HomeItemOrdering.order(active, recentRecords, overrides).take(HOME_CARD_LIMIT)
+        HomeCatalogPresentation(
             items = ordered.map { item ->
                 item.toTileUiModel(
                     overrides = overrides[item.id],
                     recentlyOpened = item.id in recentIds,
                 )
             },
+            orderedIds = ordered.map { it.id },
+            inventoryIncomplete = catalog.inventoryStatus is InventoryStatus.Incomplete,
+        )
+    }.flowOn(computationDispatcher)
+
+    val state: StateFlow<HomeUiState> = combine(
+        catalogPresentation,
+        refreshState,
+        position,
+    ) { catalog, refresh, currentPosition ->
+        val orderedIds = catalog.orderedIds
+        val selected = currentPosition.selectedItemId?.takeIf { it in orderedIds }
+            ?: nearestRemainingId(currentPosition.selectedItemId, priorOrderedIds, orderedIds)
+            ?: nearestRemainingId(lastResolvedPosition.selectedItemId, priorOrderedIds, orderedIds)
+            ?: orderedIds.firstOrNull()
+        val anchor = currentPosition.firstVisibleItemId?.takeIf { it in orderedIds }
+            ?: nearestRemainingId(currentPosition.firstVisibleItemId, priorOrderedIds, orderedIds)
+            ?: nearestRemainingId(lastResolvedPosition.firstVisibleItemId, priorOrderedIds, orderedIds)
+            ?: selected
+        val selectedWasRemoved = currentPosition.selectedItemId != null &&
+            currentPosition.selectedItemId !in orderedIds && priorOrderedIds.isNotEmpty()
+        priorOrderedIds = orderedIds
+        lastResolvedPosition = currentPosition.copy(
+            selectedItemId = selected,
+            firstVisibleItemId = anchor,
+        )
+        HomeUiState(
+            items = catalog.items,
             selectedItemId = selected,
             firstVisibleItemId = anchor,
             firstVisibleOffsetPx = currentPosition.firstVisibleOffsetPx,
             loading = false,
             refreshState = refresh,
-            inventoryIncomplete = catalog.inventoryStatus is InventoryStatus.Incomplete,
+            inventoryIncomplete = catalog.inventoryIncomplete,
             notice = when {
                 selectedWasRemoved -> HomeNotice.SelectedItemRemoved
                 refresh is AndroidCatalogRefreshState.Error -> HomeNotice.InventoryRefreshFailed
-                refresh is AndroidCatalogRefreshState.Refreshing && ordered.isNotEmpty() ->
+                refresh is AndroidCatalogRefreshState.Refreshing && catalog.items.isNotEmpty() ->
                     HomeNotice.CachedCatalogRefreshing
                 else -> null
             },
@@ -236,7 +270,15 @@ class HomeViewModel(
         transform: HomePosition.() -> HomePosition,
     ) {
         if (userInitiated) userChangedPosition = true
-        position.value = position.value.transform()
+        // Persist the displayed recovery after removals, rather than reviving an ID
+        // that no longer belongs to Home when the viewport next reports its position.
+        // Before the first projection arrives, retain any durable restored identity.
+        position.value = position.value.copy(
+            selectedItemId = position.value.selectedItemId?.takeIf { priorOrderedIds.isEmpty() || it in priorOrderedIds }
+                ?: lastResolvedPosition.selectedItemId,
+            firstVisibleItemId = position.value.firstVisibleItemId?.takeIf { priorOrderedIds.isEmpty() || it in priorOrderedIds }
+                ?: lastResolvedPosition.firstVisibleItemId,
+        ).transform()
         val current = position.value
         savedStateHandle[SELECTED_KEY] = current.selectedItemId?.value
         savedStateHandle[ANCHOR_KEY] = current.firstVisibleItemId?.value
@@ -255,6 +297,7 @@ class HomeViewModel(
     }
 
     companion object {
+        private const val HOME_CARD_LIMIT = 20
         private const val SNAPSHOT_DEBOUNCE_MS = 250L
         private const val SELECTED_KEY = "home.selected"
         private const val ANCHOR_KEY = "home.anchor"

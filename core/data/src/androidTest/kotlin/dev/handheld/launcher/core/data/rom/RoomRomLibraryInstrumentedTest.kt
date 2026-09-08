@@ -147,7 +147,11 @@ class RoomRomLibraryInstrumentedTest {
         val revision = requireNotNull(repository.beginScan(source.id))
         val stalePlan = plan(source, docs)
         repository.setItemPlatform(entry.itemId, "ps2")
-        repository.commitScan(source, revision, docs, stalePlan)
+        assertTrue(runCatching { repository.commitScan(source, revision, docs, stalePlan) }.exceptionOrNull() is ScanSupersededException)
+        val current = requireNotNull(repository.findSource(source.id))
+        val corrected = RomScanPlanner().plan(RomScanRequest(docs, current.name, current.defaultPlatformId,
+            documentPlatformOverrides=repository.itemPlatformAssignments(source.id)))
+        repository.commitScan(current, requireNotNull(repository.beginScan(source.id)), docs, corrected)
         repository.setConsoleEmulator("ps2", "emulator:ps2")
         repository.setConsoleCore("ps2", "core:ps2")
         repository.setCacheLimit(4 * RoomRomLibraryRepository.GIB)
@@ -161,6 +165,77 @@ class RoomRomLibraryInstrumentedTest {
         assertEquals("emulator:ps2", repository.consoleEmulatorDefaults.first()["ps2"])
         assertEquals("core:ps2", repository.consoleCores.first()["ps2"])
         assertEquals(4 * RoomRomLibraryRepository.GIB, repository.cacheLimitBytes.first())
+    }
+
+    @Test fun completedDependencyBatchesPublishBeforeCompletionAndCancellationKeepsOmissions() = runBlocking {
+        val source = source("one")
+        val retained = scan(source, doc("retained", "GBA/Retained.gba")).single()
+        val documents = (1..260).map { doc("game:$it", "GBA/Game $it.gba") }
+        val revision = requireNotNull(repository.beginScan(source.id))
+        var published = 0
+        val error = runCatching {
+            repository.commitScan(source, revision, documents, plan(source,documents)) { count ->
+                published = count
+                assertEquals(129, repository.entries.first().count { it.present })
+                throw kotlinx.coroutines.CancellationException("Fixture stops after first committed batch")
+            }
+        }.exceptionOrNull()
+        assertTrue(error is kotlinx.coroutines.CancellationException)
+        assertEquals(128, published)
+        repository.failScan(source.id,revision,"Interrupted after a safe batch",unavailable=false)
+        assertTrue(requireNotNull(repository.findEntry(retained.itemId)).present)
+        assertEquals(129, catalog.snapshot.first().activeItems.size)
+        assertEquals(RomSourceStatus.ERROR,repository.findSource(source.id)?.status)
+    }
+
+    @Test fun unchangedRescanAvoidsCatalogRewritesButRestoresUnavailableProjection() = runBlocking {
+        val source = source("one")
+        val documents = arrayOf(doc("game", "GBA/Game.gba"))
+        val original = scan(source,*documents).single()
+        val sql = database.openHelper.writableDatabase
+        sql.execSQL("CREATE TABLE catalog_write_counter (writes INTEGER NOT NULL)")
+        sql.execSQL("INSERT INTO catalog_write_counter VALUES (0)")
+        sql.execSQL("CREATE TRIGGER count_catalog_updates AFTER UPDATE ON catalog_items BEGIN UPDATE catalog_write_counter SET writes=writes+1; END")
+        scan(source,*documents)
+        sql.query("SELECT writes FROM catalog_write_counter").use { cursor -> cursor.moveToFirst(); assertEquals(0,cursor.getInt(0)) }
+        repository.failScan(source.id,requireNotNull(repository.beginScan(source.id)),"Disconnected",unavailable=true)
+        assertTrue(catalog.snapshot.first().activeItems.isEmpty())
+        val recovered = scan(source,*documents).single()
+        assertEquals(original.itemId,recovered.itemId)
+        assertEquals(listOf(original.itemId),catalog.snapshot.first().activeItems.map { it.id })
+    }
+
+    @Test fun validatedGroupHidesOldStandaloneTracksInItsOwnCommittedBatch() = runBlocking {
+        val source = source("one")
+        val track = doc("track","PSX/Game.bin")
+        val old = scan(source,track).single()
+        val cue = doc("cue","PSX/Game.cue")
+        val documents = listOf(track,cue)
+        val grouped = RomScanPlanner().plan(RomScanRequest(documents,descriptorText=mapOf("cue" to
+            "FILE \"Game.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00")))
+        val error = runCatching {
+            repository.commitScan(source,requireNotNull(repository.beginScan(source.id)),documents,grouped) {
+                assertFalse(requireNotNull(repository.findEntry(old.itemId)).present)
+                assertEquals(listOf("cue"),repository.entries.first().filter { it.present }.map { it.documentId })
+                throw kotlinx.coroutines.CancellationException("Stop after group publication")
+            }
+        }.exceptionOrNull()
+        assertTrue(error is kotlinx.coroutines.CancellationException)
+        assertNotNull(repository.findEntry(old.itemId))
+        assertEquals(1,catalog.snapshot.first().activeItems.size)
+    }
+
+    @Test fun sourceCountsSeparateUnidentifiedEntriesWithoutDeletingTheirIdentities() = runBlocking {
+        val source = source("one")
+        val scanned = scan(source,doc("gba","GBA/Known.gba"),doc("iso","Unknown.iso"))
+        val state = repository.sources.first().single()
+        assertEquals(1,state.gameCount)
+        assertEquals(1,state.unidentifiedCount)
+        val unknown = scanned.single { it.documentId == "iso" }
+        repository.setItemPlatform(unknown.itemId,"ps2")
+        assertEquals(2,repository.sources.first().single().gameCount)
+        assertEquals(0,repository.sources.first().single().unidentifiedCount)
+        assertEquals(unknown.itemId,repository.findEntry(unknown.itemId)?.itemId)
     }
 
     @Test fun failedLaterBatchKeepsCompletedBatchAndNeverMarksOldRowsMissing() = runBlocking {

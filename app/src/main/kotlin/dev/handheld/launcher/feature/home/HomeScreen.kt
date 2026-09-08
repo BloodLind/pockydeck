@@ -76,6 +76,7 @@ fun HomeRoute(
     allowFocusRequest: Boolean = true,
     pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
+    activityLabels: Map<ItemId, String> = emptyMap(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     HomeScreen(
@@ -92,6 +93,7 @@ fun HomeRoute(
         onRefresh = viewModel::refresh,
         onViewportChanged = viewModel::rememberViewport,
         onFocusedActionChanged = onFocusedActionChanged,
+        activityLabels = activityLabels,
     )
 }
 
@@ -111,6 +113,7 @@ fun HomeScreen(
     allowFocusRequest: Boolean = true,
     pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
+    activityLabels: Map<ItemId, String> = emptyMap(),
 ) {
     val selected = state.selectedItem
     val rowState = rememberLazyListState()
@@ -196,6 +199,7 @@ fun HomeScreen(
                             focusFrameWidth = metrics.focusFrameReservation,
                             focusLift = metrics.focusLiftReservation,
                             iconLoader = iconLoader,
+                            statusLabel = activityLabels[item.itemId],
                             onActivate = activate,
                             onFocusChanged = { focused ->
                                 if (focused) {
@@ -297,6 +301,13 @@ fun HomeScreen(
         if (action != null) onFocusedActionChanged(action)
     }
 
+    LaunchedEffect(itemIds, state.loading, metrics.hasUsableHomeCard) {
+        if (!initialRestorationComplete && itemIds.isNotEmpty() && metrics.hasUsableHomeCard) {
+            val anchorIndex = itemIds.indexOf(state.firstVisibleItemId)
+            if (anchorIndex >= 0) rowState.scrollToItem(anchorIndex, state.firstVisibleOffsetPx)
+            initialRestorationComplete = true
+        }
+    }
     LaunchedEffect(itemIds, state.loading, state.focusRequestSequence, pageActivationRequest, metrics.hasUsableHomeCard, allowFocusRequest) {
         if (!allowFocusRequest) return@LaunchedEffect
         if (itemIds.isEmpty() || !metrics.hasUsableHomeCard) {

@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.contract.LauncherActionDescriptor
 import dev.handheld.launcher.contract.LauncherActionMeaning
 import dev.handheld.launcher.contract.SemanticInputAction
@@ -59,6 +60,7 @@ data class SettingsScreenState(
     val romSources: RomSourcesScreenState = RomSourcesScreenState(),
     val emulators: EmulatorSettingsScreenState = EmulatorSettingsScreenState(),
     val artwork: ArtworkSummary = ArtworkSummary(),
+    val usageAccessGranted: Boolean = false,
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -69,6 +71,7 @@ data class SettingsCallbacks(
     val romSources: RomSourcesCallbacks = RomSourcesCallbacks(),
     val emulators: EmulatorSettingsCallbacks = EmulatorSettingsCallbacks(),
     val artwork: ArtworkSettingsCallbacks = ArtworkSettingsCallbacks(),
+    val onUsageAccess: () -> Unit = {},
 )
 
 private val settingsSections = listOf("Controls", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
@@ -126,8 +129,9 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
     val inputMode = LocalInputModeManager.current
     val fontScale = LocalDensity.current.fontScale
     val motionSummary = if (LauncherTheme.motion.reducedMotion) "On" else "Off"
-    LaunchedEffect(section, hasInitialControl, restoreFocusRequest) {
-        if (hasInitialControl) {
+    val controllerInput = LocalControllerInput.current
+    LaunchedEffect(section, hasInitialControl, restoreFocusRequest, controllerInput) {
+        if (hasInitialControl && controllerInput) {
             inputMode.requestInputMode(InputMode.Keyboard)
             withFrameNanos { }
             initial.requestFocus()
@@ -153,6 +157,13 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
                 modifier = if (section == "Launcher") Modifier.focusRequester(initial) else Modifier,
                 onActivate = callbacks.onRequestDefaultHome,
                 onFocusChanged = settingsFocus("Set as Home launcher", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onRequestDefaultHome, callbacks.onFocusedAction))
+            ActionRow("Recent activity badges", if (state.usageAccessGranted) "Usage access enabled · Activity from the last 30 minutes"
+                else "Launcher openings are tracked · Enable usage access for other app openings",
+                onActivate = callbacks.onUsageAccess,
+                onFocusChanged = settingsFocus("Recent activity badges", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onUsageAccess, callbacks.onFocusedAction))
+            LauncherText("Recently active does not mean an app or emulator is still running.",
+                style = LauncherTheme.typography.settingSupporting, color = LauncherTheme.colors.textSecondary,
+                modifier = Modifier.padding(horizontal = LauncherTheme.spacing.md))
             LauncherText(
                 "Display & text size · System text ${(fontScale * 100).toInt()}% · Reduced motion $motionSummary",
                 color = LauncherTheme.colors.textSecondary,

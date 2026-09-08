@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.unit.dp
@@ -21,6 +22,10 @@ import dev.handheld.launcher.core.data.android.status.DeviceStatusSnapshot
 import dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshState
 import dev.handheld.launcher.core.designsystem.contract.ModalFocusLifecycle
 import dev.handheld.launcher.core.designsystem.contract.LocalControlFocusRestoration
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
+import dev.handheld.launcher.input.LocalPageNavigation
+import dev.handheld.launcher.input.PageNavigation
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyph
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.controls.FilterChip
 import dev.handheld.launcher.core.designsystem.foundation.*
@@ -68,6 +73,7 @@ fun LauncherApp(
     onPickRomFolder: () -> Unit = {},
     onSetupStorageAccess: () -> Unit = {},
     onSearchEditorActiveChanged: (Boolean) -> Unit = {},
+    bindTouchInput: (() -> Unit) -> Unit = {},
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
@@ -81,6 +87,7 @@ fun LauncherApp(
     val romProgress by container.romController.progress.collectAsStateWithLifecycle()
     val romMessage by container.romController.message.collectAsStateWithLifecycle()
     val artworkSummary by container.artworkRepository.summary.collectAsStateWithLifecycle(ArtworkSummary())
+    val recentActivity by container.recentActivity.state.collectAsStateWithLifecycle()
     val status by container.deviceStatus.status.collectAsStateWithLifecycle(DeviceStatusSnapshot())
     val pageModels = listOf(LauncherDestination.LIBRARY, LauncherDestination.APPS,
         LauncherDestination.FAVORITES, LauncherDestination.SEARCH).associateWith { destination ->
@@ -90,6 +97,8 @@ fun LauncherApp(
     val pageStates = pageModels.mapValues { (_, vm) -> vm.state.collectAsStateWithLifecycle().value }
     val destination = location.selectedDockDestination()
     val library = pageStates.getValue(LauncherDestination.LIBRARY)
+    val activityLabels = remember(recentActivity, library.allItems) { recentActivity.labels(library.allItems) }
+    val androidContext = LocalContext.current
     val dataActions = pageModels.getValue(LauncherDestination.LIBRARY)
     val focusManager = LocalFocusManager.current
     val inputMode = LocalInputModeManager.current
@@ -104,6 +113,10 @@ fun LauncherApp(
     var searchEditorActions by remember(location) { mutableStateOf<SearchEditorActions?>(null) }
     var menuVisible by remember { mutableStateOf(false) }
     var filterMenuDestination by remember { mutableStateOf<LauncherDestination?>(null) }
+    var sortMenuDestination by remember { mutableStateOf<LauncherDestination?>(null) }
+    var controllerInput by remember { mutableStateOf(false) }
+    var pageNavigation by remember { mutableStateOf<PageNavigation?>(null) }
+    val publishPageNavigation = remember { { value: PageNavigation? -> pageNavigation = value } }
     var menuItemId by remember { mutableStateOf<ItemId?>(null) }
     var modalOrigin by remember { mutableStateOf<LauncherLocation?>(null) }
     var modalOriginWasDock by remember { mutableStateOf(false) }
@@ -124,13 +137,15 @@ fun LauncherApp(
     }
     val imeVisible = WindowInsets.isImeVisible
     LaunchedEffect(imeVisible) { onImeVisibilityChanged(imeVisible) }
-    val modalVisible = menuVisible || filterMenuDestination != null || errorMessage != null || romChoice != null || romProgress != null
+    val modalVisible = menuVisible || filterMenuDestination != null || sortMenuDestination != null || errorMessage != null || romChoice != null || romProgress != null
 
     fun snapshot(): DestinationSnapshot = if (destination == LauncherDestination.HOME) home.state.value.snapshot()
         else pageModels[destination]?.state?.value?.snapshot() ?: DestinationSnapshot(destination)
     fun selectDestination(value: LauncherDestination) {
         keyboard?.hide()
+        focusManager.clearFocus(force = true)
         focused = null
+        focusedDock = null
         pageActivationRequest++
         app.navigation.selectDestination(value)
     }
@@ -203,6 +218,7 @@ fun LauncherApp(
             romProgress != null -> container.romController.cancelPreparation()
             errorMessage != null -> clearError()
             filterMenuDestination != null -> filterMenuDestination = null
+            sortMenuDestination != null -> sortMenuDestination = null
             menuVisible -> menuVisible = false
             else -> {
                 val previousLocation = app.navigation.location.value
@@ -238,7 +254,7 @@ fun LauncherApp(
         add(primary)
         add(LauncherActionDescriptor(SemanticInputAction.BACK, LauncherActionMeaning.GO_BACK,
             if (!modalVisible && searchEditorActions != null) "Cancel" else "Back"))
-        if (!modalVisible) {
+        if (!modalVisible && searchEditorActions == null) {
             add(LauncherActionDescriptor(SemanticInputAction.SECONDARY, LauncherActionMeaning.OPEN_SEARCH, "Search"))
             if (selectedItem != null && location !is LauncherLocation.ItemDetails)
                 add(LauncherActionDescriptor(SemanticInputAction.TERTIARY, LauncherActionMeaning.OPEN_DETAILS, "Details"))
@@ -250,7 +266,8 @@ fun LauncherApp(
             when (descriptor.input) {
                 SemanticInputAction.CONFIRM -> if (!modalVisible && searchEditorActions != null) {
                     searchEditorActions?.apply?.invoke(); true
-                } else nativeConfirm()
+                } else if (!modalVisible && focused?.onActivate != null) { focused?.onActivate?.invoke(); true }
+                else nativeConfirm()
                 SemanticInputAction.BACK -> { goBack(); true }
                 SemanticInputAction.SECONDARY -> { openSearch(); true }
                 SemanticInputAction.TERTIARY -> { selectedItemId?.let(::openDetails); selectedItemId != null }
@@ -260,8 +277,21 @@ fun LauncherApp(
         }
     }
     SideEffect {
+        bindTouchInput {
+            if (controllerInput) {
+                controllerInput = false
+                inputMode.requestInputMode(InputMode.Touch)
+                if (searchEditorActions == null) {
+                    focusManager.clearFocus(force = true)
+                    focused = null
+                    focusedDock = null
+                }
+            }
+        }
         onSearchEditorActiveChanged(searchEditorActions != null && !modalVisible)
         bindInput { action ->
+            val enteringControllerMode = !controllerInput
+            controllerInput = true
             inputMode.requestInputMode(InputMode.Keyboard)
             val direction = when (action) {
                 SemanticInputAction.NAVIGATE_UP -> FocusDirection.Up
@@ -271,7 +301,10 @@ fun LauncherApp(
                 else -> null
             }
             when {
-                direction != null -> focusManager.moveFocus(direction)
+                enteringControllerMode && !modalVisible && (direction != null || action == SemanticInputAction.CONFIRM) && searchEditorActions == null -> {
+                    pageActivationRequest++; true
+                }
+                direction != null -> if (!modalVisible && pageNavigation?.move(direction) == true) true else focusManager.moveFocus(direction)
                 action == SemanticInputAction.BACK -> { goBack(); true }
                 modalVisible -> if (action == SemanticInputAction.CONFIRM) nativeConfirm() else true
                 action == SemanticInputAction.PREVIOUS_DESTINATION || action == SemanticInputAction.NEXT_DESTINATION -> {
@@ -284,11 +317,15 @@ fun LauncherApp(
                     val filters = pageModels[destination]?.state?.value?.let {
                         collectionFilterKeys(destination, it.allItems, it.overrides, it.favorites)
                     }.orEmpty()
-                    if (filters.isEmpty()) false else {
+                    if (filters.isEmpty()) {
+                        if (destination == LauncherDestination.HOME) {
+                            if (enteringControllerMode) { pageActivationRequest++; true }
+                            else focusManager.moveFocus(if (action == SemanticInputAction.NEXT_FILTER) FocusDirection.Right else FocusDirection.Left)
+                        } else false
+                    } else {
                         val vm = pageModels.getValue(destination)
                         val delta = if (action == SemanticInputAction.NEXT_FILTER) 1 else -1
-                        val index = filters.indexOf(vm.state.value.filter).coerceAtLeast(0)
-                        vm.filter(filters[(index + delta + filters.size) % filters.size]); true
+                        vm.cycleFilter(delta); true
                     }
                 }
                 else -> footer.actions.find { it.input == action }?.let(actionPort::dispatch) ?: false
@@ -311,7 +348,7 @@ fun LauncherApp(
     LaunchedEffect(modalVisible) {
         if (!modalVisible && modalOrigin != null) {
             withFrameNanos { }
-            if (modalOrigin == location) {
+            if (modalOrigin == location && controllerInput) {
                 inputMode.requestInputMode(InputMode.Keyboard)
                 // Compose 1.7 group restoration can stop at an implicit scroll target.
                 // The opener supplies its exact leaf requester; groups are only fallbacks
@@ -355,16 +392,22 @@ fun LauncherApp(
                             else EmptyState("Item unavailable", "This item is no longer in the catalog.", "Back", ::goBack, bounds)
                         } else when (route) {
                             LauncherDestination.HOME -> HomeRoute(home, metrics, container.iconLoader, bounds,
+                                activityLabels = activityLabels,
                                 onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
                                 onOpenDetails = ::openDetails,
-                                allowFocusRequest = !modalVisible,
+                                allowFocusRequest = !modalVisible && controllerInput,
                                 pageActivationRequest = pageActivationRequest,
                                 onFocusedActionChanged = { focused = it?.let { value -> FocusedControlAction(value.descriptor, value.onActivate, value.itemId) } })
                             LauncherDestination.SETTINGS -> SettingsScreen(
                                 SettingsScreenState(mapping, homeRoleSummary(homeRoleHeld, roleState),
                                     listOf(LibraryCategory.GAME, LibraryCategory.EMULATOR, LibraryCategory.OTHER).map { category ->
                                         CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
-                                    }, romSources, romEmulators, artworkSummary), bounds, SettingsCallbacks(
+                                    }, romSources, romEmulators, artworkSummary, recentActivity.usageAccessGranted), bounds, SettingsCallbacks(
+                                    onUsageAccess = {
+                                        runCatching {
+                                            androidContext.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                        }.onFailure { showError("Usage access settings are unavailable.") }
+                                    },
                                     onSetConfirmBackMapping = app::setMapping,
                                     artwork = ArtworkSettingsCallbacks(
                                         onSetPaused = { artworkAction { container.artworkRepository.setPaused(it) } },
@@ -391,6 +434,7 @@ fun LauncherApp(
                                             } else onPickRomFolder()
                                         },
                                         onChooseSourcePlatform = { rememberModalOrigin(); container.romController.chooseSourcePlatform(it) },
+                                        onIdentifySourceItems = { rememberModalOrigin(); container.romController.identifySourceItems(it) },
                                         onChooseCacheLimit = { rememberModalOrigin(); container.romController.chooseCacheLimit() },
                                         onClearCache = { rememberModalOrigin(); container.romController.clearCache() },
                                         onSetupStorageAccess = { keyboard?.hide(); onSetupStorageAccess() },
@@ -416,11 +460,13 @@ fun LauncherApp(
                                     onOpenSystemAction = ::openSystem,
                                     onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
                                     onFocusedAction = { focused = it },
-                                    onOpenFilters = { rememberModalOrigin(); filterMenuDestination = route })
+                                    onOpenFilters = { rememberModalOrigin(); filterMenuDestination = route },
+                                    activityLabels = activityLabels,
+                                    onOpenSort = { rememberModalOrigin(); sortMenuDestination = route })
                                 when (route) {
-                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible)
-                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible)
-                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible)
+                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput)
+                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput)
+                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput)
                                     LauncherDestination.SEARCH -> SearchScreen(current, bounds, callbacks, vm::query,
                                         searchableActions, container.iconLoader, queryFocusRequest,
                                         restoreFocusRequest = pageActivationRequest, allowFocusRequest = !modalVisible,
@@ -433,6 +479,8 @@ fun LauncherApp(
                 }
             })
             CompositionLocalProvider(LocalControlFocusRestoration provides { controlRestoreFocus = it },
+                LocalControllerInput provides controllerInput,
+                LocalPageNavigation provides publishPageNavigation,
                 LocalEnrichedArtworkLoader provides container.enrichedArtworkLoader) {
             LauncherShell(metrics, LauncherShellState(destination, focusedDock, status.toShellStatus(), footer),
                 actionPort, mapping, LauncherShellInsets(imeBottom),
@@ -478,27 +526,51 @@ fun LauncherApp(
                         }
                     }
                     filterMenuDestination != null -> filterMenuDestination?.let { filterDestination ->
-                        val firstFilterFocus = remember { FocusRequester() }
                         val filterState = pageStates.getValue(filterDestination)
                         val filterOptions = remember(filterState.allItems, filterState.overrides, filterState.favorites, filterDestination) {
                             collectionFilterOptions(filterState)
                         }
-                        LauncherDialog("Filters", { filterMenuDestination = null }) {
-                            filterOptions.forEachIndexed { index, option ->
-                                key(option.key) {
-                                    FilterChip(option.label, option.key == filterState.filter, {
-                                        pageModels.getValue(filterDestination).filter(option.key)
-                                        filterMenuDestination = null
-                                    }, Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstFilterFocus) else Modifier))
+                        val filterRequesters = remember(filterOptions.map { it.key }) { filterOptions.map { FocusRequester() } }
+                        LauncherDialog("All filters", { filterMenuDestination = null }) {
+                            filterOptions.chunked(3).forEachIndexed { row, rowOptions ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
+                                    rowOptions.forEachIndexed { column, option ->
+                                        val index = row * 3 + column
+                                        FilterChip(option.label, option.key == filterState.filter, {
+                                            pageModels.getValue(filterDestination).filter(option.key)
+                                            modalOrigin = null
+                                            modalRestoreFocus = null
+                                            pageActivationRequest++
+                                            filterMenuDestination = null
+                                        }, Modifier.weight(1f).height(64.dp).focusRequester(filterRequesters[index]).focusProperties {
+                                            if (index > 0) left = filterRequesters[index - 1]
+                                            if (index < filterRequesters.lastIndex) right = filterRequesters[index + 1]
+                                        }, compact = false)
+                                    }
+                                    repeat(3 - rowOptions.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
                         }
-                        LaunchedEffect(filterDestination) {
-                            inputMode.requestInputMode(InputMode.Keyboard)
-                            // Override the scroll group's implicit focus target with a real option.
-                            withFrameNanos { }
-                            withFrameNanos { }
-                            firstFilterFocus.requestFocus()
+                        LaunchedEffect(filterDestination, controllerInput) {
+                            if (controllerInput && filterRequesters.isNotEmpty()) {
+                                inputMode.requestInputMode(InputMode.Keyboard)
+                                withFrameNanos { }; withFrameNanos { }
+                                filterRequesters[filterOptions.indexOfFirst { it.key == filterState.filter }.coerceAtLeast(0)].requestFocus()
+                            }
+                        }
+                    }
+                    sortMenuDestination != null -> sortMenuDestination?.let { sortDestination ->
+                        val sortState = pageStates.getValue(sortDestination)
+                        LauncherDialog("Sort by", { sortMenuDestination = null }) {
+                            listOf("recent" to "Recent", "title" to "Title").forEach { (key, label) ->
+                                FilterChip(label, sortState.sort == key, {
+                                    pageModels.getValue(sortDestination).sort(key)
+                                    modalOrigin = null
+                                    modalRestoreFocus = null
+                                    pageActivationRequest++
+                                    sortMenuDestination = null
+                                }, Modifier.fillMaxWidth().height(56.dp), compact = false)
+                            }
                         }
                     }
                     menuVisible -> LauncherDialog("Menu", { menuVisible = false }) {
@@ -557,19 +629,37 @@ private fun DeviceStatusSnapshot.toShellStatus(): LauncherShellStatus {
         StatusValue.Unavailable -> StatusValue.Unavailable
         StatusValue.Unsupported -> StatusValue.Unsupported
     }
-    fun reading(label: String, value: StatusValue<String>, glyph: ShellStatusGlyph) =
-        ShellStatusReading(StatusPresentation(label, value, label), glyph)
+    fun reading(label: String, value: StatusValue<String>, glyph: ShellStatusGlyph, symbol: LauncherStatusGlyph? = null) =
+        ShellStatusReading(StatusPresentation(label, value, label), glyph, symbol = symbol)
     val usedMemory = usedMemoryBytes
     val totalMemory = totalMemoryBytes
     val memory = if (usedMemory is StatusValue.Available && totalMemory is StatusValue.Available)
         StatusValue.Available(String.format(Locale.getDefault(), "%.1f / %.0f GB", usedMemory.value / 1_073_741_824.0, totalMemory.value / 1_073_741_824.0))
         else StatusValue.Unavailable
+    val temperature = (batteryTemperatureCelsius as? StatusValue.Available)?.value
+    val memoryRatio = if (usedMemory is StatusValue.Available && totalMemory is StatusValue.Available && totalMemory.value > 0)
+        usedMemory.value.toDouble() / totalMemory.value else 0.0
+    val percent = (batteryPercent as? StatusValue.Available)?.value
+    val batterySymbol = when (percent) {
+        null -> LauncherStatusGlyph.BatteryUnknown
+        in 0..14 -> LauncherStatusGlyph.Battery0
+        in 15..28 -> LauncherStatusGlyph.Battery1
+        in 29..42 -> LauncherStatusGlyph.Battery2
+        in 43..56 -> LauncherStatusGlyph.Battery3
+        in 57..70 -> LauncherStatusGlyph.Battery4
+        in 71..85 -> LauncherStatusGlyph.Battery5
+        in 86..97 -> LauncherStatusGlyph.Battery6
+        else -> LauncherStatusGlyph.BatteryFull
+    }
     return LauncherShellStatus(readings = listOf(
-        reading("Battery temperature", batteryTemperatureCelsius.format { String.format(Locale.getDefault(), "%.0f°C", it) }, ShellStatusGlyph.Temperature),
-        reading("Memory used", memory, ShellStatusGlyph.Memory),
-        reading("Storage available", freeStorageBytes.format { "${it / 1_073_741_824} GB free" }, ShellStatusGlyph.Storage),
+        reading("Battery temperature", batteryTemperatureCelsius.format { String.format(Locale.getDefault(), "%.0f°C", it) }, ShellStatusGlyph.Temperature,
+            when { temperature == null -> LauncherStatusGlyph.Temperature; temperature < 15 -> LauncherStatusGlyph.TemperatureLow; temperature >= 45 -> LauncherStatusGlyph.TemperatureHigh; else -> LauncherStatusGlyph.Temperature }),
+        reading("Memory used", memory, ShellStatusGlyph.Memory, if (memoryRatio >= .9) LauncherStatusGlyph.MemoryHigh else LauncherStatusGlyph.Memory),
+        reading("Storage available", freeStorageBytes.format { "${it / 1_073_741_824} GB free" }, ShellStatusGlyph.Storage,
+            if (((freeStorageBytes as? StatusValue.Available)?.value ?: Long.MAX_VALUE) < 1_073_741_824) LauncherStatusGlyph.StorageLow else LauncherStatusGlyph.Storage),
     ), rightReadings = listOf(
-        reading("Wi-Fi", wifiConnected.format { if (it) "On" else "Off" }, ShellStatusGlyph.Wifi),
-        reading("Battery", batteryPercent.format { "$it%" }, ShellStatusGlyph.Battery),
+        reading("Wi-Fi", wifiEnabled.format { if (it) "Enabled" else "Disabled" }, ShellStatusGlyph.Wifi,
+            if ((wifiEnabled as? StatusValue.Available)?.value == false) LauncherStatusGlyph.WifiOff else LauncherStatusGlyph.Wifi),
+        reading("Battery", batteryPercent.format { "$it%" }, ShellStatusGlyph.Battery, batterySymbol),
     ))
 }

@@ -17,7 +17,12 @@ import java.util.UUID
 class RoomRomLibraryRepository(private val database: LauncherDatabase) : RomLibraryRepository {
     private val dao = database.romDao()
     override val sources: Flow<List<RomSource>> = combine(dao.sources(), dao.documents()) { sources, docs ->
-        sources.map { it.domain(docs.count { doc -> doc.sourceId == it.sourceId && doc.present }) }
+        val grouped = docs.filter { it.present }.groupBy { it.sourceId }
+        sources.map { source ->
+            val present = grouped[source.sourceId].orEmpty()
+            val unidentified = present.count { row -> (row.platformOverride ?: row.platformId)?.let(RomPlatforms::byId) == null }
+            source.domain(present.size - unidentified, unidentified)
+        }
     }.distinctUntilChanged()
     override val entries = dao.documents().map { it.map(RomDocumentEntity::domain) }.distinctUntilChanged()
     override val consoleEmulatorDefaults = preferences("console:")
@@ -176,6 +181,10 @@ class RoomRomLibraryRepository(private val database: LauncherDatabase) : RomLibr
         dao.document(itemId.value)?.let { old ->
             val changed = old.copy(platformOverride=platformId)
             dao.upsertDocument(changed)
+            dao.source(old.sourceId)?.let { source ->
+                dao.upsertSource(source.copy(revision=source.revision+1,
+                    status=if (source.status == "UNAVAILABLE" || !source.enabled) source.status else "NOT_SCANNED"))
+            }
             val available = dao.source(old.sourceId)?.enabled == true && old.present &&
                 database.catalogDao().readItem(old.itemId)?.item?.availabilityCode == "available"
             writeCatalog(changed, available)
@@ -197,32 +206,56 @@ class RoomRomLibraryRepository(private val database: LauncherDatabase) : RomLibr
         source.revision
     }
 
+    suspend fun itemPlatformAssignments(id: CatalogSourceId): Map<String, String> =
+        dao.sourceDocuments(id.value).mapNotNull { row -> row.platformOverride?.let { row.documentId to it } }.toMap()
+
     /** Finished entries are batched; only the final successful source commit marks omissions. */
-    suspend fun commitScan(source:RomSource, revision:Long, documents:List<RomDocument>, plan:RomScanPlan) {
+    suspend fun commitScan(source:RomSource, revision:Long, documents:List<RomDocument>, plan:RomScanPlan,
+        onBatchCommitted: suspend (Int) -> Unit = {}) {
         val token = UUID.randomUUID().toString()
         val existing = dao.sourceDocuments(source.id.value).associateBy { it.documentId }
         val observed = documents.associateBy { it.documentId }
+        val companions = plan.entries.associate { it.documentId to it.companionDocumentIds } +
+            plan.unresolved.associate { it.documentId to it.companionDocumentIds }
         val prepared = plan.entries.map { e ->
             newDocument(source, existing[e.documentId], e.documentId, e.relativePath,e.title,e.platformId,e.format,null,e.companionDocumentIds,observed[e.documentId]?.sizeBytes,token,false)
         } + plan.unresolved.map { e ->
             newDocument(source, existing[e.documentId],e.documentId,e.relativePath,e.title,null,e.format,e.reason,e.companionDocumentIds,observed[e.documentId]?.sizeBytes,token,e.requiresRepair)
         }
+        var committed = 0
+        val unchangedObservedIds = ArrayList<String>()
         prepared.chunked(128).forEach { batch ->
             currentCoroutineContext().ensureActive()
             database.withTransaction {
                 checkCurrent(source.id,revision)
-                batch.forEach { fresh ->
-                    // Re-read user assignment so a correction made during enumeration wins.
-                    val current = dao.document(fresh.itemId)
-                    val entry = if(current!=null) fresh.copy(platformOverride=current.platformOverride) else fresh
-                    dao.upsertDocument(entry)
-                    writeCatalog(entry,true)
+                // Manual classification changes increment the source revision. This batch
+                // therefore cannot publish a grouping planned before that user correction.
+                val changed = batch.filter { fresh ->
+                    existing[fresh.documentId]?.copy(scanToken=token) != fresh
                 }
+                if (changed.isNotEmpty()) dao.upsertDocuments(changed)
+                // A complete validated parent replaces its old standalone member cards in
+                // this same transaction. A later cancellation cannot expose both as games.
+                val groupedIds = batch.asSequence().flatMap { companions[it.documentId].orEmpty().asSequence() }
+                    .filterNot { it in companions }.mapNotNull { existing[it]?.takeIf { row -> row.present }?.itemId }.distinct().toList()
+                groupedIds.chunked(128).forEach { ids -> dao.markGroupedMembers(ids); dao.hideGroupedMembers(ids) }
+                val changedIds = changed.mapTo(HashSet()) { it.itemId }
+                val unchangedIds = batch.filterNot { it.itemId in changedIds }.map { it.itemId }
+                if (unchangedIds.isNotEmpty()) {
+                    unchangedObservedIds.addAll(unchangedIds)
+                    dao.restoreObservedCatalog(unchangedIds)
+                }
+                changed.forEach { writeCatalog(it,true) }
             }
+            committed += batch.size
+            onBatchCommitted(committed)
         }
         currentCoroutineContext().ensureActive()
         database.withTransaction {
             val current = checkCurrent(source.id,revision)
+            // Token-only changes do not need to invalidate the whole observed catalog for
+            // every batch. Publish them once, together with successful omission reconciliation.
+            unchangedObservedIds.chunked(128).forEach { dao.markObserved(source.id.value,it,token) }
             dao.markMissing(source.id.value,token)
             dao.hideMissing(source.id.value)
             dao.upsertSource(current.copy(status="READY",error=null,lastScanAt=System.currentTimeMillis()))
@@ -263,9 +296,10 @@ class RoomRomLibraryRepository(private val database: LauncherDatabase) : RomLibr
 }
 
 internal class ScanSupersededException : Exception()
-private fun RomSourceEntity.domain(count:Int=0) = RomSource(CatalogSourceId(sourceId),treeUri,rootDocumentId,name,enabled,
+private fun RomSourceEntity.domain(count:Int=0, unidentified:Int=0) = RomSource(CatalogSourceId(sourceId),treeUri,rootDocumentId,name,enabled,
     runCatching { RomSourceStatus.valueOf(status) }.getOrDefault(RomSourceStatus.NOT_SCANNED),defaultPlatformId,lastScanAt,error,count,
-    runCatching { RomSourceAccessKind.valueOf(accessKind) }.getOrDefault(RomSourceAccessKind.SAF),physicalRootKey,automaticallyDiscovered)
+    runCatching { RomSourceAccessKind.valueOf(accessKind) }.getOrDefault(RomSourceAccessKind.SAF),physicalRootKey,automaticallyDiscovered,
+    unidentifiedCount=unidentified)
 private fun RomDocumentEntity.domain() = RomEntry(ItemId(itemId),CatalogSourceId(sourceId),documentId,documentUri,relativePath,title,
     platformOverride ?: platformId,format,present,if(platformOverride!=null && !requiresRepair) null else issue,
     runCatching { JSONArray(companions).let { a -> List(a.length()) { a.getString(it) } } }.getOrDefault(emptyList()),sizeBytes,requiresRepair)

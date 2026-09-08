@@ -14,11 +14,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicBoolean
 import dev.handheld.launcher.core.domain.rom.RomSourceStatus
+import dev.handheld.launcher.core.data.metadata.RomMetadataIdentifier
 
-data class RomScanState(val busy:Boolean=false,val sourceName:String?=null,val documentsSeen:Int=0,val error:String?=null)
+data class RomScanState(val busy:Boolean=false,val sourceName:String?=null,val documentsSeen:Int=0,val error:String?=null,val gamesPublished:Int=0)
 
 class RomScanCoordinator(private val repository:RoomRomLibraryRepository,private val access:RomSourceAccess,scope:CoroutineScope,
-    private val discovery:AndroidSharedRomDiscovery?=null) {
+    private val discovery:AndroidSharedRomDiscovery?=null,
+    private val metadataIdentifier:RomMetadataIdentifier?=null) {
     private val requests=Channel<Unit>(Channel.CONFLATED)
     private val fullScanRequested=AtomicBoolean(false)
     private val mutex=Mutex()
@@ -31,7 +33,8 @@ class RomScanCoordinator(private val repository:RoomRomLibraryRepository,private
         catch(cancelled:CancellationException) { throw cancelled }
         catch(error:Exception) { mutableState.value=RomScanState(error=error.message?.take(240) ?: "Shared storage discovery could not finish; existing sources were kept.") }
         val sources=repository.allSources()
-        for(registered in sources.filter { it.enabled && (scanExistingSources || it.status == RomSourceStatus.NOT_SCANNED) }) {
+        for(registered in sources.filter { it.enabled && it.id !in discovery?.completedSourceIds.orEmpty() &&
+            (scanExistingSources || it.status in setOf(RomSourceStatus.NOT_SCANNED,RomSourceStatus.SCANNING)) }) {
             currentCoroutineContext().ensureActive()
             val revision=repository.beginScan(registered.id) ?: continue
             val current=repository.findSource(registered.id) ?: continue
@@ -39,8 +42,13 @@ class RomScanCoordinator(private val repository:RoomRomLibraryRepository,private
             mutableState.value=RomScanState(true,source.name)
             try {
                 val result=access.enumerate(source) { count -> mutableState.value=RomScanState(true,source.name,count) }
-                val plan=withContext(Dispatchers.Default) { RomScanPlanner().plan(RomScanRequest(result.documents,source.name,source.defaultPlatformId,descriptorText=result.descriptorText)) }
-                repository.commitScan(source,revision,result.documents,plan)
+                val assignments=repository.itemPlatformAssignments(source.id)
+                val metadata=if(source.defaultPlatformId==null) metadataIdentifier?.identify(source,result.documents).orEmpty() else emptyMap()
+                val plan=withContext(Dispatchers.Default) { RomScanPlanner().plan(RomScanRequest(result.documents,source.name,source.defaultPlatformId,
+                    descriptorText=result.descriptorText,documentPlatformOverrides=assignments,metadataPlatformCandidates=metadata)) }
+                repository.commitScan(source,revision,result.documents,plan) { count ->
+                    mutableState.value=RomScanState(true,source.name,result.documents.size,gamesPublished=count)
+                }
             } catch(cancelled:CancellationException) {
                 withContext(NonCancellable) { repository.failScan(source.id,revision,"Scan interrupted. Existing games were kept.",false) }
                 throw cancelled

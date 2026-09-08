@@ -36,39 +36,117 @@
     "sha256": "bd1ae63256c909280e9ef4e5112e07d8abd2ca054fe7c42d9ff353e6a4f15765"
   },
   {
-    "name": "device_thermostat",
-    "variant": "fill1",
-    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/device_thermostat/fill1/24px.svg",
-    "sha256": "546d9a60a65cbdbb3f4541fd5b8998f334d3a1ed31f82acdc534b73d6593b8db"
-  },
-  {
-    "name": "memory",
-    "variant": "fill1",
-    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/memory/fill1/24px.svg",
-    "sha256": "7c76251206360d7dc927b6aca71194373aeb0f56c009484b2a26221805a4a17b"
-  },
-  {
-    "name": "sd_card",
-    "variant": "fill1",
-    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/sd_card/fill1/24px.svg",
-    "sha256": "513303f0923ea3ab7bf74ef6ea198e6a3897a7b2d14c84bc859255ebe3ec2df6"
-  },
-  {
-    "name": "wifi",
-    "variant": "default",
-    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/wifi/default/24px.svg",
-    "sha256": "7b42bc5f1b5f598721bce29ec93fea9b0082cc8b970c4eb64d8ac886d8a441f3"
-  },
-  {
-    "name": "battery_5_bar",
-    "variant": "fill1",
-    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_5_bar/fill1/24px.svg",
-    "sha256": "88abbcf0877ede8024d6c166fdd7d7a524353670476e56cf76626358cecc0eb5"
-  },
-  {
     "name": "expand_more",
     "variant": "wght200",
     "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/expand_more/wght200/24px.svg",
     "sha256": "e2f72411b130bebc4e1ac389eaaeb02e388c6db884e158a38d497b8d44b77961"
+  },
+  {
+    "name": "device_thermostat",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/device_thermostat/wght200/24px.svg",
+    "sha256": "d874cc29a305250d4df7f9e1819560b6c7da21aefea52dadc5d8f3bc9c961265"
+  },
+  {
+    "name": "memory",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/memory/wght200/24px.svg",
+    "sha256": "8978a1f2ec257630f1ca3f3ba7e709f1f287080c889badcdad251fc46e695481"
+  },
+  {
+    "name": "sd_card",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/sd_card/wght200/24px.svg",
+    "sha256": "eacc918fbad18333ac6edef272d1051ddb1787cd76dc162acaab310273da2ee2"
+  },
+  {
+    "name": "wifi",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/wifi/wght200/24px.svg",
+    "sha256": "f9e7f80ae0e06782228494dfcf75126b97826506bb67e198713d8458da2626a0"
+  },
+  {
+    "name": "wifi_off",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/wifi_off/wght200/24px.svg",
+    "sha256": "1d09c5c18b063e211d59c07d51a538a4530cf2a3fc4c88fce7070c8436760b90"
+  },
+  {
+    "name": "sd_card_alert",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/sd_card_alert/wght200/24px.svg",
+    "sha256": "732a4c29aee31028371b8e80243bd4d3da3ff315668d28990b41cd039d1933ea"
+  },
+  {
+    "name": "thermometer_loss",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/thermometer_loss/wght200/24px.svg",
+    "sha256": "a058e9f4e4f2eec31993d0ab7e536c8bfb6bcd306dbefd07e9ca943e13dbcfe0"
+  },
+  {
+    "name": "thermometer_gain",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/thermometer_gain/wght200/24px.svg",
+    "sha256": "b487b617fa747b67276ffd0b891e4fc7d09a08afa058c7916dbc78961b2ac927"
+  },
+  {
+    "name": "battery_0_bar",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_0_bar/wght200/24px.svg",
+    "sha256": "d104d9b5d00fa3dddc7f01f02e39693e5b40d3d41118bd503ec7f05787082c64"
+  },
+  {
+    "name": "battery_1_bar",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_1_bar/wght200/24px.svg",
+    "sha256": "e4e1cdac3f67681bf431258faafb38334412bc81d100a30eb222b56ff7fa3e79"
+  },
+  {
+    "name": "battery_2_bar",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_2_bar/wght200/24px.svg",
+    "sha256": "15fcd64ed5a385636c31999557edcb0b2b9bd4ba7088c549cfc0244f39725a12"
+  },
+  {
+    "name": "battery_3_bar",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_3_bar/wght200/24px.svg",
+    "sha256": "d385d066033b153ef3e143285db07d4fe742ac3688669377848e812240399d0f"
+  },
+  {
+    "name": "battery_4_bar",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_4_bar/wght200/24px.svg",
+    "sha256": "da03be76ae1e8bc4abef22adf847b0c08c62eac441302c14ce7c92df580d8cf0"
+  },
+  {
+    "name": "battery_5_bar",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_5_bar/wght200/24px.svg",
+    "sha256": "2039db5abd5e30ccb688507905ac74a15f25c19f79f76583b93681863c3a3436"
+  },
+  {
+    "name": "battery_6_bar",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_6_bar/wght200/24px.svg",
+    "sha256": "ad5bf889a2731f4e62565e5aa9fa3022ed5eccc9961f7a8f7e54cfae4bf0574d"
+  },
+  {
+    "name": "battery_full",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_full/wght200/24px.svg",
+    "sha256": "70d81e2efc2f5de24e7d0b6ef17c7790e5256128166f5f02e95a3f6a094b2d9a"
+  },
+  {
+    "name": "battery_unknown",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_unknown/wght200/24px.svg",
+    "sha256": "3bc6df70884c3fcbf8202a12efea320432608ab8828fb4a785ca7fd296598a1a"
+  },
+  {
+    "name": "sort",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/sort/wght200/24px.svg",
+    "sha256": "a446c661ccd9b99b73b1df1d616e3fe866a4d97fb57b61e59868e94c730118d5"
   }
 ]

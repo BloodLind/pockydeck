@@ -49,6 +49,7 @@ data class RomSourcesCallbacks(
     val onSetupStorageAccess: () -> Unit = {},
     val onSetAutomaticDiscovery: (Boolean) -> Unit = {},
     val onDiscoverFolders: () -> Unit = {},
+    val onIdentifySourceItems: (CatalogSourceId) -> Unit = {},
 )
 
 /** Stateless source controls. The Activity owns folder grants and acknowledged requests. */
@@ -125,6 +126,10 @@ private fun SourceControls(source: RomSource, callbacks: RomSourcesCallbacks) {
         if (source.automaticallyDiscovered) LauncherText("Found automatically", style = LauncherTheme.typography.settingSupporting,
             color = LauncherTheme.colors.textSecondary)
         LauncherText(sourceStatusLabel(source), color = LauncherTheme.colors.textSecondary)
+        if (source.unidentifiedCount > 0) LauncherText(
+            "${source.unidentifiedCount} unidentified · Choose a console to show these games in the library",
+            color = LauncherTheme.colors.textSecondary,
+        )
         source.error?.takeIf { it.isNotBlank() }?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
         if (source.enabled) {
             val choose = { callbacks.onChooseSourcePlatform(source.id) }
@@ -135,6 +140,12 @@ private fun SourceControls(source: RomSource, callbacks: RomSourcesCallbacks) {
                 supportingText = "Overrides console detection for this folder",
                 onFocusChanged = settingsFocus("Choose console for ${source.name}", LauncherActionMeaning.CHANGE_FILTER, choose, callbacks.onFocusedAction),
             )
+            if (source.unidentifiedCount > 0) {
+                val identify = { callbacks.onIdentifySourceItems(source.id) }
+                ActionRow("Identify games", "Choose consoles individually for mixed folders",
+                    onActivate = identify,
+                    onFocusChanged = settingsFocus("Identify games in ${source.name}", LauncherActionMeaning.CHANGE_FILTER, identify, callbacks.onFocusedAction))
+            }
         }
         val needsAccess = !source.enabled || source.status == RomSourceStatus.UNAVAILABLE
         val rescan = { callbacks.onRescanSource(source.id) }

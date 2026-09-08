@@ -71,9 +71,12 @@ fun ItemDetailsScreen(
     val nextCategory = nextCategory(effectiveCategory, overrides?.category != null)
     val initial = remember(item.id) { FocusRequester() }
     val inputMode = LocalInputModeManager.current
-    LaunchedEffect(item.id) {
-        inputMode.requestInputMode(InputMode.Keyboard)
-        initial.requestFocus()
+    val controllerInput = dev.handheld.launcher.core.designsystem.contract.LocalControllerInput.current
+    LaunchedEffect(item.id, controllerInput) {
+        if (controllerInput) {
+            inputMode.requestInputMode(InputMode.Keyboard)
+            initial.requestFocus()
+        }
     }
     BoxWithConstraints(modifier.fillMaxSize()) {
       val wide = maxWidth >= 600.dp

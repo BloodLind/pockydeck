@@ -78,6 +78,9 @@ class SafRomSourceAccess(context:Context) : RomSourceAccess {
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree,parent)
             val found = query(children,arrayOf(Document.COLUMN_DOCUMENT_ID,Document.COLUMN_DISPLAY_NAME,Document.COLUMN_MIME_TYPE,Document.COLUMN_SIZE,Document.COLUMN_FLAGS)) { cursor ->
                 if(cursor.extras.getBoolean(DocumentsContract.EXTRA_LOADING,false)) throw IOException("The provider is still loading this folder. Try again shortly.")
+                cursor.extras.getString(DocumentsContract.EXTRA_ERROR)?.takeIf { it.isNotBlank() }?.let {
+                    throw IOException("The folder provider reported an incomplete listing: ${it.take(180)}")
+                }
                 buildList {
                     while(cursor.moveToNext()) {
                         val name=cursor.getString(1) ?: throw IOException("A document name is missing.")
@@ -109,6 +112,7 @@ class SafRomSourceAccess(context:Context) : RomSourceAccess {
             }
             onProgress(documents.size)
         }
+        if(!isAvailable(source)) throw RomSourceUnavailableException("Folder access changed during scanning. Existing games were kept; restore access and rescan.")
         RomEnumeration(documents,descriptors)
     }
 

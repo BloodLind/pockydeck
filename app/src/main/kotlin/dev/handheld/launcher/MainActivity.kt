@@ -8,13 +8,21 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.view.inputmethod.EditorInfo
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.InterceptPlatformTextInput
+import androidx.compose.ui.platform.PlatformTextInputInterceptor
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -35,6 +43,7 @@ import dev.handheld.launcher.ui.LauncherApp
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalComposeUiApi::class)
 class MainActivity : ComponentActivity() {
     private val container get() = (application as LauncherApplication).appContainer
     private val appViewModel: LauncherAppViewModel by viewModels { container.launcherViewModelFactory() }
@@ -42,7 +51,17 @@ class MainActivity : ComponentActivity() {
     private var reducedMotion by mutableStateOf(false)
     private var homeRoleHeld by mutableStateOf(false)
     private var dispatchSemantic: (SemanticInputAction) -> Boolean = { false }
+    private var touchInput: () -> Unit = {}
     private var searchEditorActive = false
+    private lateinit var inputHost: FrameLayout
+    private val inlineTextInput = PlatformTextInputInterceptor { request, next ->
+        next.startInputMethod { attributes ->
+            request.createInputConnection(attributes).also {
+                // Keep Search and its Apply/Cancel footer visible in landscape keyboards.
+                attributes.imeOptions = attributes.imeOptions or EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            }
+        }
+    }
     private lateinit var roleHandler: HomeRoleActivityRequestHandler
     private val controller by lazy {
         ControllerInputHandler(lifecycleScope, { appViewModel.mapping.value }, {
@@ -86,13 +105,32 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        setContent {
+        // Android's early post-IME stage can consume the first directional key solely to
+        // leave touch mode. Own launcher controls before that stage and keep a native focus
+        // target when touch clears the Compose leaf; text/caret keys still pass to the IME.
+        inputHost = object : FrameLayout(this) {
+            override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean =
+                if (controller.onKeyEvent(event)) true else super.dispatchKeyEventPreIme(event)
+        }.apply {
+            isFocusableInTouchMode = true
+            descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val content = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+        }
+        inputHost.addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        setContentView(inputHost)
+        content.setContent {
+          InterceptPlatformTextInput(inlineTextInput) {
             LauncherApp(container, appViewModel, homeViewModel, reducedMotion, homeRoleHeld,
                 bindInput = { dispatchSemantic = it }, nativeConfirm = ::activateNativeFocusedControl,
+                bindTouchInput = { touchInput = it },
                 onImeVisibilityChanged = controller::onImeVisibilityChanged,
                 onSearchEditorActiveChanged = { searchEditorActive = it },
                 onPickRomFolder = ::pickRomFolder,
                 onSetupStorageAccess = ::setupStorageAccess)
+          }
         }
     }
 
@@ -104,6 +142,15 @@ class MainActivity : ComponentActivity() {
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         if (controller.onMotionEvent(event)) true else super.dispatchGenericMotionEvent(event)
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            controller.reset()
+            touchInput()
+            if (!searchEditorActive) inputHost.requestFocus()
+        }
+        return super.dispatchTouchEvent(event)
+    }
 
     @SuppressLint("RestrictedApi") // Continue through the same public Window.Callback path.
     private fun activateNativeFocusedControl(): Boolean {
@@ -122,6 +169,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        container.recentActivity.start()
         container.androidCatalog.start()
         container.romScanner.refresh()
         container.romController.refreshEmulators()
@@ -131,13 +179,14 @@ class MainActivity : ComponentActivity() {
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
         homeRoleHeld = roleHandler.isHomeRoleHeld()
         container.androidCatalog.onResume()
+        container.recentActivity.refresh()
         container.romController.refreshStorageAccess()
         container.romScanner.refresh()
         container.romController.refreshEmulators()
         immersiveWindow()
     }
     override fun onPause() { controller.reset(); super.onPause() }
-    override fun onStop() { container.androidCatalog.stop(); super.onStop() }
+    override fun onStop() { container.androidCatalog.stop(); container.recentActivity.stop(); super.onStop() }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) immersiveWindow() else controller.reset()

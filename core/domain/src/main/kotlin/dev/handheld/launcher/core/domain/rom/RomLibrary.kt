@@ -24,6 +24,8 @@ data class RomSource(
     val automaticallyDiscovered: Boolean = false,
     /** Scan-local exclusions derived from manual roots and disabled discovery tombstones. */
     val excludedPhysicalRootKeys: Set<String> = emptySet(),
+    /** Kept for correction in source settings, excluded from identified game counts. */
+    val unidentifiedCount: Int = 0,
 )
 
 /** Document identity is provider-owned; the generated item ID survives rescans and source re-adds. */

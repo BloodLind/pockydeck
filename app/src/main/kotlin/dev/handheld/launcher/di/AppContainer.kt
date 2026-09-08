@@ -9,6 +9,7 @@ import dev.handheld.launcher.feature.collection.CollectionViewModel
 import dev.handheld.launcher.feature.home.HomeViewModelFactory
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.launch.LaunchCoordinator
+import dev.handheld.launcher.launch.RecentActivityTracker
 import dev.handheld.launcher.platform.home.HomeRoleRequestCoordinator
 import dev.handheld.launcher.platform.system.SystemActionRegistry
 import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
@@ -32,6 +33,7 @@ import dev.handheld.launcher.core.data.rom.emulator.AndroidEmulatorResolver
 import dev.handheld.launcher.core.data.rom.emulator.AndroidRomLauncher
 import dev.handheld.launcher.core.domain.model.LaunchTarget
 import dev.handheld.launcher.core.domain.model.LaunchRequest
+import dev.handheld.launcher.core.domain.model.LaunchAcknowledgement
 import dev.handheld.launcher.rom.RomFeatureController
 import dev.handheld.launcher.core.data.repository.DataStoreControllerPreferenceRepository
 import dev.handheld.launcher.core.data.repository.DataStoreNavigationSnapshotRepository
@@ -88,9 +90,15 @@ class AppContainer(
     val launchDispatcher: LaunchDispatcher by lazy {
         val android = AndroidComponentLaunchDispatcher(applicationContext)
         object : LaunchDispatcher {
-            override suspend fun dispatch(request: LaunchRequest) = when(request.target) {
-                is LaunchTarget.ExternalContent -> romController.dispatch(request)
-                else -> android.dispatch(request)
+            override suspend fun dispatch(request: LaunchRequest): LaunchAcknowledgement {
+                val result = when(request.target) {
+                    is LaunchTarget.ExternalContent -> romController.dispatch(request)
+                    else -> android.dispatch(request)
+                }
+                if (result is LaunchAcknowledgement.Dispatched) (request.target as? LaunchTarget.AndroidComponent)?.let {
+                    runCatching { recentActivity.recordApp(it.componentId.packageName) }
+                }
+                return result
             }
         }
     }
@@ -98,11 +106,13 @@ class AppContainer(
     val sharedStoragePaths by lazy { SharedStoragePaths(applicationContext) }
     val sharedRomDiscovery by lazy { AndroidSharedRomDiscovery(romRepository,sharedStoragePaths) }
     val romSourceAccess by lazy { RoutingRomSourceAccess(SafRomSourceAccess(applicationContext),SharedStorageRomSourceAccess(sharedStoragePaths)) }
-    val romScanner by lazy { RomScanCoordinator(romRepository,romSourceAccess,applicationScope,sharedRomDiscovery) }
+    val romScanner by lazy { RomScanCoordinator(romRepository,romSourceAccess,applicationScope,sharedRomDiscovery,
+        metadataIdentifier = EsDeRomMetadataIdentifier(sharedStoragePaths)) }
     val romCache by lazy { PreparedRomCache(applicationContext) }
     val romController by lazy { RomFeatureController(romRepository,romSourceAccess,romScanner,
         AndroidEmulatorResolver(applicationContext),AndroidRomLauncher(applicationContext),romCache,applicationScope,
-        sharedStoragePaths,sharedRomDiscovery) }
+        sharedStoragePaths,sharedRomDiscovery, onGameDispatched = { id, packageName, label -> recentActivity.recordRom(id, packageName, label) }) }
+    val recentActivity by lazy { RecentActivityTracker(applicationContext, applicationScope) }
     val launchCoordinator by lazy {
         LaunchCoordinator(catalogRepository, navigationSnapshotRepository, launchDispatcher,
             successfulOpenRepository, applicationScope)

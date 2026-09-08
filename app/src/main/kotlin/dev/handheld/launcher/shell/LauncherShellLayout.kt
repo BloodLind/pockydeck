@@ -53,15 +53,19 @@ object LauncherShellLayoutPolicy {
         val contentTop = if (showStatus) metrics.contentBounds.top else minOf(8.dp, usableBottom)
         val fullBottomHeight = metrics.dockBounds.height + metrics.footerBounds.height
         if (usableBottom - contentTop < 208.dp + fullBottomHeight) {
-            val emptyBottom = ShellBounds(0.dp, usableBottom, metrics.windowWidth, usableBottom)
+            // Keep touch Apply/Cancel available above a tall landscape keyboard. Only the
+            // dock is expendable when a query, one result and a 48dp footer still fit.
+            val footerHeight = if (usableBottom - contentTop >= 128.dp) 48.dp else 0.dp
+            val footerTop = usableBottom - footerHeight
+            val emptyDock = ShellBounds(0.dp, footerTop, metrics.windowWidth, footerTop)
             return LauncherShellLayout(
                 statusBounds = status,
                 contentBounds = ShellBounds(metrics.contentBounds.left, contentTop, metrics.contentBounds.right,
-                    (usableBottom - 8.dp).coerceAtLeast(contentTop)),
-                dockBounds = emptyBottom,
-                footerBounds = emptyBottom,
-                dockCenterY = usableBottom,
-                footerDividerY = usableBottom,
+                    (footerTop - 8.dp).coerceAtLeast(contentTop)),
+                dockBounds = emptyDock,
+                footerBounds = ShellBounds(0.dp, footerTop, metrics.windowWidth, usableBottom),
+                dockCenterY = footerTop,
+                footerDividerY = footerTop,
                 imeVisible = true,
             )
         }

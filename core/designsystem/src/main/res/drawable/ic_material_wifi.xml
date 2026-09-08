@@ -2,6 +2,6 @@
 <!-- Google Material Symbols, Apache-2.0. Source: docs/references/material-symbols/sources.json. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="960" android:viewportHeight="960">
     <group android:translateY="960">
-        <path android:fillColor="#FF000000" android:pathData="M409-149q-29-29-29-71t29-71q29-29 71-29t71 29q29 29 29 71t-29 71q-29 29-71 29t-71-29ZM254-346l-84-86q59-59 138.5-93.5T480-560q92 0 171.5 35T790-430l-84 84q-44-44-102-69t-124-25q-66 0-124 25t-102 69ZM84-516 0-600q92-94 215-147t265-53q142 0 265 53t215 147l-84 84q-77-77-178.5-120.5T480-680q-116 0-217.5 43.5T84-516Z" />
+        <path android:fillColor="#FF000000" android:pathData="M436.31-160.92q-17.85-17.85-17.85-43.7 0-25.84 17.85-43.69 17.84-17.84 43.69-17.84 25.85 0 43.69 17.84 17.85 17.85 17.85 43.69 0 25.85-17.85 43.7-17.84 17.84-43.69 17.84-25.85 0-43.69-17.84ZM254-346l-40.92-41.38q52.07-52.08 120.04-81.58 67.96-29.5 146.88-29.5t146.88 29.61q67.97 29.62 120.04 81.93L706-346q-44-44-102-69t-124-25q-66 0-124 25t-102 69ZM84-516l-40.92-40.92q83.54-84 195-132.77Q349.54-738.46 480-738.46q130.46 0 241.92 48.77 111.46 48.77 195 132.77L876-516q-77-77-178.5-120.5T480-680q-116 0-217.5 43.5T84-516Z" />
     </group>
 </vector>

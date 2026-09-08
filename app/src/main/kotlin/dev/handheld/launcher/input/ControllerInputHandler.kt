@@ -23,7 +23,7 @@ class ControllerInputHandler(
     private val imeFaceActionsEnabled: () -> Boolean = { false },
     dispatch: (SemanticInputAction) -> Boolean,
 ) {
-    private val engine = ControllerInputEngine(scope, mapping, imeVisible, imeFaceActionsEnabled, dispatch)
+    private val engine = ControllerInputEngine(scope, mapping, imeVisible, imeFaceActionsEnabled, dispatch = dispatch)
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         val button = event.keyCode.toControllerButton() ?: return false
@@ -36,8 +36,8 @@ class ControllerInputHandler(
         // UP follows any previously recorded launcher DOWN, including a focus transition.
         if (event.action == KeyEvent.ACTION_DOWN && imeFaceActionsEnabled() && keyboardArrow) return false
         return when (event.action) {
-            KeyEvent.ACTION_DOWN -> engine.onButtonDown(button, event.repeatCount > 0, event.eventTime)
-            KeyEvent.ACTION_UP -> engine.onButtonUp(button)
+            KeyEvent.ACTION_DOWN -> engine.onButtonDown(button, event.repeatCount > 0, event.eventTime, event.deviceId)
+            KeyEvent.ACTION_UP -> engine.onButtonUp(button, event.deviceId, event.eventTime)
             else -> false
         }
     }
@@ -62,6 +62,7 @@ class ControllerInputHandler(
                     event.getAxisValue(MotionEvent.AXIS_GAS),
                 ),
                 eventTimeMillis = event.eventTime,
+                deviceId = event.deviceId,
             ),
         )
     }
@@ -85,6 +86,7 @@ internal data class ControllerAxes(
     val leftTrigger: Float = 0f,
     val rightTrigger: Float = 0f,
     val eventTimeMillis: Long,
+    val deviceId: Int = 0,
 )
 
 internal enum class ControllerButton {
@@ -98,70 +100,123 @@ internal class ControllerInputEngine(
     private val mapping: () -> ConfirmBackMapping,
     private val imeVisible: () -> Boolean,
     private val imeFaceActionsEnabled: () -> Boolean = { false },
+    private val monotonicTimeMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val dispatch: (SemanticInputAction) -> Boolean,
 ) {
-    private val heldButtons = linkedSetOf<ControllerButton>()
-    private val launcherOwnedDownButtons = mutableMapOf<ControllerButton, Boolean>()
-    private var hat = Direction.None
-    private var stick = Direction.None
+    private class DeviceState {
+        val downOwners = mutableMapOf<ControllerButton, Boolean>()
+        val heldButtons = linkedMapOf<ControllerButton, Long>()
+        val keyEventTimes = mutableMapOf<ControllerButton, Long>()
+        var axisEventTime = Long.MIN_VALUE
+        var hat = Direction.None
+        var stick = Direction.None
+        var axisOrder = 0L
+        var leftAnalog = false
+        var rightAnalog = false
+        var suppressHat = false
+        var suppressStick = false
+        var suppressLeft = false
+        var suppressRight = false
+
+        val idle get() = downOwners.isEmpty() && heldButtons.isEmpty() && hat == Direction.None &&
+            stick == Direction.None && !leftAnalog && !rightAnalog
+    }
+
+    private class RepeatSession(val action: SemanticInputAction, val startedAt: Long) {
+        var job: Job? = null
+    }
+
+    private val devices = linkedMapOf<Int, DeviceState>()
+    private var inputOrder = 0L
+    private var generation = 0L
     private var direction = Direction.None
-    private var repeatJob: Job? = null
+    private var directionRepeat: RepeatSession? = null
+    private var leftRepeat: RepeatSession? = null
+    private var rightRepeat: RepeatSession? = null
     private var leftTriggerHeld = false
     private var rightTriggerHeld = false
-    private val lastActionTime = mutableMapOf<SemanticInputAction, Long>()
+
+    private fun device(id: Int): DeviceState? {
+        devices[id]?.let { return it }
+        if (devices.size >= MAX_TRACKED_DEVICES) {
+            val idle = devices.entries.firstOrNull { it.value.idle } ?: return null
+            devices.remove(idle.key)
+        }
+        return DeviceState().also { devices[id] = it }
+    }
 
     fun onButtonDown(
         button: ControllerButton,
         repeatedByAndroid: Boolean,
         eventTimeMillis: Long,
+        deviceId: Int = 0,
     ): Boolean {
-        launcherOwnedDownButtons[button]?.let { launcherOwned -> return launcherOwned }
+        val state = device(deviceId) ?: return false
+        if (eventTimeMillis < (state.keyEventTimes[button] ?: Long.MIN_VALUE)) return state.downOwners[button] ?: true
+        state.keyEventTimes[button] = eventTimeMillis
         // BUTTON_A/B are gamepad keycodes, distinct from keyboard letters, Enter and Backspace.
         val editorFaceAction = (button == ControllerButton.A || button == ControllerButton.B) && imeFaceActionsEnabled()
-        if (imeVisible() && !editorFaceAction) {
+        if (imeVisible()) {
             clearActiveState(clearDownOwnership = false)
-            launcherOwnedDownButtons[button] = false
-            return false
+            state.downOwners[button]?.let { return it }
+            if (!editorFaceAction) {
+                state.downOwners[button] = false
+                return false
+            }
         }
-        launcherOwnedDownButtons[button] = true
-        if (repeatedByAndroid || !heldButtons.add(button)) return true
-        if (button.direction != null) updateDirection()
-        else emit(button.semantic(mapping()), eventTimeMillis)
+        state.downOwners[button]?.let { return it }
+        state.downOwners[button] = true
+        // Android repeats never create/restart an engagement, including a repeat arriving after
+        // reset without a new physical DOWN. Its matching UP still belongs to the launcher.
+        if (repeatedByAndroid) return true
+        state.heldButtons[button] = ++inputOrder
+        when {
+            button.direction != null -> updateDirection()
+            button == ControllerButton.LeftTrigger || button == ControllerButton.RightTrigger -> updateTriggers()
+            else -> dispatch(button.semantic(mapping()))
+        }
         return true
     }
 
-    fun onButtonUp(button: ControllerButton): Boolean {
-        val launcherOwned = launcherOwnedDownButtons.remove(button) ?: return false
+    fun onButtonUp(button: ControllerButton, deviceId: Int = 0, eventTimeMillis: Long? = null): Boolean {
+        val state = devices[deviceId] ?: return false
+        if (eventTimeMillis != null) {
+            if (eventTimeMillis < (state.keyEventTimes[button] ?: Long.MIN_VALUE)) return state.downOwners[button] ?: true
+            state.keyEventTimes[button] = eventTimeMillis
+        }
+        val launcherOwned = state.downOwners.remove(button) ?: return false
         if (!launcherOwned) return false
-        heldButtons.remove(button)
-        if (button.direction != null) updateDirection()
+        state.heldButtons.remove(button)
+        if (imeVisible()) clearActiveState(clearDownOwnership = false)
+        else if (button.direction != null) updateDirection()
+        else if (button == ControllerButton.LeftTrigger || button == ControllerButton.RightTrigger) updateTriggers()
         return true
     }
 
     fun onAxes(axes: ControllerAxes): Boolean {
+        val state = device(axes.deviceId) ?: return false
+        if (axes.eventTimeMillis < state.axisEventTime) return !imeVisible()
+        state.axisEventTime = axes.eventTimeMillis
+        val hat = Direction.fromAxes(axes.hatX, axes.hatY, state.hat, HAT_THRESHOLD, HAT_EXIT_THRESHOLD)
+        val stick = Direction.fromAxes(axes.stickX, axes.stickY, state.stick, STICK_ENTER_THRESHOLD, STICK_EXIT_THRESHOLD)
+        if (hat != state.hat || stick != state.stick) state.axisOrder = ++inputOrder
+        state.hat = hat
+        state.stick = stick
+        val left = axes.leftTrigger.normalizedTrigger()
+        val right = axes.rightTrigger.normalizedTrigger()
+        state.leftAnalog = left > if (state.leftAnalog) TRIGGER_EXIT_THRESHOLD else TRIGGER_ENTER_THRESHOLD
+        state.rightAnalog = right > if (state.rightAnalog) TRIGGER_EXIT_THRESHOLD else TRIGGER_ENTER_THRESHOLD
+        // A held axis from an old page/IME/lifecycle cannot re-engage until it returns neutral.
+        if (hat == Direction.None) state.suppressHat = false
+        if (stick == Direction.None) state.suppressStick = false
+        if (!state.leftAnalog) state.suppressLeft = false
+        if (!state.rightAnalog) state.suppressRight = false
         if (imeVisible()) {
             clearActiveState(clearDownOwnership = false)
             return false
         }
-        hat = Direction.fromAxes(axes.hatX, axes.hatY, HAT_THRESHOLD)
-        stick = Direction.fromAxes(
-            axes.stickX,
-            axes.stickY,
-            if (stick == Direction.None) STICK_ENTER_THRESHOLD else STICK_EXIT_THRESHOLD,
-        )
         updateDirection()
-        val left = axes.leftTrigger.normalizedTrigger()
-        val right = axes.rightTrigger.normalizedTrigger()
-        if (!leftTriggerHeld && left > TRIGGER_ENTER_THRESHOLD) {
-            emit(SemanticInputAction.PREVIOUS_FILTER, axes.eventTimeMillis)
-        }
-        if (!rightTriggerHeld && right > TRIGGER_ENTER_THRESHOLD) {
-            emit(SemanticInputAction.NEXT_FILTER, axes.eventTimeMillis)
-        }
-        leftTriggerHeld = if (leftTriggerHeld) left > TRIGGER_EXIT_THRESHOLD
-            else left > TRIGGER_ENTER_THRESHOLD
-        rightTriggerHeld = if (rightTriggerHeld) right > TRIGGER_EXIT_THRESHOLD
-            else right > TRIGGER_ENTER_THRESHOLD
+        updateTriggers()
         return true
     }
 
@@ -174,52 +229,91 @@ internal class ControllerInputEngine(
     }
 
     private fun clearActiveState(clearDownOwnership: Boolean) {
-        heldButtons.clear()
-        if (clearDownOwnership) launcherOwnedDownButtons.clear()
-        hat = Direction.None
-        stick = Direction.None
+        generation++
+        devices.values.forEach { state ->
+            state.suppressHat = state.suppressHat || state.hat != Direction.None || state.heldButtons.keys.any { it.direction != null }
+            state.suppressStick = state.suppressStick || state.stick != Direction.None
+            state.suppressLeft = state.suppressLeft || state.leftAnalog || ControllerButton.LeftTrigger in state.heldButtons
+            state.suppressRight = state.suppressRight || state.rightAnalog || ControllerButton.RightTrigger in state.heldButtons
+            state.heldButtons.clear()
+            if (clearDownOwnership) state.downOwners.clear()
+        }
         direction = Direction.None
         leftTriggerHeld = false
         rightTriggerHeld = false
-        repeatJob?.cancel()
-        repeatJob = null
-        lastActionTime.clear()
+        directionRepeat?.job?.cancel()
+        leftRepeat?.job?.cancel()
+        rightRepeat?.job?.cancel()
+        directionRepeat = null
+        leftRepeat = null
+        rightRepeat = null
     }
 
     private fun updateDirection() {
-        val keyDirection = heldButtons.lastOrNull { it.direction != null }?.direction
+        val keyDirection = devices.values.flatMap { it.heldButtons.entries }.filter { it.key.direction != null }
+            .maxByOrNull { it.value }?.key?.direction
         // A physical D-pad can report both a key and HAT axis. One resolved direction owns
         // the initial event and repeat job no matter how many sources agree.
-        val next = keyDirection ?: hat.takeUnless { it == Direction.None } ?: stick
+        val hatDirection = devices.values.filter { !it.suppressHat && it.hat != Direction.None }.maxByOrNull { it.axisOrder }?.hat
+        val stickDirection = devices.values.filter { !it.suppressStick && it.stick != Direction.None }.maxByOrNull { it.axisOrder }?.stick
+        val next = keyDirection ?: hatDirection ?: stickDirection ?: Direction.None
         if (next == direction) return
         direction = next
-        repeatJob?.cancel()
-        repeatJob = null
+        directionRepeat?.job?.cancel()
+        directionRepeat = null
         val action = next.action ?: return
-        dispatch(action)
-        repeatJob = scope.launch {
-            delay(INITIAL_REPEAT_DELAY_MILLIS)
-            while (isActive && direction == next && !imeVisible()) {
-                dispatch(action)
-                delay(REPEAT_INTERVAL_MILLIS)
+        val session = RepeatSession(action, monotonicTimeMillis())
+        directionRepeat = session
+        engage(session) { directionRepeat === session }
+    }
+
+    private fun updateTriggers() {
+        // A digital edge and any pressure sample describe the same logical hold, even when
+        // they arrive hundreds of milliseconds apart. Only a fully released hold can re-arm.
+        val left = devices.values.any { ControllerButton.LeftTrigger in it.heldButtons || it.leftAnalog && !it.suppressLeft }
+        val right = devices.values.any { ControllerButton.RightTrigger in it.heldButtons || it.rightAnalog && !it.suppressRight }
+        val startedGeneration = generation
+        if (left != leftTriggerHeld) {
+            leftTriggerHeld = left
+            leftRepeat?.job?.cancel()
+            leftRepeat = null
+            if (left) {
+                val session = RepeatSession(SemanticInputAction.PREVIOUS_FILTER, monotonicTimeMillis())
+                leftRepeat = session
+                engage(session) { leftRepeat === session }
+            }
+        }
+        if (generation != startedGeneration) return
+        if (right != rightTriggerHeld) {
+            rightTriggerHeld = right
+            rightRepeat?.job?.cancel()
+            rightRepeat = null
+            if (right) {
+                val session = RepeatSession(SemanticInputAction.NEXT_FILTER, monotonicTimeMillis())
+                rightRepeat = session
+                engage(session) { rightRepeat === session }
             }
         }
     }
 
-    private fun emit(action: SemanticInputAction, eventTimeMillis: Long) {
-        // Complete key DOWN/UP pairs are separate presses. Only triggers can report the
-        // same activation through both a key and an analog axis and need time deduplication.
-        if (action != SemanticInputAction.PREVIOUS_FILTER && action != SemanticInputAction.NEXT_FILTER) {
-            dispatch(action)
-            return
+    private fun engage(session: RepeatSession, stillOwner: () -> Boolean) {
+        dispatch(session.action)
+        // Dispatch can synchronously open the IME or reset the handler while changing pages.
+        if (!stillOwner()) return
+        if (imeVisible()) { clearActiveState(clearDownOwnership = false); return }
+        session.job = scope.launch {
+            delay((INITIAL_REPEAT_DELAY_MILLIS - (monotonicTimeMillis() - session.startedAt)).coerceAtLeast(0))
+            while (isActive && stillOwner()) {
+                if (imeVisible()) { clearActiveState(clearDownOwnership = false); break }
+                dispatch(session.action)
+                if (!stillOwner()) break
+                val heldMillis = (monotonicTimeMillis() - session.startedAt).coerceAtLeast(0)
+                val accelerated = (heldMillis - INITIAL_REPEAT_DELAY_MILLIS).coerceIn(0, ACCELERATION_MILLIS)
+                val interval = REPEAT_INTERVAL_MILLIS -
+                    (REPEAT_INTERVAL_MILLIS - MIN_REPEAT_INTERVAL_MILLIS) * accelerated / ACCELERATION_MILLIS
+                delay(interval)
+            }
         }
-        // Trigger key and analog reports can describe the same physical edge.
-        val previous = lastActionTime[action]
-        if (previous != null && eventTimeMillis >= previous &&
-            eventTimeMillis - previous < CROSS_SOURCE_DEDUP_MILLIS
-        ) return
-        lastActionTime[action] = eventTimeMillis
-        dispatch(action)
     }
 
     private enum class Direction(val action: SemanticInputAction?) {
@@ -228,8 +322,12 @@ internal class ControllerInputEngine(
         ;
 
         companion object {
-            fun fromAxes(x: Float, y: Float, threshold: Float): Direction {
-                if (!x.isFinite() || !y.isFinite() || max(abs(x), abs(y)) < threshold) return None
+            fun fromAxes(x: Float, y: Float, previous: Direction, enter: Float, exit: Float): Direction {
+                if (!x.isFinite() || !y.isFinite()) return None
+                val previousAmount = when (previous) { Left -> -x; Right -> x; Up -> -y; Down -> y; None -> 0f }
+                val otherAmount = when (previous) { Left, Right -> abs(y); Up, Down -> abs(x); None -> 0f }
+                if (previous != None && previousAmount >= exit && otherAmount <= previousAmount + DIRECTION_SWITCH_MARGIN) return previous
+                if (max(abs(x), abs(y)) < enter) return None
                 return if (abs(x) >= abs(y)) {
                     if (x < 0) Left else Right
                 } else {
@@ -274,13 +372,17 @@ internal class ControllerInputEngine(
 
     private companion object {
         const val HAT_THRESHOLD = .45f
+        const val HAT_EXIT_THRESHOLD = .25f
+        const val DIRECTION_SWITCH_MARGIN = .12f
         const val STICK_ENTER_THRESHOLD = .5f
         const val STICK_EXIT_THRESHOLD = .3f
         const val TRIGGER_ENTER_THRESHOLD = .55f
         const val TRIGGER_EXIT_THRESHOLD = .25f
         const val INITIAL_REPEAT_DELAY_MILLIS = 360L
         const val REPEAT_INTERVAL_MILLIS = 115L
-        const val CROSS_SOURCE_DEDUP_MILLIS = 65L
+        const val MIN_REPEAT_INTERVAL_MILLIS = 55L
+        const val ACCELERATION_MILLIS = 2_500L
+        const val MAX_TRACKED_DEVICES = 32
     }
 }
 

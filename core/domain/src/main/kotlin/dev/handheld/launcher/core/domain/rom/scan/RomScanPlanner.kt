@@ -27,6 +27,7 @@ private class Planning(private val request: RomScanRequest) {
     private val completed = mutableMapOf<String, Resolution>()
     private val active = mutableSetOf<String>()
     private var foldedPaths = emptyMap<String, List<Node>>()
+    private var orderedNodes = emptyList<Node>()
     private val overrides = request.folderPlatformOverrides.mapNotNull { (path, platform) ->
         normalizePath(path, allowEmpty = true)?.let { it to platform }
     }.toMap()
@@ -47,17 +48,26 @@ private class Planning(private val request: RomScanRequest) {
             } else nodes[path] = distinct.single()
         }
         foldedPaths = nodes.values.groupBy { it.path.lowercase(Locale.ROOT) }
+        orderedNodes = nodes.values.toList()
         nodes.values.filterNot { it.document.isDirectory || excluded(it.path) }.forEach { node ->
             val format = RomPlatforms.formatOf(node.name) ?: return@forEach
             if (node.document.sizeBytes != null && node.document.sizeBytes <= 0L) {
                 issue(node, RomScanIssueCode.EMPTY_FILE, "Empty files are not games.")
                 return@forEach
             }
-            val platform = contextPlatform(node)
+            val context = contextPlatform(node)
+            val manual = manualPlatform(node)
+            val metadata = request.metadataPlatformCandidates[node.document.documentId].orEmpty()
+                .filter { RomPlatforms.byId(it) != null }.toSet()
+            val platform = context ?: metadata.singleOrNull()
             // Installed PC folders contain many executables/archives that are not game entries.
             if (platform == "windows" && format !in PcGameShortcut.sources) return@forEach
             val applicable = RomPlatforms.candidatesFor(format)
             val reason = when {
+                manual == null && (metadata.size > 1 || context != null && metadata.any { it != context }) -> {
+                    issue(node, RomScanIssueCode.CONFLICTING_METADATA, "Existing console metadata disagrees for this file.")
+                    "Console metadata disagrees. Choose the console for this game or folder."
+                }
                 platform != null && RomPlatforms.byId(platform) == null -> {
                     issue(node, RomScanIssueCode.UNKNOWN_PLATFORM, "Selected console is no longer recognized.")
                     "Choose a supported console for this game."
@@ -214,16 +224,38 @@ private class Planning(private val request: RomScanRequest) {
         return base.copy(companions = companions)
     }
 
-    private fun descendants(directory: String): List<Node> = nodes.values.filter {
-        !it.document.isDirectory && !excluded(it.path) && (directory.isEmpty() || it.path.startsWith("$directory/"))
+    private fun descendants(directory: String): List<Node> {
+        // Nodes are already sorted by path. Visit only this subtree, rather than scanning
+        // every document for every arcade archive or installed folder package.
+        if (directory.isEmpty()) return orderedNodes.filterNot { it.document.isDirectory || excluded(it.path) }
+        val prefix = "$directory/"
+        var low = 0
+        var high = orderedNodes.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (orderedNodes[middle].path < prefix) low = middle + 1 else high = middle
+        }
+        return buildList {
+            var index = low
+            while (index < orderedNodes.size && orderedNodes[index].path.startsWith(prefix)) {
+                val node = orderedNodes[index++]
+                if (!node.document.isDirectory && !excluded(node.path)) add(node)
+            }
+        }
     }
 
     private fun contextPlatform(node: Node): String? {
+        manualPlatform(node)?.let { return it }
         val ancestors = generateSequence(node.parent) { it.takeIf(String::isNotEmpty)?.substringBeforeLast('/', "") }.toList()
-        ancestors.firstNotNullOfOrNull { overrides[it] }?.let { return it }
-        request.assignedPlatformId?.let { return it }
         ancestors.firstNotNullOfOrNull { RomPlatforms.matchingFolder(it.substringAfterLast('/'))?.id }?.let { return it }
         return RomPlatforms.matchingFolder(request.rootDisplayName)?.id
+    }
+
+    private fun manualPlatform(node: Node): String? {
+        request.documentPlatformOverrides[node.document.documentId]?.let { return it }
+        val ancestors = generateSequence(node.parent) { it.takeIf(String::isNotEmpty)?.substringBeforeLast('/', "") }.toList()
+        ancestors.firstNotNullOfOrNull { overrides[it] }?.let { return it }
+        return request.assignedPlatformId
     }
 
     private fun find(path: String): Match = nodes[path]?.let { Match(it, false) } ?: run {

@@ -26,8 +26,12 @@ class AndroidSharedRomDiscovery(private val repository: RoomRomLibraryRepository
     private val mutableState = MutableStateFlow(SharedDiscoveryState())
     val state: StateFlow<SharedDiscoveryState> = mutableState.asStateFlow()
     private val sourceAccess = SharedStorageRomSourceAccess(paths)
+    /** Sources already published from their discovery inventory during this pass. */
+    var completedSourceIds: Set<CatalogSourceId> = emptySet()
+        private set
 
     suspend fun discover(): Unit = withContext(Dispatchers.IO) {
+        completedSourceIds = emptySet()
         if (!paths.hasAccess() || !repository.sharedDiscoveryEnabled.first()) {
             mutableState.value = SharedDiscoveryState()
             return@withContext
@@ -63,10 +67,25 @@ class AndroidSharedRomDiscovery(private val repository: RoomRomLibraryRepository
                         val treeUri = DocumentsContract.buildTreeDocumentUri(SharedDocumentId.AUTHORITY,id).toString()
                         val candidate = RomSource(CatalogSourceId("discovery:pending"),treeUri,id,folder.name,true,RomSourceStatus.NOT_SCANNED,
                             defaultPlatformId=platform.id,accessKind=RomSourceAccessKind.SHARED_STORAGE,physicalRootKey=id,automaticallyDiscovered=true)
-                        val enumeration = sourceAccess.enumerate(candidate.copy(excludedPhysicalRootKeys=SharedDiscoveryPolicy.exclusions(candidate,sources)))
+                        val scanCandidate = candidate.copy(excludedPhysicalRootKeys=SharedDiscoveryPolicy.exclusions(candidate,sources))
+                        val enumeration = sourceAccess.enumerate(scanCandidate)
                         val plan = RomScanPlanner().plan(RomScanRequest(enumeration.documents,folder.name,platform.id,descriptorText=enumeration.descriptorText))
                         if (SharedDiscoveryPolicy.hasGames(plan,platform.id)) {
-                            repository.upsertDiscoveredSource(treeUri,id,folder.name,platform.id)
+                            val sourceId = repository.upsertDiscoveredSource(treeUri,id,folder.name,platform.id)
+                            if (sourceId != null) {
+                                val revision = repository.beginScan(sourceId)
+                                val registered = repository.findSource(sourceId)
+                                val unchanged = registered != null && registered.automaticallyDiscovered && registered.rootDocumentId == id &&
+                                    registered.defaultPlatformId == platform.id &&
+                                    SharedDiscoveryPolicy.exclusions(registered,repository.allSources()) == scanCandidate.excludedPhysicalRootKeys &&
+                                    repository.itemPlatformAssignments(sourceId).isEmpty()
+                                if (unchanged && registered != null && revision != null) {
+                                    // Reuse the complete read-only inventory that proved this is a
+                                    // game folder; publish now instead of reading every file twice.
+                                    repository.commitScan(registered,revision,enumeration.documents,plan)
+                                    completedSourceIds = completedSourceIds + sourceId
+                                }
+                            }
                             sources = repository.allSources()
                             continue
                         }

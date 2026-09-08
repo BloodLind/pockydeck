@@ -49,9 +49,9 @@ class CollectionFiltersTest {
             app("emulator", LibraryCategory.EMULATOR), app("app", LibraryCategory.OTHER))
         val overrides = mapOf(gba.id to UserItemOverrides(category = LibraryCategory.EMULATOR))
 
-        assertEquals(listOf("all", "android", "console:gba", "console:unassigned"),
+        assertEquals(listOf("all", "android", "console:gba"),
             collectionFilterKeys(LauncherDestination.LIBRARY, items, overrides))
-        assertEquals(3, collectionCategoryCount(LibraryCategory.GAME, items, overrides))
+        assertEquals(2, collectionCategoryCount(LibraryCategory.GAME, items, overrides))
         assertEquals(1, collectionCategoryCount(LibraryCategory.EMULATOR, items, overrides))
         assertEquals(1, collectionCategoryCount(LibraryCategory.OTHER, items, overrides))
     }

@@ -65,6 +65,7 @@ fun LauncherText(
     overflow: TextOverflow = TextOverflow.Clip,
     unavailable: Boolean = false,
     unavailableReason: String = "Unavailable",
+    minLines: Int = 1,
 ) {
     BasicText(
         text = text,
@@ -73,6 +74,7 @@ fun LauncherText(
         } else Modifier),
         style = style.copy(color = color),
         maxLines = maxLines,
+        minLines = minLines,
         overflow = overflow,
     )
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -23,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import dev.handheld.launcher.core.designsystem.contract.rememberControlFocusRestoration
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,7 +74,7 @@ fun LauncherButton(
                 role = Role.Button,
                 onClick = { restoration.record(); onActivate() },
             ),
-        focused = focused,
+        focused = focused && LocalControllerInput.current,
         pressed = pressed,
         enabled = enabled,
         unavailable = unavailable,
@@ -115,7 +119,7 @@ fun LauncherIconButton(
                 role = Role.Button,
                 onClick = { restoration.record(); onActivate() },
             ),
-        focused = focused,
+        focused = focused && LocalControllerInput.current,
         pressed = pressed,
         enabled = enabled,
         unavailable = unavailable,
@@ -137,6 +141,7 @@ fun FilterChip(
     unavailableReason: String = DefaultUnavailableReason,
     onFocusChanged: (Boolean) -> Unit = {},
     contentDescription: String? = label,
+    compact: Boolean = true,
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val restoration = rememberControlFocusRestoration()
@@ -159,21 +164,21 @@ fun FilterChip(
                 onClick = { restoration.record(); onSelectedChange(!selected) },
             ),
         selected = selected,
-        focused = focused,
+        focused = focused && LocalControllerInput.current,
         pressed = pressed,
         enabled = enabled,
         unavailable = unavailable,
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
-        shape = RoundedCornerShape(50),
-        compact = true,
+        shape = if (compact) RoundedCornerShape(50) else RoundedCornerShape(LauncherTheme.shapes.smallControl),
+        compact = compact,
     ) {
         Row(Modifier.padding(horizontal = 10.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale,
             vertical = 4.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
             verticalAlignment = Alignment.CenterVertically) {
             LauncherText(label, style = LauncherTheme.typography.controlLabel,
                 color = if (selected) LauncherTheme.colors.destinationSelectedContent
-                    else if (focused) LauncherTheme.colors.textPrimary else LauncherTheme.colors.textSecondary,
+                    else if (focused && LocalControllerInput.current) LauncherTheme.colors.textPrimary else LauncherTheme.colors.textSecondary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             trailingIcon?.let {
                 Spacer(Modifier.width(LauncherTheme.spacing.xxs / 2))
@@ -197,16 +202,37 @@ fun SortSelector(
     contentDescription: String? = null,
 ) {
     require(options.isEmpty() || selectedOption in options) { "selectedOption must be in options" }
-    LauncherButton(
-        label = selectedOption,
-        onActivate = onOpenOptions,
-        modifier = modifier,
+    val restoration = rememberControlFocusRestoration()
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    var focused by remember { mutableStateOf(false) }
+    LauncherSurface(
+        modifier = modifier.focusRequester(restoration.requester).onFocusChanged {
+            focused = it.isFocused
+            onFocusChanged(it.isFocused)
+            if (it.isFocused) restoration.record()
+        }.clickable(source, indication = null, enabled = enabled, role = Role.Button,
+            onClick = { restoration.record(); onOpenOptions() }),
+        focused = focused && LocalControllerInput.current,
+        pressed = pressed,
         enabled = enabled,
         unavailable = unavailable,
         unavailableReason = unavailableReason,
-        onFocusChanged = onFocusChanged,
         contentDescription = contentDescription ?: "Sort: $selectedOption",
-    )
+        shape = RoundedCornerShape(50),
+        compact = true,
+    ) {
+        Row(Modifier.padding(horizontal = LauncherTheme.spacing.sm, vertical = LauncherTheme.spacing.xs),
+            verticalAlignment = Alignment.CenterVertically) {
+            val iconSize = 16.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+            LauncherGlyphIcon(LauncherGlyph.Sort, Modifier.size(iconSize), contentDescription = null)
+            Spacer(Modifier.width(LauncherTheme.spacing.xxs))
+            LauncherText(selectedOption, Modifier.weight(1f, fill = false), style = LauncherTheme.typography.controlLabel,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(LauncherTheme.spacing.xxs))
+            LauncherGlyphIcon(LauncherGlyph.ExpandMore, Modifier.size(iconSize), contentDescription = null)
+        }
+    }
 }
 
 /** Native IME-backed query input. Query ownership remains with the caller. */
@@ -234,7 +260,7 @@ fun SearchField(
     )
     LauncherSurface(
         modifier = modifier,
-        focused = focused,
+        focused = focused && LocalControllerInput.current,
         enabled = enabled,
         contentDescription = contentDescription,
         shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),

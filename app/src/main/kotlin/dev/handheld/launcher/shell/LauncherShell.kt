@@ -48,6 +48,7 @@ import dev.handheld.launcher.contract.SemanticActionPort
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.contract.StatusPresentation
 import dev.handheld.launcher.core.designsystem.controls.ControllerGlyph
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.core.designsystem.controls.StatusIndicator
 import dev.handheld.launcher.core.designsystem.controls.StatusValue as DisplayStatusValue
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
@@ -82,6 +83,7 @@ enum class ShellStatusGlyph {
 data class ShellStatusReading(
     val presentation: StatusPresentation,
     val glyph: ShellStatusGlyph? = null,
+    val symbol: LauncherStatusGlyph? = null,
 )
 
 /** Presentation inputs for the one persistent launcher status strip. */
@@ -230,22 +232,31 @@ private fun StatusReadings(
 @Composable
 private fun StatusReading(reading: ShellStatusReading) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
-        reading.glyph?.let { glyph -> ShellStatusGlyphIcon(glyph) }
-        StatusIndicator(reading.presentation.asDisplayStatus(), label = reading.presentation.label)
+        reading.glyph?.let { glyph -> ShellStatusGlyphIcon(glyph, reading.symbol,
+            if (glyph == ShellStatusGlyph.Wifi) reading.presentation.contentDescription + ": " +
+                ((reading.presentation.value as? StatusValue.Available<String>)?.value ?: "Unavailable") else null) }
+        if (reading.glyph != ShellStatusGlyph.Wifi)
+            StatusIndicator(reading.presentation.asDisplayStatus(), label = reading.presentation.label)
     }
 }
 
 /** Symbols from the HTML design preview; semantic text stays with StatusIndicator. */
 @Composable
-private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph) {
-    val color = when (glyph) {
+private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph, symbolOverride: LauncherStatusGlyph?, description: String?) {
+    val color = when {
+        symbolOverride in setOf(LauncherStatusGlyph.Battery0, LauncherStatusGlyph.Battery1,
+            LauncherStatusGlyph.TemperatureHigh, LauncherStatusGlyph.MemoryHigh, LauncherStatusGlyph.StorageLow) -> LauncherTheme.colors.cancel
+        symbolOverride == LauncherStatusGlyph.TemperatureLow -> LauncherTheme.colors.textMuted
+        symbolOverride == LauncherStatusGlyph.WifiOff || symbolOverride == LauncherStatusGlyph.BatteryUnknown -> LauncherTheme.colors.textSecondary
+        else -> when (glyph) {
         ShellStatusGlyph.Temperature -> LauncherTheme.colors.cancel
         ShellStatusGlyph.Memory -> LauncherTheme.colors.focus
         ShellStatusGlyph.Storage -> LauncherTheme.colors.textMuted
         ShellStatusGlyph.Battery -> LauncherTheme.colors.confirm
         ShellStatusGlyph.Wifi -> LauncherTheme.colors.textPrimary
+        }
     }
-    val symbol = when (glyph) {
+    val symbol = symbolOverride ?: when (glyph) {
         ShellStatusGlyph.Temperature -> LauncherStatusGlyph.Temperature
         ShellStatusGlyph.Memory -> LauncherStatusGlyph.Memory
         ShellStatusGlyph.Storage -> LauncherStatusGlyph.Storage
@@ -253,7 +264,7 @@ private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph) {
         ShellStatusGlyph.Battery -> LauncherStatusGlyph.Battery
     }
     val glyphSize = 16.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
-    LauncherStatusGlyphIcon(symbol, Modifier.size(glyphSize), tint = color)
+    LauncherStatusGlyphIcon(symbol, Modifier.size(glyphSize), tint = color, contentDescription = description)
 }
 
 @Composable
@@ -367,7 +378,7 @@ private fun DockDestination(
                     shape = CircleShape,
                 )
                 .then(
-                    if (focused) Modifier.border(2.dp * LauncherTheme.referenceScale, LauncherTheme.colors.focus, CircleShape)
+                    if (focused && LocalControllerInput.current) Modifier.border(2.dp * LauncherTheme.referenceScale, LauncherTheme.colors.focus, CircleShape)
                     else Modifier,
                 ),
             contentAlignment = Alignment.Center,
@@ -407,12 +418,12 @@ private fun ShellFooter(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(horizontal = gutter),
-            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xl),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             footer.actions.forEach { descriptor ->
                 FooterAction(descriptor, actionPort, confirmBackMapping,
-                    visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f)
+                    visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f - 3.dp * LauncherTheme.referenceScale)
             }
         }
     }
@@ -436,7 +447,7 @@ private fun FooterAction(
     ) {
       Row(
         modifier = Modifier.offset(y = visualOffset),
-        horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ControllerGlyph(

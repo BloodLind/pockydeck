@@ -54,6 +54,15 @@ internal interface RomDao {
     @Query("SELECT * FROM rom_documents WHERE item_id=:id") suspend fun document(id:String): RomDocumentEntity?
     @Query("SELECT * FROM rom_documents WHERE source_id=:id") suspend fun sourceDocuments(id:String): List<RomDocumentEntity>
     @Upsert suspend fun upsertDocument(document: RomDocumentEntity)
+    @Upsert suspend fun upsertDocuments(documents: List<RomDocumentEntity>)
+    @Query("UPDATE rom_documents SET scan_token=:token, present=1 WHERE source_id=:sourceId AND item_id IN (:itemIds)")
+    suspend fun markObserved(sourceId: String, itemIds: List<String>, token: String)
+    @Query("UPDATE catalog_items SET availability_code='available', unavailability_reason_code=NULL WHERE item_id IN (:itemIds) AND availability_code!='available'")
+    suspend fun restoreObservedCatalog(itemIds: List<String>)
+    @Query("UPDATE rom_documents SET present=0 WHERE item_id IN (:itemIds)")
+    suspend fun markGroupedMembers(itemIds: List<String>)
+    @Query("UPDATE catalog_items SET availability_code='unavailable', unavailability_reason_code='removed' WHERE item_id IN (:itemIds)")
+    suspend fun hideGroupedMembers(itemIds: List<String>)
     @Query("UPDATE rom_documents SET present=0 WHERE source_id=:id AND scan_token!=:token") suspend fun markMissing(id:String, token:String)
     @Query("UPDATE catalog_items SET availability_code='unavailable', unavailability_reason_code=:reason WHERE item_id IN (SELECT item_id FROM rom_documents WHERE source_id=:id)") suspend fun hideSource(id:String, reason:String)
     @Query("UPDATE catalog_items SET availability_code='unavailable', unavailability_reason_code='removed' WHERE item_id IN (SELECT item_id FROM rom_documents WHERE source_id=:id AND present=0)") suspend fun hideMissing(id:String)

@@ -2,6 +2,6 @@
 <!-- Google Material Symbols, Apache-2.0. Source: docs/references/material-symbols/sources.json. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="960" android:viewportHeight="960">
     <group android:translateY="960">
-        <path android:fillColor="#FF000000" android:pathData="M360-360v-240h240v240H360Zm0 240v-80h-80q-33 0-56.5-23.5T200-280v-80h-80v-80h80v-80h-80v-80h80v-80q0-33 23.5-56.5T280-760h80v-80h80v80h80v-80h80v80h80q33 0 56.5 23.5T760-680v80h80v80h-80v80h80v80h-80v80q0 33-23.5 56.5T680-200h-80v80h-80v-80h-80v80h-80Zm320-160v-400H280v400h400Z" />
+        <path android:fillColor="#FF000000" android:pathData="M400-400v-160h160v160H400Zm40-40h80v-80h-80v80Zm-60 261.54V-240h-75.38q-27.62 0-46.12-18.5Q240-277 240-304.62V-380h-61.54v-40H240v-120h-61.54v-40H240v-75.38q0-27.62 18.5-46.12Q277-720 304.62-720H380v-61.54h40V-720h120v-61.54h40V-720h75.38q27.62 0 46.12 18.5Q720-683 720-655.38V-580h61.54v40H720v120h61.54v40H720v75.38q0 27.62-18.5 46.12Q683-240 655.38-240H580v61.54h-40V-240H420v61.54h-40ZM655.38-280q9.24 0 16.93-7.69 7.69-7.69 7.69-16.93v-350.76q0-9.24-7.69-16.93-7.69-7.69-16.93-7.69H304.62q-9.24 0-16.93 7.69-7.69 7.69-7.69 16.93v350.76q0 9.24 7.69 16.93 7.69 7.69 16.93 7.69h350.76ZM480-480Z" />
     </group>
 </vector>

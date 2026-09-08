@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -29,11 +30,13 @@ import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -42,11 +45,15 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import dev.handheld.launcher.core.designsystem.controls.ControllerGlyph
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.core.designsystem.controls.PlatformBadge
 import dev.handheld.launcher.core.designsystem.controls.StatusIndicator
 import dev.handheld.launcher.core.designsystem.controls.StatusValue
@@ -113,7 +120,7 @@ class LauncherCardsTest {
     }
 
     @Test
-    fun collectionCaptionKeepsItsHeightAndNativeAppAndSearchVariantsRender() {
+    fun collectionTitleReservesTwoLinesAndContextualSubtitleAddsOnlyItsOwnLine() {
         var title by mutableStateOf("Short")
         var subtitle by mutableStateOf<String?>(null)
         compose.setContent {
@@ -140,9 +147,10 @@ class LauncherCardsTest {
         val before = compose.onNodeWithTag("collection").fetchSemanticsNode().boundsInRoot
         compose.runOnIdle {
             title = "A long collection title that needs two bounded lines and stays within this card"
-            subtitle = "A long secondary description that remains on a single line"
         }
         assertEquals(before, compose.onNodeWithTag("collection").fetchSemanticsNode().boundsInRoot)
+        compose.runOnIdle { subtitle = "A long secondary description that remains on a single line" }
+        assertTrue(compose.onNodeWithTag("collection").fetchSemanticsNode().boundsInRoot.height > before.height)
         val artwork = compose.onNodeWithTag("collection-image", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals(artwork.width, artwork.height, 1f)
         val caption = compose.onNodeWithText(title, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
@@ -166,12 +174,18 @@ class LauncherCardsTest {
 
     @Test
     fun appAndRomCollectionCardsShareSquareArtworkAndCaptionAllocation() {
+        val romTitle = "Collection game with a long title that fills both caption lines"
+        val appTitle = "Collection application with a long title that fills both caption lines"
+        var actualDensity = 1f
         compose.setContent {
             LauncherTheme(referenceScale = 2f / 3f) {
+                actualDensity = LocalDensity.current.density
                 Row {
-                    CoverTile("Collection game", CardVariant.CollectionCover, true, {}, {},
-                        Modifier.width(160.dp).testTag("collection-rom"), artwork = { ArtworkFallback() })
-                    AppIconTile("Collection application", true, {}, {}, Modifier.width(160.dp).testTag("collection-app"),
+                    CoverTile(romTitle, CardVariant.CollectionCover, true, {}, {},
+                        Modifier.width(160.dp).testTag("collection-rom"), artwork = {
+                            Box(Modifier.fillMaxSize().testTag("compact-artwork")) { ArtworkFallback() }
+                        })
+                    AppIconTile(appTitle, true, {}, {}, Modifier.width(160.dp).testTag("collection-app"),
                         icon = { AppIconArtwork(StripedPainter()) }, showCaption = true)
                 }
             }
@@ -180,19 +194,55 @@ class LauncherCardsTest {
         val app = compose.onNodeWithTag("collection-app").fetchSemanticsNode().boundsInRoot
         assertEquals("App and ROM collections reserve the same width", rom.width, app.width, 1f)
         assertEquals("App and ROM collections reserve the same square and caption height", rom.height, app.height, 1f)
-        val romCaption = compose.onNodeWithText("Collection game", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        val appCaption = compose.onNodeWithText("Collection application", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        assertTrue(romCaption.top >= rom.top + rom.width)
-        assertTrue(appCaption.top >= app.top + app.width)
+        val romCaption = compose.onNodeWithText(romTitle, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val appCaption = compose.onNodeWithText(appTitle, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val artwork = compose.onNodeWithTag("compact-artwork", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals("The artwork remains square", artwork.width, artwork.height, 1f)
+        assertTrue("Artwork is capped independently of the wider caption", artwork.width <= 176f * 2f / 3f * actualDensity)
+        // Text semantics measure the laid-out text, so use wrapping titles to exercise the full caption width.
+        assertTrue("The ROM caption keeps the wider column allocation", romCaption.width > artwork.width)
+        assertTrue("The app caption keeps the wider column allocation", appCaption.width > artwork.width)
+        assertEquals("Artwork is centered in the column", rom.center.x, artwork.center.x, 1f)
+        assertTrue(romCaption.top >= artwork.bottom)
+        assertEquals("App and ROM captions align", romCaption.top, appCaption.top, 1f)
     }
 
     @Test
-    fun completedTouchFocusesBeforeActivationAndScrollingDoesNotActivate() {
+    fun collectionCaptionLaysOutTwoLinesAtIncreasedFontScaleAndRetainsTheirHeight() {
+        var title by mutableStateOf("A long collection game title that needs two readable lines at increased font scale")
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, 1.3f)) {
+                LauncherTheme(referenceScale = 2f / 3f) {
+                    CoverTile(title, CardVariant.CollectionCover, true, {}, {},
+                        Modifier.width(160.dp).testTag("large-font-collection"),
+                        artwork = { ArtworkFallback() })
+                }
+            }
+        }
+        val layouts = mutableListOf<TextLayoutResult>()
+        val caption = compose.onNodeWithText(title, useUnmergedTree = true)
+        caption.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        val captionBounds = caption.fetchSemanticsNode().boundsInRoot
+        val cardBounds = compose.onNodeWithTag("large-font-collection").fetchSemanticsNode().boundsInRoot
+        assertEquals("The long title actually lays out both lines", 2, layout.lineCount)
+        assertTrue("The second line fits inside the caption", layout.getLineBottom(1) <= captionBounds.height + 1f)
+
+        compose.runOnIdle { title = "Short title" }
+        val shortCaptionBounds = compose.onNodeWithText(title, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals("Short titles retain the two-line caption height", captionBounds.height, shortCaptionBounds.height, 1f)
+        assertEquals("Changing title length keeps the collection allocation stable", cardBounds,
+            compose.onNodeWithTag("large-font-collection").fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test
+    fun completedTouchActivatesWithoutControllerFocusAndScrollingDoesNotActivate() {
         var focused = false
         var focusedAtActivation = false
         var activations = 0
         lateinit var scroll: ScrollState
         compose.setContent {
+          CompositionLocalProvider(LocalControllerInput provides false) {
             LauncherTheme {
                 scroll = rememberScrollState()
                 Row(Modifier.width(240.dp).horizontalScroll(scroll)) {
@@ -203,11 +253,12 @@ class LauncherCardsTest {
                         Modifier.size(160.dp), artwork = { ArtworkFallback() })
                 }
             }
+          }
         }
         compose.onNodeWithTag("touch-card").performTouchInput { click() }
-        compose.onNodeWithTag("touch-card").assertIsFocused()
+        compose.onNodeWithTag("touch-card").assertIsNotFocused()
         compose.runOnIdle {
-            assertTrue("The launch callback sees the newly focused item", focusedAtActivation)
+            assertTrue("Touch does not create a persistent controller focus", !focusedAtActivation)
             assertEquals(1, activations)
         }
         compose.onNodeWithTag("touch-card").performTouchInput { swipeLeft() }
@@ -215,6 +266,40 @@ class LauncherCardsTest {
             assertTrue("The gesture scrolls the row", scroll.value > 0)
             assertEquals("A scroll gesture does not launch a card", 1, activations)
         }
+    }
+
+    @Test
+    fun controllerFocusFrameDisappearsInTouchModeEvenWhenTheCardRemainsSelected() {
+        var controllerInput by mutableStateOf(true)
+        val requester = FocusRequester()
+        lateinit var inputMode: androidx.compose.ui.input.InputModeManager
+        compose.setContent {
+            CompositionLocalProvider(LocalControllerInput provides controllerInput) {
+                LauncherTheme(reducedMotion = true) {
+                    inputMode = LocalInputModeManager.current
+                    CoverTile("Focused card", CardVariant.HomeCover, true, {}, {},
+                        Modifier.size(160.dp).focusRequester(requester).testTag("focus-mode-card"),
+                        artwork = { Box(Modifier.fillMaxSize().background(Color.DarkGray)) }, selected = true)
+                }
+            }
+        }
+        fun amberPixels(): Int {
+            val pixels = compose.onNodeWithTag("focus-mode-card").captureToImage().toPixelMap()
+            var matches = 0
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                val pixel = pixels[x, y]
+                if (pixel.red > .7f && pixel.green in .45f.. .75f && pixel.blue < .2f) matches++
+            }
+            return matches
+        }
+        compose.runOnIdle {
+            inputMode.requestInputMode(InputMode.Keyboard)
+            requester.requestFocus()
+        }
+        compose.onNodeWithTag("focus-mode-card").assertIsFocused()
+        assertTrue("Actual controller focus has an amber frame", amberPixels() > 0)
+        compose.runOnIdle { controllerInput = false }
+        assertEquals("Touch hides the controller frame without changing selected metadata", 0, amberPixels())
     }
 
     @Test

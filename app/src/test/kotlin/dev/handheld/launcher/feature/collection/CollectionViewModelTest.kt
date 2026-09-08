@@ -106,7 +106,7 @@ class CollectionViewModelTest {
     }
 
     @Test
-    fun `console filters contain only readable detected games and keep unresolved games selectable`() = runTest(dispatcher) {
+    fun `unidentified games stay out of console filters and game grids until assigned`() = runTest(dispatcher) {
         val gba = collectionRom("gba-game", "gba")
         val ambiguous = collectionRom("unassigned-game", null)
         val removed = collectionRom("removed-psx", "psx").copy(
@@ -117,7 +117,7 @@ class CollectionViewModelTest {
         val viewModel = collectionViewModel(items, snapshots)
         advanceUntilIdle()
 
-        assertEquals(listOf("console:gba", "console:unassigned"), detectedConsoleFilterKeys(items))
+        assertEquals(listOf("console:gba"), detectedConsoleFilterKeys(items))
         assertFalse(collectionFilterKeys(LauncherDestination.APPS, items).any { it.startsWith("console:") })
         viewModel.filter("console:gba")
         advanceUntilIdle()
@@ -125,8 +125,8 @@ class CollectionViewModelTest {
 
         viewModel.filter("console:unassigned")
         advanceUntilIdle()
-        assertEquals(listOf(ambiguous.id), viewModel.state.value.items.map { it.id })
-        assertEquals("console:unassigned", viewModel.state.value.snapshot().filterKey?.value)
+        assertFalse(viewModel.state.value.items.any { it.id == ambiguous.id })
+        assertEquals("all", viewModel.state.value.snapshot().filterKey?.value)
     }
 
     @Test
@@ -269,6 +269,35 @@ class CollectionViewModelTest {
     }
 
     @Test
+    fun `large searches publish early results and cancel batches from an obsolete query`() = runTest(dispatcher) {
+        val items = (1..800).map { collectionItem("game$it", "Shared game $it", LibraryCategory.GAME) } +
+            collectionItem("specific", "Unique result", LibraryCategory.OTHER)
+        val viewModel = collectionViewModel(items, releasedSnapshots(LauncherDestination.SEARCH), destination = LauncherDestination.SEARCH)
+        advanceUntilIdle()
+        viewModel.query("Shared")
+        runCurrent()
+        assertTrue(viewModel.state.value.items.isNotEmpty())
+        assertTrue(viewModel.state.value.items.size < 800)
+        assertTrue(viewModel.state.value.searching)
+        viewModel.query("Unique")
+        runCurrent()
+        advanceUntilIdle()
+        assertEquals(listOf("Unique result"), viewModel.state.value.items.map { it.title })
+        assertFalse(viewModel.state.value.searching)
+    }
+
+    @Test
+    fun `selection and viewport updates preserve the prepared result list`() = runTest(dispatcher) {
+        val items = (1..400).map { collectionItem("game$it", "Game $it", LibraryCategory.GAME) }
+        val viewModel = collectionViewModel(items, releasedSnapshots())
+        advanceUntilIdle()
+        val prepared = viewModel.state.value.items
+        repeat(20) { viewModel.select(items[it].id); viewModel.rememberAnchor(items[it].id, it * 3); runCurrent() }
+        org.junit.Assert.assertSame(prepared, viewModel.state.value.items)
+        assertEquals(items[19].id, viewModel.state.value.selectedItemId)
+    }
+
+    @Test
     fun `Search matches stored platform IDs short captions and full console names`() = runTest(dispatcher) {
         val game = collectionRom("A racing game", "gamecube")
         val items = listOf(game, collectionRom("A different game", "psx"))
@@ -314,6 +343,7 @@ private fun TestScope.collectionViewModel(
     EmptyOpens,
     snapshots,
     SavedStateHandle(),
+    computationDispatcher = StandardTestDispatcher(testScheduler),
 )
 
 private fun releasedSnapshots(destination: LauncherDestination = LauncherDestination.LIBRARY) =

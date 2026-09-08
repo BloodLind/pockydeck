@@ -22,16 +22,31 @@ enum class LauncherGlyph(val label: String, internal val resourceId: Int) {
     Favorites("Favorites", R.drawable.ic_material_grade),
     Settings("Settings", R.drawable.ic_material_tune),
     Search("Search", R.drawable.ic_material_search),
+    Sort("Sort", R.drawable.ic_material_sort),
     ExpandMore("More", R.drawable.ic_material_expand_more),
 }
 
-/** Status symbols retain the HTML preview's fill variants. Labels belong to the status value. */
+/** Official Material Symbols Outlined at weight 200. Values choose an appropriate variant. */
 enum class LauncherStatusGlyph(internal val resourceId: Int) {
     Temperature(R.drawable.ic_material_device_thermostat),
+    TemperatureLow(R.drawable.ic_material_thermometer_loss),
+    TemperatureHigh(R.drawable.ic_material_thermometer_gain),
     Memory(R.drawable.ic_material_memory),
+    MemoryHigh(R.drawable.ic_material_memory),
     Storage(R.drawable.ic_material_sd_card),
+    StorageLow(R.drawable.ic_material_sd_card_alert),
     Wifi(R.drawable.ic_material_wifi),
+    WifiOff(R.drawable.ic_material_wifi_off),
     Battery(R.drawable.ic_material_battery_5_bar),
+    Battery0(R.drawable.ic_material_battery_0_bar),
+    Battery1(R.drawable.ic_material_battery_1_bar),
+    Battery2(R.drawable.ic_material_battery_2_bar),
+    Battery3(R.drawable.ic_material_battery_3_bar),
+    Battery4(R.drawable.ic_material_battery_4_bar),
+    Battery5(R.drawable.ic_material_battery_5_bar),
+    Battery6(R.drawable.ic_material_battery_6_bar),
+    BatteryFull(R.drawable.ic_material_battery_full),
+    BatteryUnknown(R.drawable.ic_material_battery_unknown),
 }
 
 /** Physical legends only: the controller mapping supplies Confirm/Back meaning at the call site. */
@@ -50,7 +65,8 @@ fun LauncherStatusGlyphIcon(
     glyph: LauncherStatusGlyph,
     modifier: Modifier = Modifier,
     tint: Color = launcherContentColor(),
-) = LauncherIcon(ImageVector.vectorResource(glyph.resourceId), null, modifier, tint)
+    contentDescription: String? = null,
+) = LauncherIcon(ImageVector.vectorResource(glyph.resourceId), contentDescription, modifier, tint)
 
 @Composable
 fun LauncherFaceGlyph(

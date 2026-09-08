@@ -66,9 +66,9 @@ class RomCollectionPresentationTest {
         }
         compose.onNodeWithText("Sample app", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("Sample GBA game", useUnmergedTree = true).assertIsDisplayed()
-        // This subtitle belongs to the ROM card; the console filter remains a separate button.
-        val subtitle = compose.onNode(
-            hasText("GBA") and hasAnyAncestor(hasContentDescription("Sample GBA game")),
+        // The console tag overlays this ROM's artwork; its filter is a separate control.
+        val consoleTag = compose.onNode(
+            hasContentDescription("GBA") and hasAnyAncestor(hasContentDescription("Sample GBA game")),
             useUnmergedTree = true,
         ).assertIsDisplayed().fetchSemanticsNode()
         compose.onNodeWithContentDescription("Sample GBA game").assertIsDisplayed().performClick()
@@ -76,6 +76,6 @@ class RomCollectionPresentationTest {
         val title = compose.onNodeWithText("Sample GBA game", useUnmergedTree = true).fetchSemanticsNode()
         val card = compose.onNodeWithContentDescription("Sample GBA game").fetchSemanticsNode()
         assertTrue(title.boundsInRoot.height > 0f && card.boundsInRoot.contains(title.boundsInRoot.center))
-        assertTrue(subtitle.boundsInRoot.height > 0f && subtitle.boundsInRoot.bottom <= card.boundsInRoot.bottom)
+        assertTrue(consoleTag.boundsInRoot.height > 0f && consoleTag.boundsInRoot.bottom <= title.boundsInRoot.top)
     }
 }

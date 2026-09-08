@@ -12,6 +12,44 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AndroidEmulatorContractTest {
+    @Test fun gameNativeReceivesTypedSteamIdWithoutFilesOrContainerOverrides() {
+        val profile = EmulatorRegistry.profiles.first { it.id == "gamenative" }
+        val intent = RomIntentFactory.build(profile, input("windows", "steam"), null, null, "/storage/emulated/0", 220)
+        assertEquals("app.gamenative.LAUNCH_GAME", intent.action)
+        assertEquals("app.gamenative.MainActivity", intent.component!!.className)
+        assertEquals("app.gamenative", intent.component!!.packageName)
+        assertEquals(220, intent.getIntExtra("app_id", -1))
+        assertEquals("STEAM", intent.getStringExtra("game_source"))
+        assertEquals(setOf("app_id", "game_source"), intent.extras!!.keySet())
+        assertNull(intent.data)
+        assertNull(intent.clipData)
+        assertEquals(Intent.FLAG_ACTIVITY_NEW_TASK, intent.flags)
+    }
+
+    @Test fun gameHubReceivesOnlySteamIdAndAutostart() {
+        for (id in listOf("gamehub.lite", "emuready.gamehub.lite")) {
+            val profile = EmulatorRegistry.profiles.first { it.id == id }
+            val intent = RomIntentFactory.build(profile, input("windows", "steam"), null, null, "/storage/emulated/0", 219990)
+            assertEquals(id, intent.component!!.packageName)
+            assertEquals("gamehub.lite.LAUNCH_GAME", intent.action)
+            assertEquals("219990", intent.getStringExtra("steamAppId"))
+            assertTrue(intent.getBooleanExtra("autoStartGame", false))
+            assertEquals(setOf("steamAppId", "autoStartGame"), intent.extras!!.keySet())
+            assertNull(intent.data)
+            assertNull(intent.clipData)
+        }
+    }
+
+    @Test fun gameNativeSourceComesFromTheExportFormat() {
+        val profile = EmulatorRegistry.profiles.first { it.id == "gamenative" }
+        val expected = mapOf("steam" to "STEAM", "epic" to "EPIC", "gog" to "GOG", "amazon" to "AMAZON", "pcgame" to "CUSTOM_GAME")
+        expected.forEach { (extension, source) ->
+            val intent = RomIntentFactory.build(profile, input("windows", extension), null, null, "/storage/emulated/0", 123)
+            assertEquals(source, intent.getStringExtra("game_source"))
+            assertEquals(123, intent.getIntExtra("app_id", -1))
+        }
+    }
+
     private val tree = DocumentsContract.buildTreeDocumentUri("example.documents", "primary:ROMs")
     private fun input(platform: String, extension: String) = RomLaunchInput(
         platform, extension,

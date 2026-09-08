@@ -87,6 +87,10 @@ fun RomSourcesScreen(
             onActivate = callbacks.onAddSource,
             onFocusChanged = settingsFocus("Add ROM folder", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onAddSource, callbacks.onFocusedAction),
         )
+        LauncherText(
+            "PC games: in GameNative, choose Export for frontend and save the shortcut in ROMs/windows or ROMs/steam. Choose the PC app under Emulators.",
+            style = LauncherTheme.typography.settingSupporting, color = LauncherTheme.colors.textSecondary,
+        )
         state.preparingText?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
         state.message?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
         if (state.busy && state.preparingText == null) {

@@ -74,6 +74,7 @@ object RomPlatforms {
         platform("msx", "MSX", "msx|msx1|microsoft msx", "rom|ri|mx1|dsk|cas|m3u|m3u8"),
         platform("msx2", "MSX2", "msx2|msx2+|msx turbo r|msxturbor", "rom|ri|mx2|dsk|cas|m3u|m3u8"),
         platform("dos", "DOS", "dos|msdos|ms dos|dosbox|pc dos", "dosz|exe|com|bat|iso|cue|ins|img|ima|vhd|jrc|tc|conf|m3u|m3u8"),
+        platform("windows", "PC games", "windows|steam|epic|gog|amazon|pc|pc games|pcgames", "steam|epic|gog|amazon|pcgame"),
         platform("scummvm", "ScummVM", "scummvm|scumm vm", "scummvm"),
     )
 
@@ -93,13 +94,13 @@ object RomPlatforms {
     }
 
     fun candidatesFor(format: String): Set<String> = if (format in archiveExtensions) {
-        all.mapTo(linkedSetOf()) { it.id }
+        all.filter { it.id != "windows" }.mapTo(linkedSetOf()) { it.id }
     } else {
         all.filter { format in it.extensions }.mapTo(linkedSetOf()) { it.id }
     }
 
     fun supports(platformId: String, format: String): Boolean =
-        byId(platformId)?.let { format in it.extensions || format in archiveExtensions } == true
+        byId(platformId)?.let { format in it.extensions || platformId != "windows" && format in archiveExtensions } == true
 
     private fun platform(id: String, name: String, aliases: String, extensions: String) =
         RomPlatformDefinition(id, name, (aliases.split('|') + id + name).toSet(), extensions.split('|').toSet())

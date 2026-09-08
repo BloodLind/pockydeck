@@ -5,7 +5,7 @@ import java.util.Locale
 const val MAX_DESCRIPTOR_BYTES: Int = 262_144
 
 fun needsDescriptorText(name: String): Boolean =
-    RomPlatforms.formatOf(name) in setOf("cue", "gdi", "toc", "m3u", "m3u8")
+    RomPlatforms.formatOf(name).let { it in setOf("cue", "gdi", "toc", "m3u", "m3u8") || it in PcGameShortcut.sources }
 
 /**
  * Plans one complete enumeration, including archive contents after the caller extracts them.
@@ -54,6 +54,8 @@ private class Planning(private val request: RomScanRequest) {
                 return@forEach
             }
             val platform = contextPlatform(node)
+            // Installed PC folders contain many executables/archives that are not game entries.
+            if (platform == "windows" && format !in PcGameShortcut.sources) return@forEach
             val applicable = RomPlatforms.candidatesFor(format)
             val reason = when {
                 platform != null && RomPlatforms.byId(platform) == null -> {
@@ -102,6 +104,7 @@ private class Planning(private val request: RomScanRequest) {
             return fail(base, RomScanIssueCode.CYCLIC_PLAYLIST, "Playlist references form a cycle or exceed the nesting limit.")
         }
         val result = when {
+            candidate.format in PcGameShortcut.sources -> pcShortcut(base)
             needsDescriptorText(candidate.node.name) -> descriptor(base, depth)
             candidate.format == "ccd" -> pairedDescriptor(base, "img", listOf("sub"))
             candidate.format == "mds" -> pairedDescriptor(base, "mdf", emptyList())
@@ -113,6 +116,13 @@ private class Planning(private val request: RomScanRequest) {
         active.remove(candidate.node.path)
         completed[candidate.node.path] = result
         return result
+    }
+
+    private fun pcShortcut(base: Resolution): Resolution {
+        val text = request.descriptorText[base.candidate.node.document.documentId]
+            ?: return fail(base, RomScanIssueCode.MISSING_DESCRIPTOR_TEXT, "PC shortcut could not be read. Reconnect its folder and rescan.")
+        return if (PcGameShortcut.gameId(text) != null) base
+        else fail(base, RomScanIssueCode.INVALID_DESCRIPTOR, "This PC shortcut needs one positive game ID. Export it again from GameNative and rescan.")
     }
 
     private fun descriptor(base: Resolution, depth: Int): Resolution {

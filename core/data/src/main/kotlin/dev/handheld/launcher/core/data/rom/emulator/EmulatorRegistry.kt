@@ -53,6 +53,12 @@ object EmulatorRegistry {
     )
 
     internal val profiles: List<EmulatorProfile> = buildList {
+        add(EmulatorProfile("gamenative", "app.gamenative", "GameNative", words("windows"),
+            dev.handheld.launcher.core.domain.rom.scan.PcGameShortcut.sources.keys, "app.gamenative.MainActivity", EmulatorContract.GAMENATIVE))
+        for (pkg in listOf("gamehub.lite", "emuready.gamehub.lite")) {
+            add(EmulatorProfile(pkg, pkg, if (pkg == "gamehub.lite") "GameHub Lite" else "GameHub Lite (EmuReady)",
+                words("windows"), words("steam"), "com.xj.landscape.launcher.ui.gamedetail.GameDetailActivity", EmulatorContract.GAMEHUB_STEAM))
+        }
         fun view(id: String, pkg: String, name: String, platforms: String, extensions: String, activity: String) {
             add(EmulatorProfile(id, pkg, name, words(platforms), words(extensions), activity))
         }

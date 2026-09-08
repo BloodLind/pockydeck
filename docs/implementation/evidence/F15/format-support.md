@@ -11,11 +11,12 @@ The user's approved scope is broad popular console formats, console folders popu
 - With no folder/assignment context, only deterministic platform suffixes select a console. Shared ISO, CHD, BIN, ROM, PBP, ZIP, 7Z, RVZ, ST and other shared formats remain selectable, unassigned entries. Generic GZ, PKG, CONF, CMD, BAT, WAD, O, ABS, COF and PRX need context even if this registry has one matching platform.
 - A folder/format disagreement remains an unassigned, correctable entry. A manual selection is not silently used to reinterpret an incompatible format.
 - File identity remains the provider's opaque document ID. The planner never constructs durable item identity from a title, filename or path. Reordering provider enumeration produces the same plan.
-- Generic compressed/archive formats are opaque candidates for every configured platform: ZIP, 7Z, RAR, GZIP/GZ, XZ, BZIP2/BZ2, TAR and tar.gz/tgz, tar.xz/txz, tar.bz2/tbz2/tbz. RAR remains discoverable with an explicit unsupported-extraction outcome; it is not silently hidden. The archive filename does not establish its contents. The caller can feed extracted metadata back to this planner; several resulting games remain several entries for a chooser, rather than arbitrarily selecting one.
+- Generic compressed/archive formats are opaque candidates for every configured console platform except the PC frontend integration: ZIP, 7Z, RAR, GZIP/GZ, XZ, BZIP2/BZ2, TAR and tar.gz/tgz, tar.xz/txz, tar.bz2/tbz2/tbz. RAR remains discoverable with an explicit unsupported-extraction outcome; it is not silently hidden. The archive filename does not establish its contents. The caller can feed extracted metadata back to this planner; several resulting games remain several entries for a chooser, rather than arbitrarily selecting one.
+- PC frontend folders (`windows`, `steam`, `epic`, `gog`, `amazon`, `pc`, `pcgames`) accept only GameNative's exported `.steam`, `.epic`, `.gog`, `.amazon` and `.pcgame` shortcuts. Each must contain one positive Int game ID. Executables, installers, archives and support files in that context do not become game cards. These exports refer to the frontend's existing library; they do not install games or enumerate its private database.
 
 ## Recognized formats
 
-Suffixes are case-insensitive. The longest suffix wins, including `.nkit.iso` and `.tar.gz`. The generic compressed/archive formats above are additional opaque formats for every row. DOSZ remains specifically identified as a DOS archive. This broad matrix is not a promise that every emulator can launch every format listed for its console.
+Suffixes are case-insensitive. The longest suffix wins, including `.nkit.iso` and `.tar.gz`. The generic compressed/archive formats above are additional opaque formats for every row except `windows`. DOSZ remains specifically identified as a DOS archive. This broad matrix is not a promise that every emulator can launch every format listed for its console.
 
 | Console ID | Recognized suffixes besides generic compressed/archive formats |
 | --- | --- |
@@ -60,6 +61,7 @@ Suffixes are case-insensitive. The longest suffix wins, including `.nkit.iso` an
 | amstradcpc | dsk, sna, tap, cdt, voc, cpr, m3u |
 | msx / msx2 | rom, ri, mx1, dsk, cas, m3u, m3u8 / rom, ri, mx2, dsk, cas, m3u, m3u8 |
 | dos | dosz, exe, com, bat, iso, cue, ins, img, ima, vhd, jrc, tc, conf, m3u, m3u8 |
+| windows (PC) | steam, epic, gog, amazon, pcgame — validated game-ID exports only |
 | scummvm | scummvm |
 
 ## Multi-file games and packages

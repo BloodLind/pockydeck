@@ -141,8 +141,8 @@ private fun AndroidLauncherActivity.toLibraryItem(
         componentId = componentId,
         title = title,
         category = when {
-            packageName in knownEmulatorPackages -> LibraryCategory.EMULATOR
             packageName in knownGameFrontendPackages -> LibraryCategory.OTHER
+            packageName in knownEmulatorPackages -> LibraryCategory.EMULATOR
             declaredGame -> LibraryCategory.GAME
             else -> LibraryCategory.OTHER
         },
@@ -156,7 +156,7 @@ private val knownEmulatorPackages by lazy { EmulatorRegistry.profiles.map { it.p
 // These apps declare Android's game category for controller/system integration, but the
 // installed frontend itself is an app; its individual game entries belong in Library.
 private val knownGameFrontendPackages = setOf(
-    "org.es_de.frontend", "app.gamenative", "com.limelight.noir",
+    "org.es_de.frontend", "app.gamenative", "gamehub.lite", "emuready.gamehub.lite", "com.limelight.noir",
 )
 
 private val ANDROID_APP_ACTIONS = setOf(

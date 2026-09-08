@@ -8,6 +8,27 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RomLaunchPolicyTest {
+    @Test fun pcAppsAcceptSteamShortcutsAndKeepExplicitChoiceWhenSeveralAreInstalled() {
+        val native = profile("gamenative")
+        val gamehub = profile("gamehub.lite")
+        assertNull(RomLaunchPolicy.unsupportedReason(native, input("windows", "steam")))
+        assertNull(RomLaunchPolicy.unsupportedReason(gamehub, input("windows", "steam")))
+        assertNull(RomLaunchPolicy.unsupportedReason(native, input("windows", "gog")))
+        assertNotNull(RomLaunchPolicy.unsupportedReason(gamehub, input("windows", "gog")))
+        assertNotNull(RomLaunchPolicy.unsupportedReason(native, input("windows", "exe")))
+        assertNotNull(RomLaunchPolicy.unsupportedReason(native, input("windows", "steam").copy(companionUris = listOf("content://other"))))
+        val choices = EmulatorResolution(listOf(installed("gamenative"), installed("gamehub.lite")), emptyList())
+        assertNull(choices.automaticChoice(null))
+        assertEquals("gamenative", choices.automaticChoice("gamenative")?.id)
+    }
+
+    @Test fun gameNativeVersionProtectsSourceAwareLaunches() {
+        assertFalse(AndroidEmulatorResolver.supportsGameNative(null))
+        assertFalse(AndroidEmulatorResolver.supportsGameNative("1.1.9"))
+        assertTrue(AndroidEmulatorResolver.supportsGameNative("1.2.0"))
+        assertTrue(AndroidEmulatorResolver.supportsGameNative("1.3.0"))
+    }
+
     private fun profile(id: String) = EmulatorRegistry.profiles.first { it.id == id }
     private fun input(platform: String, extension: String, core: String? = null) =
         RomLaunchInput(platform, extension, "content://test/document/game.$extension", coreId = core)

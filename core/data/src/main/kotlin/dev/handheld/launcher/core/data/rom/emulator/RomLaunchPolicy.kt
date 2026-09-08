@@ -29,6 +29,9 @@ internal object RomLaunchPolicy {
             return if (extension in archiveExtensions) "This archive must be prepared before this emulator can open it."
             else "This emulator does not support .$extension games for this console."
         }
+        if (profile.contract in setOf(EmulatorContract.GAMENATIVE, EmulatorContract.GAMEHUB_STEAM) && input.companionUris.isNotEmpty()) {
+            return "PC game shortcuts cannot include companion files. Export the game again and rescan."
+        }
         if (extension in companionFormats && (input.treeUri == null || input.relativePath == null)) {
             return "This game needs its companion files. Add its containing folder and rescan."
         }

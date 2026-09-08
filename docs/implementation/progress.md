@@ -18,7 +18,9 @@ The **0.3.3 (code 6)** revision increases the smallest text with the user's 3→
 
 The **0.4.0 (code 7)** artwork revision reuses ES-DE covers and downloads missing ROM artwork from Libretro's public thumbnail collection, explicitly approved by the user. A separate persistent artwork queue, bounded cache, lazy bitmap decoding and small card hints preserve the catalog and existing card layout. Artwork settings provide pause/resume and retry. Real downloads for all 22 Jaguar games were verified on the physical Flip 2. [Artwork evidence](evidence/F17/artwork-040.md) records the request contract, final checks and remaining acceptance coverage.
 
-The broader discovery batch remains open. Device inspection found GameNative 1.2.0 with Windows Steam shortcuts; no GameHub package was found. The pending PC integration target question remains separate. This revision does not implement PC shortcut import or the requested batched discovery/search performance work. ES-DE artwork/title matching is implemented; full metadata import and manual match correction remain later work.
+The user approved GameNative as the PC integration, with GameHub also acceptable. The **0.5.0 (code 8)** revision imports GameNative's Steam, Epic, GOG, Amazon and custom-game exports as PC library cards, reuses ES-DE media, and dispatches source-specific game IDs. Compatible GameHub Lite packages can handle Steam exports through the existing app chooser and console preferences. The catalog schema is unchanged. The physical Flip2 imported three existing PC games, and Half-Life 2 reached its main menu through GameNative. **262 unique tests passed**, one Windows fixture skipped; lint has zero errors and both APK builds passed. The update is installed. See [PC integration evidence](evidence/F16/pc-integration-050.md) for exact build coverage and remaining limits.
+
+The broader batched discovery/search performance work remains open. ES-DE artwork/title matching is implemented; full metadata import and manual match correction remain later work.
 
 ## Baseline and authorization
 
@@ -59,7 +61,7 @@ The broader discovery batch remains open. Device inspection found GameNative 1.2
 | F13 / US-036–037 | Implemented in native batch | Sol/high review; coordinator integration | Actual lifecycle-bound device status |
 | F14 / US-038–039 | Integrated checks; physical matrix partial | Coordinator and Sol/high review | [Native application evidence](evidence/F14/native-application-base.md) |
 | F15 / US-040–043 | Implemented in broad ROM batch; physical source matrix pending | Parallel planner/UI work; coordinator storage/integration | [ROM batch](evidence/F15/rom-feature-batch.md), [format support](evidence/F15/format-support.md), [extraction](evidence/F15/archive-extraction.md) |
-| F16 / US-044–046 | Implemented adapters and emulator/core choice; actual game-boot matrix partial | Parallel contract research; coordinator launch integration | [Emulator contracts and versions](evidence/F16/emulator-contracts.md) |
+| F16 / US-044–046 | Implemented adapters and emulator/core choice; actual game-boot matrix partial | Parallel contract research; coordinator launch integration | [Emulator contracts and versions](evidence/F16/emulator-contracts.md), [GameNative PC integration](evidence/F16/pc-integration-050.md) |
 | F17 / US-047–048 | Artwork implemented; acceptance coverage partial | Coordinator integration | [ES-DE reuse, approved Libretro downloads and device evidence](evidence/F17/artwork-040.md) |
 | F17 / US-049 | Planned | Per feature packet | Full manual metadata/match/artwork correction remains |
 | F18 / US-050–053 | Later work | Per feature packet | Final physical delivery gates remain |

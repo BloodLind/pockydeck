@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
+import dev.handheld.launcher.core.domain.rom.scan.PcGameShortcut
+import java.util.Locale
 
 /** Builds only independently verified contracts. Eligibility and document checks precede this call. */
 internal object RomIntentFactory {
@@ -13,7 +15,19 @@ internal object RomIntentFactory {
         validatedTree: Uri?,
         emulatorDataDir: String?,
         primaryStorage: String,
+        pcGameId: Int? = null,
     ): Intent {
+        if (profile.contract in setOf(EmulatorContract.GAMENATIVE, EmulatorContract.GAMEHUB_STEAM)) {
+            val id = requireNotNull(pcGameId).also { require(it > 0) }
+            val intent = Intent().setComponent(ComponentName(profile.packageName, requireNotNull(profile.activityName)))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return if (profile.contract == EmulatorContract.GAMENATIVE) {
+                val source = requireNotNull(PcGameShortcut.sources[input.extension.removePrefix(".").lowercase(Locale.ROOT)])
+                intent.setAction("app.gamenative.LAUNCH_GAME").putExtra("app_id", id).putExtra("game_source", source)
+            } else {
+                intent.setAction("gamehub.lite.LAUNCH_GAME").putExtra("steamAppId", id.toString()).putExtra("autoStartGame", true)
+            }
+        }
         val uri = Uri.parse(input.documentUri)
         val intent = Intent(Intent.ACTION_VIEW)
             .setComponent(ComponentName(profile.packageName, requireNotNull(profile.activityName)))
@@ -45,6 +59,7 @@ internal object RomIntentFactory {
             }
             EmulatorContract.VIEW -> Unit
             EmulatorContract.DETECTION_ONLY -> error("A detection-only emulator cannot be dispatched")
+            EmulatorContract.GAMENATIVE, EmulatorContract.GAMEHUB_STEAM -> error("PC shortcuts use their game-ID entry point")
         }
         val readUris = (listOf(input.documentUri) + input.companionUris).distinct().map(Uri::parse)
         // Dolphin treats every ClipData entry as a disc, never as a permission-only item.

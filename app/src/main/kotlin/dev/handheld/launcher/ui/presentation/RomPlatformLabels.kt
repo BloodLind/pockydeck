@@ -61,6 +61,7 @@ object RomPlatformLabels {
         "msx" to "MSX",
         "msx2" to "MSX2",
         "dos" to "DOS",
+        "windows" to "PC",
         "scummvm" to "SCUMMVM",
     )
 

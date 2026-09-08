@@ -53,7 +53,7 @@ sealed interface RomDispatchResult {
     data class Failed(val reason: String) : RomDispatchResult
 }
 
-internal enum class EmulatorContract { VIEW, MELONDS, BOOT_PATH, RETROARCH, DETECTION_ONLY }
+internal enum class EmulatorContract { VIEW, MELONDS, BOOT_PATH, RETROARCH, GAMENATIVE, GAMEHUB_STEAM, DETECTION_ONLY }
 
 internal data class EmulatorProfile(
     val id: String,

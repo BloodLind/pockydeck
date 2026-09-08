@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Environment
 import java.io.FileNotFoundException
 import java.io.IOException
+import dev.handheld.launcher.core.domain.rom.scan.PcGameShortcut
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -52,8 +53,20 @@ class AndroidRomLauncher(
         val tree = resolver.validatedTree(input)
         val appInfo = resolver.packageInfo(profile.packageName)?.applicationInfo
             ?: return@withContext RomDispatchResult.Unavailable("The emulator was removed. Choose another app.")
+        val pcGameId = if (profile.contract in setOf(EmulatorContract.GAMENATIVE, EmulatorContract.GAMEHUB_STEAM)) {
+            try {
+                val bytes = applicationContext.contentResolver.openInputStream(Uri.parse(input.documentUri))?.use {
+                    it.readNBytes(PcGameShortcut.MAX_BYTES + 1)
+                } ?: return@withContext RomDispatchResult.Unreadable("The PC shortcut is unavailable. Reconnect its folder and rescan.")
+                if (bytes.size > PcGameShortcut.MAX_BYTES) return@withContext RomDispatchResult.Unsupported("This PC shortcut is too large. Export it again from GameNative.")
+                PcGameShortcut.gameId(bytes.toString(Charsets.UTF_8))
+                    ?: return@withContext RomDispatchResult.Unsupported("This PC shortcut needs one positive game ID. Export it again from GameNative.")
+            } catch (_: Exception) {
+                return@withContext RomDispatchResult.Unreadable("The PC shortcut could not be read. Restore folder access and rescan.")
+            }
+        } else null
         val intent = try {
-            RomIntentFactory.build(profile, input, tree, appInfo.dataDir, Environment.getExternalStorageDirectory().absolutePath)
+            RomIntentFactory.build(profile, input, tree, appInfo.dataDir, Environment.getExternalStorageDirectory().absolutePath, pcGameId)
         } catch (_: IllegalArgumentException) {
             return@withContext RomDispatchResult.Unsupported("This game or core configuration cannot be passed to the emulator.")
         } catch (_: NoSuchElementException) {

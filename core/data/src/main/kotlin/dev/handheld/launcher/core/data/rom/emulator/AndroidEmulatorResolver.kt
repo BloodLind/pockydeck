@@ -67,6 +67,8 @@ class AndroidEmulatorResolver(
         val reason = when {
             profile.contract == EmulatorContract.DETECTION_ONLY -> profile.unavailableReason
             !componentAvailable -> "This installed version does not expose the expected ROM entry point. Update the emulator or choose another app."
+            profile.contract == EmulatorContract.GAMENATIVE && !supportsGameNative(info.versionName) ->
+                "Update GameNative to version 1.2.0 or newer for exported PC game shortcuts."
             profile.contract == EmulatorContract.RETROARCH && !supportsRetroArchSaf(info.versionName) ->
                 "Update RetroArch to version 1.22.2 or newer for this folder launch adapter."
             else -> null
@@ -104,6 +106,12 @@ class AndroidEmulatorResolver(
     }
 
     internal companion object {
+        fun supportsGameNative(version: String?): Boolean {
+            val match = Regex("^(\\d+)\\.(\\d+)\\.(\\d+)").find(version.orEmpty()) ?: return false
+            val numbers = match.groupValues.drop(1).map { it.toIntOrNull() ?: return false }
+            return numbers[0] > 1 || numbers[0] == 1 && numbers[1] >= 2
+        }
+
         fun isDocumentUri(value: String): Boolean = try {
             val uri = Uri.parse(value)
             uri.scheme == "content" && !uri.authority.isNullOrBlank() && uri.fragment == null && uri.query == null

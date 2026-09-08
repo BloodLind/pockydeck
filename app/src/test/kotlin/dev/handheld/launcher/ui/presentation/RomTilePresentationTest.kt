@@ -43,7 +43,7 @@ class RomTilePresentationTest {
 
     @Test
     fun `every supported platform has a compact caption in both card locations`() {
-        assertEquals(56, RomPlatforms.all.size)
+        assertEquals(57, RomPlatforms.all.size)
         RomPlatforms.all.forEach { platform ->
             val model = game(platform.id).toTileUiModel()
             assertEquals(platform.id, model.subtitle, model.platformLabel)
@@ -62,8 +62,8 @@ class RomTilePresentationTest {
 
     @Test
     fun `abbreviations distinguish similar handheld and disc platforms`() {
-        val ids = listOf("gb", "gbc", "gba", "nds", "3ds", "psx", "ps2", "psp", "psvita", "pce", "pcecd")
-        assertEquals(listOf("GB", "GBC", "GBA", "NDS", "3DS", "PSX", "PS2", "PSP", "PSV", "PCE", "PCE CD"),
+        val ids = listOf("gb", "gbc", "gba", "nds", "3ds", "psx", "ps2", "psp", "psvita", "pce", "pcecd", "windows")
+        assertEquals(listOf("GB", "GBC", "GBA", "NDS", "3DS", "PSX", "PS2", "PSP", "PSV", "PCE", "PCE CD", "PC"),
             ids.map(RomPlatformLabels::shortLabel))
     }
 

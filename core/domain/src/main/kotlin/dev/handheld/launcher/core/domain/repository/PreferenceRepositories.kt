@@ -17,6 +17,7 @@ interface DisplayPreferenceRepository {
     val preferences: Flow<DisplayPreferences>
     suspend fun setUiScalePercent(percent: Int)
     suspend fun setReduceMotion(enabled: Boolean)
+    suspend fun setCollectionListMode(destination: LauncherDestination, isList: Boolean)
 }
 
 /** Each destination owns an independent compact snapshot. */

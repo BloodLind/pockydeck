@@ -146,7 +146,7 @@ private fun CardActivation(
         }
         if (caption != null) {
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                frame(Modifier.size(minOf(maxWidth, 208.dp * LauncherTheme.referenceScale,
+                frame(Modifier.size(minOf(maxWidth, 176.dp * LauncherTheme.referenceScale,
                     maxArtworkSize.coerceAtLeast(0.dp))))
             }
         } else frame(Modifier)
@@ -301,8 +301,11 @@ fun SearchResultCard(
         onActivate, onFocusChanged, modifier, RoundedCornerShape(LauncherTheme.shapes.smallControl),
         focusFrameWidth, focusLift) {
         Row(Modifier.fillMaxWidth().padding(LauncherTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-            CardArtwork(Modifier.size(imageSize), artwork, badge, status, badgePadding = LauncherTheme.spacing.xxs / 2)
-            TileCaption(title, subtitle, Modifier.weight(1f).padding(start = LauncherTheme.spacing.sm), subtitleColor)
+            CardArtwork(Modifier.size(imageSize), artwork, badge, badgePadding = LauncherTheme.spacing.xxs / 2)
+            Column(Modifier.weight(1f).padding(start = LauncherTheme.spacing.sm)) {
+                TileCaption(title, subtitle, subtitleColor = subtitleColor, reserveSubtitle = status == null)
+                status?.invoke()
+            }
         }
     }
 }

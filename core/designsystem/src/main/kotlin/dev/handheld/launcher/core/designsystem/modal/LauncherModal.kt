@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.core.designsystem.contract.ModalFocusLifecycle
 import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
+import dev.handheld.launcher.core.designsystem.controls.FilterChip
 import dev.handheld.launcher.core.designsystem.foundation.LauncherSurface
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
@@ -57,6 +58,7 @@ fun LauncherDialog(
     modifier: Modifier = Modifier,
     visible: Boolean = true,
     lifecycle: ModalFocusLifecycle = ModalFocusLifecycle.None,
+    compactDismiss: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!visible) return
@@ -96,7 +98,9 @@ fun LauncherDialog(
                     verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md),
                     content = content,
                 )
-                LauncherButton("Close", onDismissRequest, Modifier.fillMaxWidth())
+                if (compactDismiss) Box(Modifier.fillMaxWidth()) {
+                    FilterChip("Close", false, { onDismissRequest() }, Modifier.align(Alignment.CenterEnd))
+                } else LauncherButton("Close", onDismissRequest, Modifier.fillMaxWidth())
             }
         }
     }

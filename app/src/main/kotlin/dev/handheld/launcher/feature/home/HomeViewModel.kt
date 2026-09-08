@@ -51,6 +51,8 @@ data class HomeUiState(
     val pendingLaunchItemId: ItemId? = null,
     val notice: HomeNotice? = null,
     val focusRequestSequence: Long = 0,
+    val returnToStartSequence: Long = 0,
+    val followingStart: Boolean = false,
 ) {
     val selectedItem: TileUiModel?
         get() = items.firstOrNull { it.itemId == selectedItemId }
@@ -77,6 +79,8 @@ private data class HomePosition(
     val firstVisibleItemId: ItemId? = null,
     val firstVisibleOffsetPx: Int = 0,
     val focusRequestSequence: Long = 0,
+    val returnToStartSequence: Long = 0,
+    val followStart: Boolean = false,
 )
 
 private data class HomeCatalogPresentation(
@@ -141,15 +145,19 @@ class HomeViewModel(
         position,
     ) { catalog, refresh, currentPosition ->
         val orderedIds = catalog.orderedIds
-        val selected = currentPosition.selectedItemId?.takeIf { it in orderedIds }
-            ?: nearestRemainingId(currentPosition.selectedItemId, priorOrderedIds, orderedIds)
-            ?: nearestRemainingId(lastResolvedPosition.selectedItemId, priorOrderedIds, orderedIds)
-            ?: orderedIds.firstOrNull()
-        val anchor = currentPosition.firstVisibleItemId?.takeIf { it in orderedIds }
-            ?: nearestRemainingId(currentPosition.firstVisibleItemId, priorOrderedIds, orderedIds)
-            ?: nearestRemainingId(lastResolvedPosition.firstVisibleItemId, priorOrderedIds, orderedIds)
-            ?: selected
-        val selectedWasRemoved = currentPosition.selectedItemId != null &&
+        val selected = if (currentPosition.followStart) orderedIds.firstOrNull() else {
+            currentPosition.selectedItemId?.takeIf { it in orderedIds }
+                ?: nearestRemainingId(currentPosition.selectedItemId, priorOrderedIds, orderedIds)
+                ?: nearestRemainingId(lastResolvedPosition.selectedItemId, priorOrderedIds, orderedIds)
+                ?: orderedIds.firstOrNull()
+        }
+        val anchor = if (currentPosition.followStart) orderedIds.firstOrNull() else {
+            currentPosition.firstVisibleItemId?.takeIf { it in orderedIds }
+                ?: nearestRemainingId(currentPosition.firstVisibleItemId, priorOrderedIds, orderedIds)
+                ?: nearestRemainingId(lastResolvedPosition.firstVisibleItemId, priorOrderedIds, orderedIds)
+                ?: selected
+        }
+        val selectedWasRemoved = !currentPosition.followStart && currentPosition.selectedItemId != null &&
             currentPosition.selectedItemId !in orderedIds && priorOrderedIds.isNotEmpty()
         priorOrderedIds = orderedIds
         lastResolvedPosition = currentPosition.copy(
@@ -160,7 +168,7 @@ class HomeViewModel(
             items = catalog.items,
             selectedItemId = selected,
             firstVisibleItemId = anchor,
-            firstVisibleOffsetPx = currentPosition.firstVisibleOffsetPx,
+            firstVisibleOffsetPx = if (currentPosition.followStart) 0 else currentPosition.firstVisibleOffsetPx,
             loading = false,
             refreshState = refresh,
             inventoryIncomplete = catalog.inventoryIncomplete,
@@ -172,6 +180,8 @@ class HomeViewModel(
                 else -> null
             },
             focusRequestSequence = currentPosition.focusRequestSequence,
+            returnToStartSequence = currentPosition.returnToStartSequence,
+            followingStart = currentPosition.followStart,
         )
     }.combine(launchCoordinator.state) { current, launch ->
         val homeLaunch = launch.originOrNull()?.takeIf {
@@ -231,7 +241,22 @@ class HomeViewModel(
 
     fun select(itemId: ItemId) {
         if (state.value.items.none { it.itemId == itemId }) return
-        updatePosition { copy(selectedItemId = itemId) }
+        updatePosition { copy(
+            selectedItemId = itemId,
+            followStart = followStart && itemId == state.value.items.firstOrNull()?.itemId,
+        ) }
+    }
+
+    /** Explicit Home entry/resume resets both input modes, including a pending catalog projection. */
+    fun returnToStart() {
+        val firstId = state.value.items.firstOrNull()?.itemId
+        updatePosition(persistImmediately = true) { copy(
+            selectedItemId = firstId,
+            firstVisibleItemId = firstId,
+            firstVisibleOffsetPx = 0,
+            returnToStartSequence = returnToStartSequence + 1,
+            followStart = true,
+        ) }
     }
 
     fun activate(itemId: ItemId): Boolean {
@@ -245,11 +270,15 @@ class HomeViewModel(
         return launchCoordinator.submit(itemId, current.copy(selectedItemId = itemId).snapshot())
     }
 
-    fun rememberViewport(firstVisibleItemId: ItemId?, offsetPx: Int) {
+    fun rememberViewport(firstVisibleItemId: ItemId?, offsetPx: Int, returnSequence: Long? = null) {
+        // A collector from the previous Home composition must not undo a fresh reset.
+        if (returnSequence != null && returnSequence != position.value.returnToStartSequence) return
         updatePosition(persistImmediately = false, userInitiated = false) {
             copy(
                 firstVisibleItemId = firstVisibleItemId,
                 firstVisibleOffsetPx = offsetPx.coerceAtLeast(0),
+                followStart = followStart && offsetPx <= 0 &&
+                    firstVisibleItemId == state.value.items.firstOrNull()?.itemId,
             )
         }
     }
@@ -273,10 +302,11 @@ class HomeViewModel(
         // Persist the displayed recovery after removals, rather than reviving an ID
         // that no longer belongs to Home when the viewport next reports its position.
         // Before the first projection arrives, retain any durable restored identity.
+        val displayedStart = priorOrderedIds.firstOrNull().takeIf { position.value.followStart }
         position.value = position.value.copy(
-            selectedItemId = position.value.selectedItemId?.takeIf { priorOrderedIds.isEmpty() || it in priorOrderedIds }
+            selectedItemId = displayedStart ?: position.value.selectedItemId?.takeIf { priorOrderedIds.isEmpty() || it in priorOrderedIds }
                 ?: lastResolvedPosition.selectedItemId,
-            firstVisibleItemId = position.value.firstVisibleItemId?.takeIf { priorOrderedIds.isEmpty() || it in priorOrderedIds }
+            firstVisibleItemId = displayedStart ?: position.value.firstVisibleItemId?.takeIf { priorOrderedIds.isEmpty() || it in priorOrderedIds }
                 ?: lastResolvedPosition.firstVisibleItemId,
         ).transform()
         val current = position.value
@@ -287,7 +317,11 @@ class HomeViewModel(
         persistJob = viewModelScope.launch {
             if (!persistImmediately) delay(SNAPSHOT_DEBOUNCE_MS)
             try {
-                navigationSnapshotRepository.save(state.value.snapshot())
+                val snapshot = if (persistImmediately) DestinationSnapshot(
+                    LauncherDestination.HOME, current.selectedItemId,
+                    current.firstVisibleItemId, current.firstVisibleOffsetPx,
+                ) else state.value.snapshot()
+                navigationSnapshotRepository.save(snapshot)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {

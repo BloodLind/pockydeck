@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.testTag
@@ -43,6 +44,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -56,8 +59,6 @@ import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.contract.StatusPresentation
 import dev.handheld.launcher.core.designsystem.controls.ControllerGlyph
 import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
-import dev.handheld.launcher.core.designsystem.controls.StatusIndicator
-import dev.handheld.launcher.core.designsystem.controls.StatusValue as DisplayStatusValue
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.foundation.ShellBounds
 import dev.handheld.launcher.core.designsystem.foundation.ShellMetrics
@@ -85,12 +86,17 @@ enum class ShellStatusGlyph {
     Battery,
 }
 
+enum class ShellStatusTint { Neutral, Muted, Cold, Hot, Charging, Warning, Memory }
+
 /** A status source and, when available, its stable visual role. */
 @Immutable
 data class ShellStatusReading(
     val presentation: StatusPresentation,
     val glyph: ShellStatusGlyph? = null,
     val symbol: LauncherStatusGlyph? = null,
+    val tint: ShellStatusTint = ShellStatusTint.Neutral,
+    val displayText: String? = null,
+    val accessibilityDescription: String? = null,
 )
 
 /** Presentation inputs for the one persistent launcher status strip. */
@@ -221,8 +227,8 @@ private fun StatusStrip(
                 .semantics { contentDescription = "Notifications available" })
         }
         if (status.readings.isNotEmpty()) Spacer(Modifier.width(LauncherTheme.spacing.md))
-        StatusReadings(status.readings)
-        Spacer(Modifier.weight(1f))
+        StatusReadings(status.readings, Modifier.weight(1f), constrained = true)
+        Spacer(Modifier.width(LauncherTheme.spacing.sm))
         if (status.bluetoothEnabled) {
             LauncherStatusGlyphIcon(LauncherStatusGlyph.Bluetooth,
                 Modifier.size(16.dp * scale * LauncherTheme.smallControlScale),
@@ -239,6 +245,7 @@ private fun StatusStrip(
 private fun StatusReadings(
     readings: List<ShellStatusReading>,
     modifier: Modifier = Modifier,
+    constrained: Boolean = false,
 ) {
     Row(
         modifier = modifier,
@@ -248,38 +255,45 @@ private fun StatusReadings(
         readings.filter { it.presentation.shouldRender }.let { visible ->
             visible.forEachIndexed { index, reading ->
                 if (index > 0) Spacer(Modifier.width(LauncherTheme.spacing.sm))
-                StatusReading(reading)
+                StatusReading(reading, if (constrained) Modifier.weight(
+                    when (reading.glyph) { ShellStatusGlyph.Temperature -> 1f; ShellStatusGlyph.Memory -> 1.7f; else -> 2f },
+                    fill = false,
+                ) else Modifier, constrained = constrained)
             }
         }
     }
 }
 
 @Composable
-private fun StatusReading(reading: ShellStatusReading) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
+private fun StatusReading(reading: ShellStatusReading, modifier: Modifier = Modifier, constrained: Boolean = false) {
+    val description = reading.accessibilityDescription ?: "${reading.presentation.contentDescription}: ${
+        (reading.presentation.value as? StatusValue.Available<String>)?.value ?: "Unavailable"}"
+    Row(modifier.clearAndSetSemantics {
+        contentDescription = description
+        if (reading.presentation.value == StatusValue.Unavailable) stateDescription = "Unavailable"
+    }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
         reading.glyph?.let { glyph -> ShellStatusGlyphIcon(glyph, reading.symbol,
-            if (glyph == ShellStatusGlyph.Wifi) reading.presentation.contentDescription + ": " +
-                ((reading.presentation.value as? StatusValue.Available<String>)?.value ?: "Unavailable") else null) }
+            reading.tint) }
         if (reading.glyph != ShellStatusGlyph.Wifi)
-            StatusIndicator(reading.presentation.asDisplayStatus(), label = reading.presentation.label)
+            LauncherText(reading.displayText ?: reading.presentation.displayedValue.orEmpty(),
+                modifier = if (constrained) Modifier.weight(1f, fill = false) else Modifier,
+                style = LauncherTheme.typography.statusValue,
+                color = if (reading.presentation.value == StatusValue.Unavailable) LauncherTheme.colors.textSecondary else LauncherTheme.colors.textPrimary,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
-/** Symbols from the HTML design preview; semantic text stays with StatusIndicator. */
+/** Symbols from the HTML design preview; the enclosing reading owns complete semantic text. */
 @Composable
-private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph, symbolOverride: LauncherStatusGlyph?, description: String?) {
-    val color = when {
-        symbolOverride in setOf(LauncherStatusGlyph.Battery0, LauncherStatusGlyph.Battery1,
-            LauncherStatusGlyph.TemperatureHigh, LauncherStatusGlyph.MemoryHigh, LauncherStatusGlyph.StorageLow) -> LauncherTheme.colors.cancel
-        symbolOverride == LauncherStatusGlyph.TemperatureLow -> LauncherTheme.colors.textMuted
-        symbolOverride == LauncherStatusGlyph.WifiOff || symbolOverride == LauncherStatusGlyph.BatteryUnknown -> LauncherTheme.colors.textSecondary
-        else -> when (glyph) {
-        ShellStatusGlyph.Temperature -> LauncherTheme.colors.cancel
-        ShellStatusGlyph.Memory -> LauncherTheme.colors.focus
-        ShellStatusGlyph.Storage -> LauncherTheme.colors.textMuted
-        ShellStatusGlyph.Battery -> LauncherTheme.colors.confirm
-        ShellStatusGlyph.Wifi -> LauncherTheme.colors.textPrimary
-        }
+private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph, symbolOverride: LauncherStatusGlyph?, tint: ShellStatusTint) {
+    val color = when (tint) {
+        ShellStatusTint.Neutral -> LauncherTheme.colors.textPrimary
+        ShellStatusTint.Muted -> LauncherTheme.colors.textMuted
+        ShellStatusTint.Cold -> Color(0xFF67C7F5)
+        ShellStatusTint.Hot -> LauncherTheme.colors.cancel
+        ShellStatusTint.Charging -> LauncherTheme.colors.confirm
+        ShellStatusTint.Warning -> Color(0xFFFACC15)
+        ShellStatusTint.Memory -> Color(0xFFA5A5F3)
     }
     val symbol = symbolOverride ?: when (glyph) {
         ShellStatusGlyph.Temperature -> LauncherStatusGlyph.Temperature
@@ -289,7 +303,7 @@ private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph, symbolOverride: Launch
         ShellStatusGlyph.Battery -> LauncherStatusGlyph.Battery
     }
     val glyphSize = 16.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
-    LauncherStatusGlyphIcon(symbol, Modifier.size(glyphSize), tint = color, contentDescription = description)
+    LauncherStatusGlyphIcon(symbol, Modifier.size(glyphSize), tint = color, contentDescription = null)
 }
 
 @Composable
@@ -308,12 +322,6 @@ private fun rememberLocalClock(): String {
         }
     }
     return clock
-}
-
-private fun StatusPresentation.asDisplayStatus(): DisplayStatusValue = when (val source = value) {
-    is StatusValue.Available -> DisplayStatusValue.Available(source.value)
-    StatusValue.Unavailable -> DisplayStatusValue.Unavailable(contentDescription)
-    StatusValue.Unsupported -> DisplayStatusValue.Unsupported
 }
 
 @Composable

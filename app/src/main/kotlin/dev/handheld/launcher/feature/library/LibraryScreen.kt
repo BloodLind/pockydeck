@@ -17,4 +17,7 @@ fun LibraryScreen(
     iconLoader: AndroidIconLoader? = null,
     restoreFocusRequest: Int = 1,
     allowFocusRequest: Boolean = true,
-) = CollectionDestinationScreen("Library", state, modifier, callbacks, systemActions, iconLoader, restoreFocusRequest, allowFocusRequest)
+    isList: Boolean = false,
+    onLayoutChange: (Boolean) -> Unit = {},
+) = CollectionDestinationScreen("Library", state, modifier, callbacks, systemActions, iconLoader, restoreFocusRequest, allowFocusRequest,
+    isList = isList, onLayoutChange = onLayoutChange)

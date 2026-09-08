@@ -347,7 +347,7 @@ class MainActivityInputDeviceTest {
 
         var testFailure: Throwable? = null
         try {
-            for (percent in listOf(120, 100)) {
+            for (percent in listOf(110, 120, 100)) {
                 chooseScale(percent)
                 compose.waitForIdle()
                 assertChromeInsideNativeWindow(percent)
@@ -465,9 +465,13 @@ class MainActivityInputDeviceTest {
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
         compose.onNode(hasContentDescription("Show all console filters in a grid")).assertIsFocused()
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNodeWithTag("collection-layout").assertIsFocused()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
         val sortLabel = if (library.state.value.sort == "recent") "Recent" else "Title"
         compose.onNode(hasContentDescription("Sort: $sortLabel")).assertIsFocused()
         assertEquals(stripScroll, filterStripScroll(), .001f)
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        compose.onNodeWithTag("collection-layout").assertIsFocused()
         press(KeyEvent.KEYCODE_DPAD_LEFT)
         compose.onNode(hasContentDescription("Show all console filters in a grid")).assertIsFocused()
         for (tag in visible.asReversed()) {

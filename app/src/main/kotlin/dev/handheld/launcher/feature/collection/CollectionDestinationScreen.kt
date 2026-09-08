@@ -30,6 +30,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import dev.handheld.launcher.core.designsystem.controls.SortSelector
 import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.input.RegisterPageNavigation
@@ -110,6 +113,8 @@ fun CollectionDestinationScreen(
     iconLoader: AndroidIconLoader? = null,
     restoreFocusRequest: Int = 1,
     allowFocusRequest: Boolean = true,
+    isList: Boolean = false,
+    onLayoutChange: (Boolean) -> Unit = {},
 ) = BoxWithConstraints(modifier.fillMaxSize()) {
     val columns = when {
         maxWidth >= 760.dp -> 5
@@ -118,8 +123,8 @@ fun CollectionDestinationScreen(
     }
     val fontScale = LocalDensity.current.fontScale
     CollectionBody(title, state, callbacks, systemActions, iconLoader,
-        if (fontScale > 1.2f) (columns - 1).coerceAtLeast(2) else columns,
-        restoreFocusRequest, allowFocusRequest)
+        if (isList) 1 else if (fontScale > 1.2f) (columns - 1).coerceAtLeast(2) else columns,
+        restoreFocusRequest, allowFocusRequest, isList, onLayoutChange)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -133,6 +138,8 @@ private fun CollectionBody(
     columns: Int,
     restoreFocusRequest: Int,
     allowFocusRequest: Boolean,
+    isList: Boolean,
+    onLayoutChange: (Boolean) -> Unit,
 ) {
     val grid = rememberLazyGridState()
     val laidOutItemCount by remember { derivedStateOf { grid.layoutInfo.totalItemsCount } }
@@ -146,16 +153,17 @@ private fun CollectionBody(
     val renderedItemIds = remember(state.items) { state.items.map { it.id } }
     val itemKeys = remember(renderedItemIds) { renderedItemIds.map { it.value } }
     val currentRenderedItemIds by rememberUpdatedState(renderedItemIds)
-    val currentCriteria by rememberUpdatedState(state.filter to state.sort)
+    val currentCriteria by rememberUpdatedState(Triple(state.filter, state.sort, isList))
     var focusedGridItem by remember { mutableStateOf<ItemId?>(null) }
     var gridHasLaidOutItems by remember { mutableStateOf(false) }
-    var handledFocusRequest by remember { mutableStateOf<Triple<Int, String, String>?>(null) }
+    var handledFocusRequest by remember { mutableStateOf<Pair<Triple<Int, String, String>, Boolean>?>(null) }
     var viewportRestored by remember { mutableStateOf(false) }
     var filterStripFocused by remember { mutableStateOf(false) }
     var focusedHeaderKey by remember { mutableStateOf<String?>(null) }
     val allFilterFocus = remember { FocusRequester() }
     val allFiltersFocus = remember { FocusRequester() }
     val sortFocus = remember { FocusRequester() }
+    val layoutFocus = remember { FocusRequester() }
     val filterRow = rememberLazyListState()
     val categoryRequesters = remember { mutableMapOf<String, FocusRequester>() }
     val scope = rememberCoroutineScope()
@@ -167,7 +175,7 @@ private fun CollectionBody(
         if (restoreViewport && anchor >= 0) grid.scrollToItem(anchor, state.firstVisibleOffsetPx)
         val id = state.selectedItemId?.takeIf { selected -> state.items.any { it.id == selected } }
             ?: state.items.firstOrNull()?.id ?: return false
-        val requestedCriteria = state.filter to state.sort
+        val requestedCriteria = Triple(state.filter, state.sort, isList)
         repeat(4) {
             withFrameNanos { }
             if (!focusAllowed || currentCriteria != requestedCriteria) return false
@@ -199,6 +207,7 @@ private fun CollectionBody(
             val path = buildList {
                 add("all"); addAll(visible)
                 if (callbacks.onOpenFilters != null) add("header-more")
+                add("header-layout")
                 add("header-sort")
             }
             fun requestHeader(key: String) {
@@ -206,6 +215,7 @@ private fun CollectionBody(
                     "all" -> allFilterFocus
                     "header-more" -> allFiltersFocus
                     "header-sort" -> sortFocus
+                    "header-layout" -> layoutFocus
                     else -> categoryRequesters[key]
                 }?.requestFocus()
             }
@@ -236,7 +246,7 @@ private fun CollectionBody(
             true
         } else navigator.move(direction)
     }
-    val focusRequest = Triple(restoreFocusRequest, state.filter, state.sort)
+    val focusRequest = Triple(restoreFocusRequest, state.filter, state.sort) to isList
     val restoringCardFocus = controllerInput && allowFocusRequest && restoreFocusRequest > 0 &&
         focusRequest != handledFocusRequest && (state.items.isNotEmpty() || state.searching)
     LaunchedEffect(focusRequest, state.loading, state.searching, renderedItemIds, allowFocusRequest, controllerInput, laidOutItemCount) {
@@ -270,7 +280,13 @@ private fun CollectionBody(
         // fallback focus while a changed filter is restoring the resulting card.
         CompositionLocalProvider(LocalControllerInput provides (controllerInput && !restoringCardFocus)) {
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val compactHeader = maxWidth < 560.dp
+            val measureText = rememberTextWidth()
+            val controls = collectionControlWidths(state, callbacks, measureText)
+            val titleWidth = measureText(title, LauncherTheme.typography.pageTitle)
+            val sortWidth = (measureText(if (state.sort == "recent") "Recent" else "Title", LauncherTheme.typography.controlLabel) +
+                32.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale +
+                (LauncherTheme.spacing.sm + LauncherTheme.spacing.xxs) * 2f).coerceAtLeast(48.dp)
+            val compactHeader = maxWidth < titleWidth + controls.minimumWidth + sortWidth + 48.dp + LauncherTheme.spacing.xs * 3f
             val headerCallbacks = callbacks.copy(onFocusedAction = {
                 if (!restoringCardFocus) callbacks.onFocusedAction(it)
             })
@@ -280,27 +296,39 @@ private fun CollectionBody(
             val sortControl: @Composable () -> Unit = {
                 val sort = callbacks.onOpenSort ?: callbacks.onToggleSort
                 SortSelector(if (state.sort == "recent") "Recent" else "Title", listOf("Recent", "Title"), sort,
-                    Modifier.height(48.dp).focusRequester(sortFocus),
+                    Modifier.heightIn(min = 48.dp).focusRequester(sortFocus).testTag("collection-sort"),
                     onFocusChanged = { focused ->
                         headerFocus("header-sort", focused)
                         headerCallbacks.focused("Sort", LauncherActionMeaning.CHANGE_FILTER, sort, focused)
                     })
             }
             Column {
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("collection-header"),
+                    horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
                     verticalAlignment = Alignment.CenterVertically) {
                     LauncherText(title, style = LauncherTheme.typography.pageTitle,
-                        modifier = if (compactHeader) Modifier.weight(1f) else Modifier.width(102.dp),
+                        modifier = (if (compactHeader) Modifier.weight(1f) else Modifier).testTag("collection-title"),
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (!compactHeader) CollectionFilters(state, headerCallbacks, Modifier.weight(1f), allFilterFocus, allFiltersFocus,
-                        filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it })
+                        filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it }, controls = controls)
+                    val switchLayout = { onLayoutChange(!isList) }
+                    val layoutLabel = if (isList) "Switch to grid view" else "Switch to list view"
+                    FilterChip("", isList, { switchLayout() }, Modifier.focusRequester(layoutFocus).testTag("collection-layout"),
+                        contentDescription = layoutLabel,
+                        onFocusChanged = { focused ->
+                            headerFocus("header-layout", focused)
+                            headerCallbacks.focused(layoutLabel, LauncherActionMeaning.CHANGE_FILTER, switchLayout, focused)
+                        },
+                        trailingIcon = {
+                            LauncherGlyphIcon(if (isList) LauncherGlyph.Sort else LauncherGlyph.Library,
+                                Modifier.size(16.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale), contentDescription = null)
+                        })
                     sortControl()
                 }
                 LauncherText(countLabel(state.items.size, visibleSystemActions.size),
                     style = LauncherTheme.typography.tileSubtitle, color = LauncherTheme.colors.textSecondary)
                 if (compactHeader) CollectionFilters(state, headerCallbacks, Modifier.fillMaxWidth(), allFilterFocus, allFiltersFocus,
-                    filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it })
+                    filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it }, controls = controls)
             }
         }
         }
@@ -329,7 +357,7 @@ private fun CollectionBody(
                     val model = item.toTileUiModel(state.overrides[item.id], item.id in state.recentIds)
                     val open = { callbacks.onSelect(item.id); callbacks.onOpen(item.id) }
                     LibraryItemCard(
-                        model, LibraryItemCardVariant.Collection, state.selectedItemId == item.id,
+                        model, if (isList) LibraryItemCardVariant.SearchResult else LibraryItemCardVariant.Collection, state.selectedItemId == item.id,
                         // Keep the native target attached during filtering. The ViewModel's
                         // synchronous launch guard rejects activation until criteria settle.
                         activationEnabled = model.canOpen,
@@ -376,11 +404,12 @@ private fun CollectionFilters(
     categoryRequesters: MutableMap<String, FocusRequester>,
     onHeaderFocus: (String, Boolean) -> Unit,
     onStripFocused: (Boolean) -> Unit,
+    controls: CollectionControlWidths,
 ) {
     val options = remember(state.destination, state.allItems, state.overrides, state.favorites) { collectionFilterOptions(state) }
     if (options.isEmpty()) return
     val categories = remember(options) { options.filter { it.key != "all" } }
-    Row(modifier.height(48.dp), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
+    Row(modifier.heightIn(min = 48.dp).testTag("collection-filters"), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically) {
         FilterChip("All", state.filter == "all", { callbacks.onFilter("all") },
             Modifier.focusRequester(allFocus).testTag("collection-filter-all"),
@@ -393,7 +422,11 @@ private fun CollectionFilters(
             Box(Modifier.width(1.dp).height(20.dp).border(1.dp, LauncherTheme.colors.borderEmphasis))
             ControllerGlyph("L2", semanticLabel = "L2: previous filter; hold to accelerate")
             val reducedMotion = LauncherTheme.motion.reducedMotion
-            LaunchedEffect(state.filter, categories.map { it.key }) {
+            // Fit whole intrinsic chip allocations, then show one fewer category when
+            // another complete target still fits. No fixed blank gap grows with UI scale.
+            BoxWithConstraints(Modifier.weight(1f, fill = false)) {
+            val stripWidth = collectionStripWidth(maxWidth, controls.categoryWidths)
+            LaunchedEffect(state.filter, categories.map { it.key }, stripWidth) {
                 val selected = categories.indexOfFirst { it.key == state.filter }
                 if (selected >= 0) {
                     val item = row.layoutInfo.visibleItemsInfo.firstOrNull { it.index == selected }
@@ -402,12 +435,8 @@ private fun CollectionFilters(
                     }
                 }
             }
-            // Reserve roughly one short category less than the available width. This
-            // keeps the chooser and sort visually separate even at enlarged UI scales.
-            BoxWithConstraints(Modifier.weight(1f, fill = false)) {
-            val stripWidth = (maxWidth - 72.dp * LauncherTheme.referenceScale).coerceAtLeast(48.dp)
             LazyRow(state = row,
-                modifier = Modifier.widthIn(max = stripWidth).clipToBounds().testTag("collection-filter-strip")
+                modifier = Modifier.width(stripWidth).clipToBounds().testTag("collection-filter-strip")
                     .onFocusChanged { onStripFocused(it.hasFocus) }.focusGroup(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 items(categories.size, key = { categories[it].key }) { index ->
@@ -427,7 +456,7 @@ private fun CollectionFilters(
             ControllerGlyph("R2", semanticLabel = "R2: next filter; hold to accelerate")
         } else androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
         callbacks.onOpenFilters?.let { open ->
-            FilterChip("All filters", false, { open() }, Modifier.focusRequester(moreFocus),
+            FilterChip("All filters", false, { open() }, Modifier.focusRequester(moreFocus).testTag("collection-all-filters"),
                 contentDescription = "Show all console filters in a grid",
                 onFocusChanged = { focused ->
                     onHeaderFocus("header-more", focused)
@@ -436,6 +465,50 @@ private fun CollectionFilters(
                 trailingIcon = { LauncherGlyphIcon(LauncherGlyph.Apps, Modifier.size(16.dp), contentDescription = null) })
         }
     }
+}
+
+private data class CollectionControlWidths(val categoryWidths: List<Dp>, val minimumWidth: Dp)
+
+@Composable
+private fun rememberTextWidth(): (String, TextStyle) -> Dp {
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(textMeasurer, density) {
+        { text, style -> with(density) { textMeasurer.measure(text, style, maxLines = 1).size.width.toDp() } }
+    }
+}
+
+@Composable
+private fun collectionControlWidths(
+    state: CollectionUiState,
+    callbacks: CollectionScreenCallbacks,
+    textWidth: (String, TextStyle) -> Dp,
+): CollectionControlWidths {
+    val spacing = LauncherTheme.spacing
+    val style = LauncherTheme.typography.controlLabel
+    val chipPadding = 20.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    fun chipWidth(label: String, trailingWidth: Dp = 0.dp) =
+        (textWidth(label, style) + chipPadding + trailingWidth + 1.dp).coerceAtLeast(48.dp)
+    val categories = collectionFilterOptions(state).filter { it.key != "all" }
+    val categoryWidths = categories.map { chipWidth(it.label) }
+    val moreWidth = if (callbacks.onOpenFilters != null) chipWidth("All filters", 16.dp + spacing.xxs / 2f) else 0.dp
+    val minimumWidth = if (categories.isEmpty()) chipWidth("All") + moreWidth + spacing.xs
+        else chipWidth("All") + 1.dp +
+            textWidth("L2", style) + textWidth("R2", style) + spacing.xs * 4f +
+            moreWidth + (categoryWidths.maxOrNull() ?: 48.dp) +
+            spacing.xs * if (callbacks.onOpenFilters != null) 5f else 4f
+    return CollectionControlWidths(categoryWidths, minimumWidth)
+}
+
+private fun collectionStripWidth(available: Dp, widths: List<Dp>): Dp {
+    var used = 0.dp
+    val fitted = widths.takeWhile { width ->
+        val next = used + (if (used > 0.dp) 2.dp else 0.dp) + width
+        (next <= available).also { if (it) used = next }
+    }
+    val keep = if (fitted.size > 1) fitted.dropLast(1) else fitted
+    val wholeTargetsWidth = keep.foldIndexed(0.dp) { index, total, width -> total + width + if (index > 0) 2.dp else 0.dp }
+    return maxOf(wholeTargetsWidth, widths.maxOrNull() ?: 48.dp).coerceAtMost(available).coerceAtLeast(0.dp)
 }
 
 private fun CollectionScreenCallbacks.focused(label: String, meaning: LauncherActionMeaning, action: () -> Unit, focused: Boolean) {

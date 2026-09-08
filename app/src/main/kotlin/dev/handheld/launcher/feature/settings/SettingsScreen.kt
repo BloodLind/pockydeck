@@ -65,6 +65,8 @@ data class SettingsScreenState(
     val uiScalePercent: Int = 100,
     val reduceMotion: Boolean = false,
     val notificationAccessGranted: Boolean = false,
+    val runningIndicatorsEnabled: Boolean = false,
+    val runningStatusSummary: String = "Show verified app and emulator process status",
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -78,6 +80,8 @@ data class SettingsCallbacks(
     val onSetUiScalePercent: (Int) -> Unit = {},
     val onSetReduceMotion: (Boolean) -> Unit = {},
     val onSetupNotificationAccess: () -> Unit = {},
+    val onSetRunningIndicators: (Boolean) -> Unit = {},
+    val onSetupRunningStatus: () -> Unit = {},
 )
 
 private val settingsSections = listOf("Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
@@ -184,8 +188,22 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
                 modifier = if (section == "Launcher") Modifier.focusRequester(initial) else Modifier,
                 onActivate = callbacks.onRequestDefaultHome,
                 onFocusChanged = settingsFocus("Set as Home launcher", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onRequestDefaultHome, callbacks.onFocusedAction))
-            state.categorySummaries.forEach { summary -> ActionRow(category(summary.category), "${summary.count} items", onActivate = { callbacks.onOpenCategory(summary.category) },
-                onFocusChanged = settingsFocus(category(summary.category), LauncherActionMeaning.CHANGE_FILTER, { callbacks.onOpenCategory(summary.category) }, callbacks.onFocusedAction)) }
+            state.categorySummaries.forEach { summary ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = LauncherTheme.spacing.md, vertical = LauncherTheme.spacing.sm),
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    LauncherText(category(summary.category), style = LauncherTheme.typography.settingLabel)
+                    LauncherText("${summary.count} items", style = LauncherTheme.typography.settingSupporting,
+                        color = LauncherTheme.colors.textSecondary)
+                }
+            }
+            val toggleRunning = { latestCallbacks.onSetRunningIndicators(!latestState.runningIndicatorsEnabled) }
+            ToggleRow("Running indicators", state.runningIndicatorsEnabled, callbacks.onSetRunningIndicators,
+                supportingText = state.runningStatusSummary,
+                onFocusChanged = settingsFocus("Toggle running indicators", LauncherActionMeaning.CHANGE_FILTER, toggleRunning, callbacks.onFocusedAction))
+            if (state.runningIndicatorsEnabled) ActionRow("Set up Shizuku", "Optional access for live process readings",
+                onActivate = callbacks.onSetupRunningStatus,
+                onFocusChanged = settingsFocus("Set up Shizuku", LauncherActionMeaning.OPEN_SETTINGS,
+                    callbacks.onSetupRunningStatus, callbacks.onFocusedAction))
         }
         if (section == "All" || section == "ROM folders") {
             RomSourcesScreen(

@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -36,6 +37,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,6 +80,8 @@ fun HomeRoute(
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val renderedReturnSequence = state.returnToStartSequence
+    val renderedFirstId = state.items.firstOrNull()?.itemId
     HomeScreen(
         state = state,
         metrics = metrics,
@@ -90,7 +94,11 @@ fun HomeRoute(
         allowFocusRequest = allowFocusRequest,
         pageActivationRequest = pageActivationRequest,
         onRefresh = viewModel::refresh,
-        onViewportChanged = viewModel::rememberViewport,
+        onViewportChanged = { id, offset ->
+            if (renderedFirstId == viewModel.state.value.items.firstOrNull()?.itemId) {
+                viewModel.rememberViewport(id, offset, renderedReturnSequence)
+            }
+        },
         onFocusedActionChanged = onFocusedActionChanged,
     )
 }
@@ -125,6 +133,14 @@ fun HomeScreen(
     var handledFocusRequestSequence by remember {
         mutableLongStateOf(state.focusRequestSequence)
     }
+    var appliedReturnSequence by remember { mutableLongStateOf(-1) }
+    var handledReturnSequence by remember { mutableLongStateOf(-1) }
+    var restoredStartId by remember { mutableStateOf<ItemId?>(null) }
+    val positionRestored = initialRestorationComplete && appliedReturnSequence == state.returnToStartSequence &&
+        (!state.followingStart || restoredStartId == itemIds.firstOrNull())
+    val currentPositionRestored by rememberUpdatedState(positionRestored)
+    val currentFocusAllowed by rememberUpdatedState(allowFocusRequest)
+    val currentViewportChanged by rememberUpdatedState(onViewportChanged)
     val density = LocalDensity.current
     val shadowOffset = with(density) { (2.dp * metrics.referenceScale).toPx() }
     val shadowBlur = with(density) { (3.dp * metrics.referenceScale).toPx() }
@@ -178,6 +194,7 @@ fun HomeScreen(
             ) {
                 LazyRow(
                     modifier = Modifier
+                        .testTag("home-row")
                         .width(metrics.windowWidth - metrics.gutter + metrics.focusLiftReservation)
                         .height(metrics.homeCardAllocatedSize),
                     state = rowState,
@@ -198,7 +215,7 @@ fun HomeScreen(
                             iconLoader = iconLoader,
                             onActivate = activate,
                             onFocusChanged = { focused ->
-                                if (focused) {
+                                if (focused && currentPositionRestored) {
                                     onSelect(item.itemId)
                                     focusedTarget = HomeFocusTarget.Item(item.itemId)
                                 } else if (focusedTarget == HomeFocusTarget.Item(item.itemId)) {
@@ -297,14 +314,24 @@ fun HomeScreen(
         if (action != null) onFocusedActionChanged(action)
     }
 
-    LaunchedEffect(itemIds, state.loading, metrics.hasUsableHomeCard) {
-        if (!initialRestorationComplete && itemIds.isNotEmpty() && metrics.hasUsableHomeCard) {
-            val anchorIndex = itemIds.indexOf(state.firstVisibleItemId)
-            if (anchorIndex >= 0) rowState.scrollToItem(anchorIndex, state.firstVisibleOffsetPx)
+    LaunchedEffect(itemIds, state.loading, metrics.hasUsableHomeCard, state.returnToStartSequence, state.followingStart) {
+        if (itemIds.isNotEmpty() && metrics.hasUsableHomeCard &&
+            (!initialRestorationComplete || appliedReturnSequence != state.returnToStartSequence ||
+                state.followingStart && restoredStartId != itemIds.firstOrNull())) {
+            if (state.followingStart) {
+                rowState.scrollToItem(0, 0)
+            } else {
+                val anchorIndex = itemIds.indexOf(state.firstVisibleItemId)
+                if (anchorIndex >= 0) rowState.scrollToItem(anchorIndex, state.firstVisibleOffsetPx)
+            }
+            withFrameNanos { }
+            restoredStartId = itemIds.firstOrNull()
+            appliedReturnSequence = state.returnToStartSequence
             initialRestorationComplete = true
         }
     }
-    LaunchedEffect(itemIds, state.loading, state.focusRequestSequence, pageActivationRequest, metrics.hasUsableHomeCard, allowFocusRequest) {
+    LaunchedEffect(itemIds, state.loading, state.focusRequestSequence, state.returnToStartSequence, positionRestored,
+        pageActivationRequest, metrics.hasUsableHomeCard, allowFocusRequest) {
         if (!allowFocusRequest) return@LaunchedEffect
         if (itemIds.isEmpty() || !metrics.hasUsableHomeCard) {
             if (!state.loading && pageActivationRequest > 0 && pageActivationRequest != handledPageActivation) {
@@ -314,25 +341,17 @@ fun HomeScreen(
             }
             return@LaunchedEffect
         }
+        if (!positionRestored) return@LaunchedEffect
         val selectedId = state.selectedItemId ?: return@LaunchedEffect
         val selectedIndex = itemIds.indexOf(selectedId)
         if (selectedIndex < 0) return@LaunchedEffect
-        val explicitReturn = state.focusRequestSequence != handledFocusRequestSequence
+        val explicitReturn = state.focusRequestSequence != handledFocusRequestSequence || state.returnToStartSequence != handledReturnSequence
         val pageActivated = pageActivationRequest > 0 && pageActivationRequest != handledPageActivation
-        val initial = !initialRestorationComplete
-
-        if (initial) {
-            val anchorIndex = itemIds.indexOf(state.firstVisibleItemId)
-            if (anchorIndex >= 0) {
-                rowState.scrollToItem(anchorIndex, state.firstVisibleOffsetPx)
-            }
-            initialRestorationComplete = true
-        }
-
         withFrameNanos { }
+        if (!currentFocusAllowed || !currentPositionRestored) return@LaunchedEffect
         val selectedVisible = rowState.layoutInfo.visibleItemsInfo.any { it.index == selectedIndex }
         val ownsContentFocus = focusedTarget is HomeFocusTarget.Item
-        val shouldRequestFocus = explicitReturn || pageActivated || initial || ownsContentFocus
+        val shouldRequestFocus = explicitReturn || pageActivated || ownsContentFocus
         if (!shouldRequestFocus) return@LaunchedEffect
 
         if (!selectedVisible) {
@@ -340,19 +359,21 @@ fun HomeScreen(
         }
         inputMode.requestInputMode(InputMode.Keyboard)
         withFrameNanos { }
+        if (!currentFocusAllowed || !currentPositionRestored) return@LaunchedEffect
         if (rowState.layoutInfo.visibleItemsInfo.none { it.index == selectedIndex }) return@LaunchedEffect
         val requester = requesters[selectedId] ?: return@LaunchedEffect
         if (runCatching { requester.requestFocus() }.isSuccess) {
             handledPageActivation = pageActivationRequest
             handledFocusRequestSequence = state.focusRequestSequence
+            handledReturnSequence = state.returnToStartSequence
         }
     }
-    LaunchedEffect(rowState, itemIds, initialRestorationComplete) {
-        if (itemIds.isEmpty() || !initialRestorationComplete) return@LaunchedEffect
+    LaunchedEffect(rowState, itemIds, positionRestored, state.returnToStartSequence) {
+        if (itemIds.isEmpty() || !positionRestored) return@LaunchedEffect
         snapshotFlow { rowState.firstVisibleItemIndex to rowState.firstVisibleItemScrollOffset }
             .distinctUntilChanged()
             .collect { (index, offset) ->
-                onViewportChanged(itemIds.getOrNull(index), offset)
+                if (currentPositionRestored) currentViewportChanged(itemIds.getOrNull(index), offset)
             }
     }
 }

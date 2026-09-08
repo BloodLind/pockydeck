@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +61,7 @@ class LauncherPreferencesStore private constructor(
 internal object LauncherPreferenceKeys {
     val uiScalePercent = intPreferencesKey("display.ui_scale_percent")
     val reduceMotion = booleanPreferencesKey("display.reduce_motion")
+    val listDestinations = stringSetPreferencesKey("display.list_destinations")
     val confirmButton = stringPreferencesKey("controller.confirm_button")
     val backButton = stringPreferencesKey("controller.back_button")
 

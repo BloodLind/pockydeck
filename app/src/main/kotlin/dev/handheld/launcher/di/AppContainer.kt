@@ -111,7 +111,9 @@ class AppContainer(
     val romCache by lazy { PreparedRomCache(applicationContext) }
     val romController by lazy { RomFeatureController(romRepository,romSourceAccess,romScanner,
         AndroidEmulatorResolver(applicationContext),AndroidRomLauncher(applicationContext),romCache,applicationScope,
-        sharedStoragePaths,sharedRomDiscovery) }
+        sharedStoragePaths,sharedRomDiscovery, runningApps::recordEmulator) }
+    val runningApps by lazy { dev.handheld.launcher.runtime.RunningAppMonitor(applicationContext,
+        catalogRepository, romRepository, applicationScope) }
     val launchCoordinator by lazy {
         LaunchCoordinator(catalogRepository, navigationSnapshotRepository, launchDispatcher,
             successfulOpenRepository, applicationScope)

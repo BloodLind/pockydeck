@@ -52,5 +52,10 @@ Google Material Symbols
   Converted to Android VectorDrawable with original path data and a Y offset
   matching the SVG viewBox. No upstream path shapes were modified.
 
+dev.rikka.shizuku:api:13.1.5 and dev.rikka.shizuku:provider:13.1.5
+  shizuku-api-13.1.5-LICENSE.txt <- upstream MIT LICENSE
+  https://github.com/RikkaApps/Shizuku-API
+  Optional, explicitly approved Shizuku integration for read-only process presence.
+
 No dependency source files were modified. Emulator binaries, cores, ROMs and
 BIOS files are not included in these assets.

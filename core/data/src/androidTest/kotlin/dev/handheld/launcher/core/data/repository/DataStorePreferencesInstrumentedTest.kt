@@ -155,6 +155,50 @@ class DataStorePreferencesInstrumentedTest {
     }
 
     @Test
+    fun collectionLayoutsPersistIndependentlyAndConcurrentChangesKeepOtherPreferences() = runBlocking {
+        assertTrue(displayPreferences.preferences.first().listDestinations.isEmpty())
+        val mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        val snapshot = DestinationSnapshot(LauncherDestination.LIBRARY, filterKey = PageStateKey("console:gba"))
+        controllerPreferences.setConfirmBackMapping(mapping)
+        navigationSnapshots.save(snapshot)
+        displayPreferences.setUiScalePercent(110)
+        displayPreferences.setReduceMotion(true)
+        coroutineScope {
+            listOf(LauncherDestination.LIBRARY, LauncherDestination.APPS, LauncherDestination.FAVORITES).map { destination ->
+                async { displayPreferences.setCollectionListMode(destination, true) }
+            }.awaitAll()
+        }
+        assertEquals(DisplayPreferences.collectionDestinations, displayPreferences.preferences.first().listDestinations)
+        displayPreferences.setCollectionListMode(LauncherDestination.LIBRARY, false)
+        reopenStore()
+
+        assertEquals(DisplayPreferences(110, true, setOf(LauncherDestination.APPS, LauncherDestination.FAVORITES)),
+            displayPreferences.preferences.first())
+        assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+        assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.LIBRARY).first())
+    }
+
+    @Test
+    fun invalidStoredLayoutsAreIgnoredAndUnsupportedDestinationWritesChangeNothing() = runBlocking {
+        displayPreferences.setUiScalePercent(120)
+        store.dataStore.edit {
+            it[LauncherPreferenceKeys.listDestinations] = setOf("apps", "home", "unknown", "LIBRARY")
+        }
+        reopenStore()
+        assertEquals(DisplayPreferences(120, listDestinations = setOf(LauncherDestination.APPS)), displayPreferences.preferences.first())
+        val before = store.dataStore.data.first().asMap()
+        for (destination in listOf(LauncherDestination.HOME, LauncherDestination.SETTINGS, LauncherDestination.SEARCH)) {
+            assertTrue(runCatching { displayPreferences.setCollectionListMode(destination, true) }.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(before, store.dataStore.data.first().asMap())
+        }
+        store.dataStore.edit { it[stringPreferencesKey("display.list_destinations")] = "library" }
+        assertEquals(DisplayPreferences(120), displayPreferences.preferences.first())
+        displayPreferences.setCollectionListMode(LauncherDestination.LIBRARY, true)
+        reopenStore()
+        assertEquals(DisplayPreferences(120, listDestinations = setOf(LauncherDestination.LIBRARY)), displayPreferences.preferences.first())
+    }
+
+    @Test
     fun allSnapshotFieldsRemainIndependentForEveryDestinationAfterReopen() {
         runBlocking {
             val expected = LauncherDestination.entries.associateWith { destination ->

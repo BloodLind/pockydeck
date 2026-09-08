@@ -12,7 +12,6 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
-import android.os.StatFs
 import dev.handheld.launcher.core.domain.model.StatusValue
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +35,8 @@ data class DeviceStatusSnapshot(
     val wifiEnabled: StatusValue<Boolean> = StatusValue.Unavailable,
     val bluetoothEnabled: StatusValue<Boolean> = StatusValue.Unavailable,
     val notificationsPresent: StatusValue<Boolean> = StatusValue.Unavailable,
+    val batteryCharging: StatusValue<Boolean> = StatusValue.Unavailable,
+    val storageVolumes: StatusValue<List<StorageVolumeStatus>> = StatusValue.Unavailable,
 )
 
 /** Starts callbacks and modest off-main sampling only while the foreground UI collects. */
@@ -108,6 +109,9 @@ class AndroidDeviceStatusSource(context: Context) {
                     BatteryManager.EXTRA_TEMPERATURE,
                     Int.MIN_VALUE,
                 )
+                val charging = batteryChargingFromStatus(intent.getIntExtra(
+                    BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN,
+                ))
                 update { previous ->
                     previous.copy(
                         batteryPercent = if (level >= 0 && scale > 0) {
@@ -120,6 +124,7 @@ class AndroidDeviceStatusSource(context: Context) {
                         } else {
                             StatusValue.Unavailable
                         },
+                        batteryCharging = charging,
                     )
                 }
             }
@@ -144,6 +149,7 @@ class AndroidDeviceStatusSource(context: Context) {
                 it.copy(
                     batteryPercent = StatusValue.Unavailable,
                     batteryTemperatureCelsius = StatusValue.Unavailable,
+                    batteryCharging = StatusValue.Unavailable,
                 )
             }
             false
@@ -199,16 +205,13 @@ class AndroidDeviceStatusSource(context: Context) {
                 } catch (_: RuntimeException) {
                     StatusValue.Unavailable to StatusValue.Unavailable
                 }
-                val storage = try {
-                    StatusValue.Available(StatFs(context.filesDir.absolutePath).availableBytes)
-                } catch (_: RuntimeException) {
-                    StatusValue.Unavailable
-                }
+                val storage = readStorageTelemetry(context)
                 update {
                     it.copy(
                         usedMemoryBytes = memoryPair.first,
                         totalMemoryBytes = memoryPair.second,
-                        freeStorageBytes = storage,
+                        freeStorageBytes = storage.internalAvailableBytes,
+                        storageVolumes = storage.volumes,
                     )
                 }
                 delay(SAMPLE_INTERVAL_MILLIS)

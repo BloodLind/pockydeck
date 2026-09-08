@@ -70,6 +70,8 @@ class LauncherAppViewModel(
 
     fun setUiScalePercent(value: Int) = saveDisplay { displayPreferences?.setUiScalePercent(value) }
     fun setReduceMotion(value: Boolean) = saveDisplay { displayPreferences?.setReduceMotion(value) }
+    fun setCollectionListMode(destination: LauncherDestination, isList: Boolean) =
+        saveDisplay { displayPreferences?.setCollectionListMode(destination, isList) }
 
     private fun saveDisplay(write: suspend () -> Unit) {
         viewModelScope.launch {

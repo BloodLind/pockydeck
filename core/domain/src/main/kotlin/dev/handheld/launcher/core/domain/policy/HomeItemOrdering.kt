@@ -8,7 +8,7 @@ import dev.handheld.launcher.core.domain.model.LibraryItemKind
 import dev.handheld.launcher.core.domain.model.SuccessfulOpenRecord
 import dev.handheld.launcher.core.domain.model.UserItemOverrides
 
-/** Home promotes just the newest available item; older history cannot displace the game groups. */
+/** Recent items lead a stable console showcase; additional games stay in the full library. */
 object HomeItemOrdering {
     fun order(
         items: List<LibraryItem>,
@@ -17,15 +17,25 @@ object HomeItemOrdering {
     ): List<LibraryItem> {
         val active = items.filter { it.availability == Availability.Available && it.kind != LibraryItemKind.SYSTEM_ACTION }
         val latestById = records.groupBy { it.itemId }.mapValues { (_, values) -> values.maxOf { it.openOrder } }
-        val newest = active.filter { it.id in latestById }.minWithOrNull(
+        val recent = active.filter { it.id in latestById }.sortedWith(
             compareByDescending<LibraryItem> { latestById.getValue(it.id) }.then(LibraryItemOrdering.titleThenId),
-        )?.id
-        fun tier(item: LibraryItem): Int = when {
-            item.id == newest -> 0
-            item.kind == LibraryItemKind.ANDROID_APP && (overrides[item.id]?.category ?: item.category) == LibraryCategory.GAME -> 1
-            item.kind == LibraryItemKind.ROM_GAME -> 2
-            else -> 3
+        )
+        fun gameGroup(item: LibraryItem): String? = when {
+            item is LibraryItem.RomGame -> item.platformId?.let { "rom:$it" }
+            item.kind == LibraryItemKind.ANDROID_APP &&
+                (overrides[item.id]?.category ?: item.category) == LibraryCategory.GAME -> "android"
+            else -> null
         }
-        return active.sortedWith(compareBy<LibraryItem>(::tier).then(LibraryItemOrdering.titleThenId))
+        val representedGroups = recent.mapNotNull(::gameGroup).toSet()
+        val remaining = active.filterNot { it.id in latestById }
+        // Sorting before choosing representatives makes the showcase independent of
+        // scan order, Compose recomposition, and the order of history records.
+        val showcase = remaining.filter { gameGroup(it)?.let { group -> group !in representedGroups } == true }
+            .sortedWith(compareBy<LibraryItem> { if (it.kind == LibraryItemKind.ANDROID_APP) 0 else 1 }
+                .then(LibraryItemOrdering.titleThenId))
+            .distinctBy(::gameGroup)
+        val apps = remaining.filter { it.kind == LibraryItemKind.ANDROID_APP && gameGroup(it) == null }
+            .sortedWith(LibraryItemOrdering.titleThenId)
+        return recent + showcase + apps
     }
 }

@@ -15,5 +15,8 @@ fun FavoritesScreen(
     iconLoader: AndroidIconLoader? = null,
     restoreFocusRequest: Int = 1,
     allowFocusRequest: Boolean = true,
+    isList: Boolean = false,
+    onLayoutChange: (Boolean) -> Unit = {},
 ) = CollectionDestinationScreen("Favorites", state, modifier, callbacks, iconLoader = iconLoader,
-    restoreFocusRequest = restoreFocusRequest, allowFocusRequest = allowFocusRequest)
+    restoreFocusRequest = restoreFocusRequest, allowFocusRequest = allowFocusRequest,
+    isList = isList, onLayoutChange = onLayoutChange)

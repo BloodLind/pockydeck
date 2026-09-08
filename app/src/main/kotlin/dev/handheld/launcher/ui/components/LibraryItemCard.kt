@@ -33,6 +33,8 @@ import dev.handheld.launcher.ui.artwork.local.rememberAndroidIconPainter
 import dev.handheld.launcher.ui.presentation.TileArtwork
 import dev.handheld.launcher.ui.presentation.TileUiModel
 import dev.handheld.launcher.ui.presentation.platformAccent
+import dev.handheld.launcher.runtime.LocalRunningLabels
+import dev.handheld.launcher.runtime.RunningIndicator
 
 @Immutable
 enum class LibraryItemCardVariant {
@@ -81,6 +83,8 @@ fun LibraryItemCard(
         else -> model.platformLabel
     }
     val badge: @Composable () -> Unit = { PlatformBadge(tagLabel, accentColor = model.platformAccent, compact = true) }
+    val runningLabel = LocalRunningLabels.current[model.itemId]
+    val status: (@Composable () -> Unit)? = if (runningLabel != null) ({ RunningIndicator(runningLabel) }) else null
     val contextualSubtitle = model.subtitle?.takeUnless {
         it.equals(model.platformLabel, ignoreCase = true) || it in setOf("App", "Game", "Emulator", "System")
     }
@@ -109,6 +113,7 @@ fun LibraryItemCard(
             focusLift = focusLift,
             showCaption = variant == LibraryItemCardVariant.Collection,
             badge = badge,
+            status = status,
             maxArtworkSize = maxArtworkSize,
         )
         return
@@ -124,6 +129,7 @@ fun LibraryItemCard(
             modifier = cardModifier,
             artwork = artwork,
             badge = badge,
+            status = status,
             selected = selected,
             unavailable = unavailable,
             unavailableReason = unavailableReason,
@@ -141,6 +147,7 @@ fun LibraryItemCard(
             artwork = artwork,
             subtitle = contextualSubtitle,
             badge = badge,
+            status = status,
             selected = selected,
             unavailable = unavailable,
             unavailableReason = unavailableReason,
@@ -159,6 +166,7 @@ fun LibraryItemCard(
             modifier = cardModifier,
             artwork = artwork,
             badge = badge,
+            status = status,
             selected = selected,
             unavailable = unavailable,
             unavailableReason = unavailableReason,

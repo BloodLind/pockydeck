@@ -183,7 +183,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `home caps the existing newest game rom app order at twenty and excludes unassigned roms`() =
+    fun `home caps recent showcase and app order at twenty and excludes unassigned roms`() =
         runTest(dispatcher) {
             val apps = ('A'..'Z').map(::homeAndroidItem)
             val assigned = homeRomItem("Assigned", "gba")
@@ -204,6 +204,102 @@ class HomeViewModelTest {
             assertEquals(expected, viewModel.state.value.items.map { it.itemId })
             assertFalse(viewModel.activate(apps[23].id))
         }
+
+    @Test
+    fun `opening an emulator keeps the previous PSP game above a stable console showcase`() = runTest(dispatcher) {
+        val psp = homeRomItem("Z PSP game", "psp")
+        val firstPsp = homeRomItem("A PSP game", "psp")
+        val gba = homeRomItem("A GBA game", "gba")
+        val otherGba = homeRomItem("B GBA game", "gba")
+        val emulator = homeAndroidItem('M')
+        val apps = ('A'..'Z').map(::homeAndroidItem)
+        val opens = HomeOpens().apply { records.value = listOf(SuccessfulOpenRecord(psp.id, 7)) }
+        val viewModel = createHome(HomeCatalog(apps + listOf(firstPsp, psp, otherGba, gba)), opens = opens)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.activate(emulator.id))
+        advanceUntilIdle()
+        assertEquals(listOf(emulator.id, psp.id, gba.id), viewModel.state.value.items.take(3).map { it.itemId })
+        assertEquals(20, viewModel.state.value.items.size)
+        assertFalse(viewModel.state.value.items.any { it.itemId == firstPsp.id || it.itemId == otherGba.id })
+    }
+
+    @Test
+    fun `twenty most recent available items take precedence over all showcase cards`() = runTest(dispatcher) {
+        val apps = ('A'..'Z').map(::homeAndroidItem)
+        val opens = HomeOpens().apply {
+            records.value = apps.mapIndexed { index, item -> SuccessfulOpenRecord(item.id, index.toLong() + 1) }.reversed() +
+                SuccessfulOpenRecord(ItemId("missing"), 999)
+        }
+        val viewModel = createHome(HomeCatalog(apps + homeRomItem("A GBA", "gba")), opens = opens)
+        advanceUntilIdle()
+        assertEquals(apps.reversed().take(20).map { it.id }, viewModel.state.value.items.map { it.itemId })
+    }
+
+    @Test
+    fun `return to start rejects an old viewport and follows delayed recency until the user moves`() = runTest(dispatcher) {
+        val apps = ('A'..'F').map(::homeAndroidItem)
+        val opens = HomeOpens()
+        val saved = SavedStateHandle()
+        val snapshots = HomeSnapshots(null)
+        val viewModel = createHome(HomeCatalog(apps), opens = opens, snapshots = snapshots, savedStateHandle = saved)
+        advanceUntilIdle()
+        viewModel.select(apps[3].id)
+        viewModel.rememberViewport(apps[3].id, 37)
+        advanceUntilIdle()
+
+        opens.records.value = listOf(SuccessfulOpenRecord(apps.last().id, 10))
+        viewModel.returnToStart() // The background ordering has not published the new first card yet.
+        assertEquals(apps.first().id.value, saved.get<String>("home.selected"))
+        assertEquals(0, saved.get<Int>("home.offset"))
+        viewModel.rememberViewport(apps[3].id, 37, returnSequence = 0)
+        advanceUntilIdle()
+        assertEquals(apps.last().id, viewModel.state.value.selectedItemId)
+        assertEquals(apps.last().id, viewModel.state.value.firstVisibleItemId)
+        assertEquals(0, viewModel.state.value.firstVisibleOffsetPx)
+        assertEquals(1L, viewModel.state.value.returnToStartSequence)
+        assertTrue(viewModel.state.value.followingStart)
+
+        viewModel.rememberViewport(apps.last().id, 0, returnSequence = 1)
+        advanceUntilIdle()
+        assertEquals(apps.last().id, snapshots.latest?.selectedItemId)
+        assertEquals(apps.last().id.value, saved.get<String>("home.selected"))
+
+        viewModel.select(apps[1].id)
+        viewModel.rememberViewport(apps[1].id, 15, returnSequence = 1)
+        opens.records.value = listOf(SuccessfulOpenRecord(apps[4].id, 11)) + opens.records.value
+        advanceUntilIdle()
+        assertEquals(apps[1].id, viewModel.state.value.selectedItemId)
+        assertEquals(15, viewModel.state.value.firstVisibleOffsetPx)
+        assertFalse(viewModel.state.value.followingStart)
+
+        viewModel.returnToStart()
+        advanceUntilIdle()
+        assertEquals(apps[4].id, viewModel.state.value.selectedItemId)
+        assertEquals(apps[4].id, snapshots.latest?.selectedItemId)
+        assertEquals(0, snapshots.latest?.firstVisibleOffsetPx)
+        assertEquals(2L, viewModel.state.value.returnToStartSequence)
+    }
+
+    @Test
+    fun `Home entry before loading overrides a delayed saved position and still selects the first recent item`() = runTest(dispatcher) {
+        val apps = ('A'..'F').map(::homeAndroidItem)
+        val catalogGate = CompletableDeferred<Unit>()
+        val snapshotGate = CompletableDeferred<Unit>()
+        val opens = HomeOpens().apply { records.value = listOf(SuccessfulOpenRecord(apps[4].id, 7)) }
+        val snapshots = HomeSnapshots(DestinationSnapshot(LauncherDestination.HOME, apps[3].id, apps[3].id, 49), snapshotGate)
+        val viewModel = createHome(HomeCatalog(apps, catalogGate), opens = opens, snapshots = snapshots)
+        runCurrent()
+        viewModel.returnToStart()
+        viewModel.rememberViewport(apps[3].id, 49, returnSequence = 0)
+        snapshotGate.complete(Unit)
+        catalogGate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(apps[4].id, viewModel.state.value.selectedItemId)
+        assertEquals(apps[4].id, viewModel.state.value.firstVisibleItemId)
+        assertEquals(0, viewModel.state.value.firstVisibleOffsetPx)
+        assertTrue(viewModel.state.value.followingStart)
+    }
 
     @Test
     fun `selection viewport and refresh reuse off main catalog projection and save position immediately`() =
@@ -363,8 +459,8 @@ private class HomeOpens : SuccessfulOpenRepository {
     val candidates = mutableListOf<SuccessfulOpenCandidate>()
     override suspend fun recordOnce(candidate: SuccessfulOpenCandidate): SuccessfulOpenWriteResult {
         candidates += candidate
-        val record = SuccessfulOpenRecord(candidate.itemId, candidates.size.toLong())
-        records.value = listOf(record)
+        val record = SuccessfulOpenRecord(candidate.itemId, (records.value.maxOfOrNull { it.openOrder } ?: 0) + 1)
+        records.value = listOf(record) + records.value.filterNot { it.itemId == candidate.itemId }
         return SuccessfulOpenWriteResult.Recorded(record)
     }
 }
@@ -376,7 +472,7 @@ private class HomeSnapshots(
     private val current = MutableStateFlow(initial)
     val latest: DestinationSnapshot? get() = current.value
     override fun observe(destination: LauncherDestination): Flow<DestinationSnapshot?> =
-        observeGate?.let { gate -> flow { gate.await(); emit(current.value) } } ?: current
+        observeGate?.let { gate -> flow { val stored = current.value; gate.await(); emit(stored) } } ?: current
     override suspend fun save(snapshot: DestinationSnapshot) { current.value = snapshot }
     override suspend fun clear(destination: LauncherDestination) { current.value = null }
 }

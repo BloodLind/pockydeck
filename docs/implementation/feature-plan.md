@@ -6,6 +6,16 @@ Read [the project plan](../project-plan.md), [the design contract](../design-sys
 
 The [user-story backlog](user-stories/README.md) divides F01–F18 into traceable acceptance criteria. On 8 September the user authorized building the complete native application base first, followed by a combined verification and documentation reconciliation. Per-story dispatch and intermediate wave gates are superseded for this delivery; packet scope, shared-file ownership and truthful device evidence still apply.
 
+## Current v0.9 integration scope
+
+The current batch implements all available recent Home games/apps before a stable showcase containing one game per otherwise unrepresented console and one Android-game group, followed by deterministic app fillers, with a 20-card limit. Every Home entry/reselection and actual Activity return to Home resets selection and scrolling to first, including delayed recency publication; modal dismissal alone preserves its opener.
+
+Library, Apps and Favorites independently persist Grid/List mode. Grid artwork is capped at 176 reference units and still respects caption/viewport space. Collection headers measure and center their native controls across 100/110/120% scale instead of assuming fixed label widths. Page replacement uses one live page with a 160ms fade/8dp slide, respecting Reduce motion. Sort has a compact Close control, and Launcher category counts are noninteractive.
+
+The user explicitly approved optional Shizuku process indicators and the normal persistent permission flow. They remain off by default and require explicit setup. API/provider 13.1.5 reads requested current-user package process names every three seconds while foreground; the current development setup uses the official Shizuku 13.6.0 helper started over USB. ROM badges name the last dispatched emulator or the configured/unique supported adapter only when that process is observed. This does not identify an active ROM, infer a session from history, or introduce Usage Access/process management.
+
+The status revision labels battery temperature accurately (blue below 15°C, red from 45°C), colors the battery green only when Android reports CHARGING, otherwise red at 10% or below, yellow below 15%, and neutral above that. RAM has a distinct cool tint; storage covers internal and all mounted external free space. [Current contracts](contracts.md) define behavior and lifecycle limits; [progress](progress.md) records the separate validation outcomes. Code inclusion is not a claim that every physical check has passed.
+
 ## How to use the packets
 
 Implement coherent batches across the native application, then check the integrated result against the story criteria and fix findings. A packet is accepted only when its applicable validation has evidence; code integration does not imply completion of unrun physical checks. ROM, emulator compatibility and provider choices retain their own later readiness decisions.
@@ -43,7 +53,7 @@ The table preserves the original dependency plan. Live implementation state and 
 
 ## Concrete path and ownership policy
 
-Use application ID and base package `dev.handheld.launcher`. Android module source sets use `src/main/kotlin`; tests use `src/test/kotlin` or `src/androidTest/kotlin`. These are **proposed paths**, not claims that the scaffold already exists.
+Use application ID and base package `dev.handheld.launcher`. Android module source sets use `src/main/kotlin`; tests use `src/test/kotlin` or `src/androidTest/kotlin`. These are the implemented module paths; per-task leases still determine who may edit them.
 
 | Area | Concrete path prefix |
 |---|---|
@@ -105,11 +115,11 @@ All integration gates run the configured debug build, Android lint, relevant JVM
 ## Cross-packet rules
 
 - One persistent shell owns background, status, dock, footer, insets, navigation, and overlays. All pages use the allocated content rectangle.
-- Home uses most-recently-opened ordering. Reopening promotes the same ID. Focus, details, scraping, and system actions do not promote entries.
-- Successful launcher-initiated Android/ROM dispatch is recency data; it never proves that a process is running. No HUD, analytics, usage access, process management, or global key interception is introduced.
+- Home prioritizes all available recent IDs before its stable console showcase and app fillers, capped at 20 cards. Reopening promotes the same ID. Focus, details, scraping and system actions do not promote entries. Explicit entry/return resets Home to first; ordinary modal closure does not.
+- Successful launcher-initiated Android/ROM dispatch is recency data; it never proves that a process is running. The separately approved, optional Shizuku adapter reads process presence only. No active-ROM inference, HUD, analytics, Usage Access, emulator process management or global key interception is introduced.
 - Room supplies cached catalog/favorites/recency. DataStore stores small preferences and durable navigation snapshots. Failed discovery/scan never infers deletion from an incomplete result.
 - Android keeps notification shade, volume/brightness controls, power menu, and Retroid controls. Immersive handling applies only to this launcher's window.
-- Content updates preserve stable IDs, focus, scroll anchors, and card dimensions. All controls support touch and controller interaction and semantic unavailable/error states.
+- Content updates preserve stable IDs and the page's defined selection/anchor policy, including the explicit Home reset and Search-close reset. Grid/List and larger UI scale may adapt card allocation without changing item identity. All controls support touch and controller interaction and semantic unavailable/error states.
 - Reused GPL-compatible source and bundled assets/fonts keep required notices and attribution. Reuse is selective and reviewed; it is not permission to copy a different product architecture.
 
 Each completion handoff contains: changed paths; provided contract symbols; screenshots/test commands and actual outcomes; known limitations; pending coordinator delta; and readiness of dependent packets. Update the packet status only when the coordinator accepts that evidence. For dispatch prompts, branch/worktree decisions, and review routing, use [the agent workflow](agent-workflow.md).

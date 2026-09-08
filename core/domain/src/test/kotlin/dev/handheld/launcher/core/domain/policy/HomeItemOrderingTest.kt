@@ -10,36 +10,54 @@ class HomeItemOrderingTest {
         category = if (game) LibraryCategory.GAME else LibraryCategory.OTHER,
     )
 
-    @Test fun newestItemThenAndroidGamesThenRomsThenOtherApps() {
+    private fun rom(id: String, title: String, platform: String) = ContractFixtures.rom(id, title).copy(platformId = platform)
+
+    @Test fun allAvailableHistoryLeadsTheShowcaseWithoutLosingEarlierGames() {
         val newest = app("last", "Z utility")
         val old = app("old", "B utility")
         val utility = app("alpha", "A utility")
         val gameZ = app("gamez", "Z game", true)
         val gameA = app("gamea", "A game", true)
-        val romZ = ContractFixtures.rom("rom-z", "Z ROM")
-        val romA = ContractFixtures.rom("rom-a", "A ROM")
-        val history = listOf(SuccessfulOpenRecord(old.id, 8), SuccessfulOpenRecord(romZ.id, 9), SuccessfulOpenRecord(newest.id, 10))
-        val result = HomeItemOrdering.order(listOf(old, romZ, gameZ, utility, newest, romA, gameA), history)
-        assertEquals(listOf(newest, gameA, gameZ, romA, romZ, utility, old), result)
+        val psp = rom("psp", "Z PSP game", "psp")
+        val anotherPsp = rom("psp-a", "A PSP game", "psp")
+        val gba = rom("gba", "A GBA game", "gba")
+        val history = listOf(SuccessfulOpenRecord(old.id, 8), SuccessfulOpenRecord(psp.id, 9),
+            SuccessfulOpenRecord(newest.id, 10), SuccessfulOpenRecord(psp.id, 3), SuccessfulOpenRecord(ItemId("removed"), 99))
+        val result = HomeItemOrdering.order(listOf(old, psp, gameZ, utility, newest, gba, gameA, anotherPsp), history)
+        assertEquals(listOf(newest, psp, old, gameA, gba, utility), result)
     }
 
-    @Test fun newGameOrRomCanBeRecentWithoutDuplicationAndOverridesMoveAndroidGroups() {
+    @Test fun recentItemsFromTheSameConsoleAreAllKeptAndOverridesChooseTheAndroidShowcase() {
         val native = app("native", "A native", true)
         val utility = app("utility", "Z utility")
-        val rom = ContractFixtures.rom("rom", "A ROM")
+        val first = rom("rom-first", "A ROM", "gba")
+        val second = rom("rom-second", "B ROM", "gba")
+        val filler = rom("rom-filler", "C ROM", "gba")
         val overrides = mapOf(native.id to UserItemOverrides(category = LibraryCategory.OTHER),
             utility.id to UserItemOverrides(category = LibraryCategory.GAME))
-        assertEquals(listOf(rom, utility, native), HomeItemOrdering.order(listOf(native, rom, utility),
-            listOf(SuccessfulOpenRecord(rom.id, 10), SuccessfulOpenRecord(native.id, 9)), overrides))
-        assertEquals(listOf(native, utility, rom), HomeItemOrdering.order(listOf(native, rom, utility),
-            listOf(SuccessfulOpenRecord(native.id, 11)), overrides))
+        assertEquals(listOf(second, first, native, utility), HomeItemOrdering.order(listOf(native, first, second, filler, utility),
+            listOf(SuccessfulOpenRecord(first.id, 10), SuccessfulOpenRecord(native.id, 9), SuccessfulOpenRecord(second.id, 11)), overrides))
     }
 
-    @Test fun absentRecentEntriesDoNotDisplaceCurrentGroupsAndNoArtificialHomeLimitRemains() {
+    @Test fun noHistoryUsesOneStableRepresentativePerConsoleRegardlessOfInputOrder() {
         val native = app("game", "Z game", true)
-        val rom = ContractFixtures.rom("rom", "Z ROM")
+        val firstNative = app("firstgame", "A game", true)
+        val gba = rom("gba", "Z GBA", "gba")
+        val firstGba = rom("first-gba", "A GBA", "gba")
+        val psp = rom("psp", "B PSP", "psp")
+        val unavailable = firstGba.copy(id = ItemId("missing"), title = "0 Missing", availability = Availability.Unavailable(UnavailabilityReason.REMOVED))
         val others = (1..20).map { app("app$it", "App ${it.toString().padStart(2, '0')}") }
-        assertEquals(listOf(native, rom) + others, HomeItemOrdering.order(others.reversed() + rom + native,
-            listOf(SuccessfulOpenRecord(ItemId("removed-game"), 99))))
+        val items = others + native + firstNative + gba + firstGba + psp + unavailable + ContractFixtures.systemAction("settings", "Settings")
+        val expected = listOf(firstNative, firstGba, psp) + others
+        assertEquals(expected, HomeItemOrdering.order(items, emptyList()))
+        assertEquals(expected, HomeItemOrdering.order(items.reversed(), listOf(SuccessfulOpenRecord(unavailable.id, 99))))
+    }
+
+    @Test fun tiedHistoryAndShowcaseTitlesUseStableItemIdentity() {
+        val one = rom("a", "Same", "gba")
+        val two = rom("b", "Same", "gba")
+        val records = listOf(SuccessfulOpenRecord(two.id, 7), SuccessfulOpenRecord(one.id, 7))
+        assertEquals(listOf(one, two), HomeItemOrdering.order(listOf(two, one), records))
+        assertEquals(listOf(one), HomeItemOrdering.order(listOf(two, one), emptyList()))
     }
 }

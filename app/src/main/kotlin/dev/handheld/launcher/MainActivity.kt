@@ -203,6 +203,8 @@ class MainActivity : ComponentActivity() {
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
         homeRoleHeld = roleHandler.isHomeRoleHeld()
         notificationAccessGranted = notificationAccess.isAccessGranted()
+        if (appViewModel.navigation.location.value == dev.handheld.launcher.core.domain.model.LauncherLocation.Destination(LauncherDestination.HOME))
+            homeViewModel.returnToStart()
         container.androidCatalog.onResume()
         container.romController.refreshStorageAccess()
         container.romScanner.refresh()

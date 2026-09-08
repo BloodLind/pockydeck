@@ -30,6 +30,7 @@ class RomFeatureController(
     private val scope:CoroutineScope,
     private val sharedStorage:SharedStoragePaths,
     private val discovery:AndroidSharedRomDiscovery,
+    private val onEmulatorDispatched: (ItemId, String, String) -> Unit = { _, _, _ -> },
 ) : LaunchDispatcher {
     private val interaction=Mutex()
     private val decisionGuard=Any()
@@ -231,7 +232,10 @@ class RomFeatureController(
             val result=try { launcher.dispatch(input,selected.id).also { dispatched=it===RomDispatchResult.Started } }
                 finally { if(!dispatched && preparedKey!=null) withContext(NonCancellable) { cache.releaseFailedReservation(preparedKey!!,newlyReserved) } }
             return when(result) {
-                RomDispatchResult.Started -> LaunchAcknowledgement.Dispatched(request.operationId)
+                RomDispatchResult.Started -> {
+                    runCatching { onEmulatorDispatched(entry.itemId, selected.packageName, selected.displayName) }
+                    LaunchAcknowledgement.Dispatched(request.operationId)
+                }
                 else -> { mutableMessage.value=result.message(); LaunchAcknowledgement.Failed(request.operationId,LaunchFailureReason.DISPATCH_FAILED) }
             }
         } catch(_:UserCancelled) { return LaunchAcknowledgement.Failed(request.operationId,LaunchFailureReason.CANCELLED) }

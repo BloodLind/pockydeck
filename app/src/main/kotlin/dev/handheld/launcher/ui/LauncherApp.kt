@@ -94,6 +94,7 @@ fun LauncherApp(
     val romMessage by container.romController.message.collectAsStateWithLifecycle()
     val artworkSummary by container.artworkRepository.summary.collectAsStateWithLifecycle(ArtworkSummary())
     val status by container.deviceStatus.status.collectAsStateWithLifecycle(DeviceStatusSnapshot())
+    val runningApps by container.runningApps.state.collectAsStateWithLifecycle(dev.handheld.launcher.runtime.RunningAppState())
     val pageModels = listOf(LauncherDestination.LIBRARY, LauncherDestination.APPS,
         LauncherDestination.FAVORITES, LauncherDestination.SEARCH).associateWith { destination ->
         viewModel<CollectionViewModel>(key = "collection.${destination.persistedKey}",
@@ -132,6 +133,7 @@ fun LauncherApp(
     var pageActivationRequest by remember { mutableIntStateOf(1) }
     var settingsSection by rememberSaveable { mutableStateOf("Launcher") }
     LaunchedEffect(location) {
+        if (location == LauncherLocation.Destination(LauncherDestination.HOME)) home.returnToStart()
         // Details reached from Search belong to the same session. Actual page closure
         // clears both persisted query/filter state and the editor's saveable local state.
         if (!location.hasSearchSession()) {
@@ -163,6 +165,7 @@ fun LauncherApp(
         focused = null
         focusedDock = null
         pageActivationRequest++
+        if (value == LauncherDestination.HOME) home.returnToStart()
         app.navigation.selectDestination(value)
     }
     fun openDetails(id: ItemId) {
@@ -414,9 +417,10 @@ fun LauncherApp(
         }
         val imeBottom = with(density) { WindowInsets.ime.getBottom(this).toDp() }
         LauncherTheme(reducedMotion || display.reduceMotion, metrics.referenceScale, uiScaleFactor = display.uiScaleFactor) {
+            val pageMotion = pageTransition(location, reducedMotion || display.reduceMotion)
             val registry = LauncherRouteRegistry(LauncherDestination.dockOrder.map { route ->
                 LauncherDestinationRoute(route) { context ->
-                    val bounds = context.modifier.focusRequester(pageFocus).focusGroup()
+                    val bounds = context.modifier.then(pageMotion).focusRequester(pageFocus).focusGroup()
                     saveablePages.SaveableStateProvider(route.persistedKey) {
                         val detailsLocation = location as? LauncherLocation.ItemDetails
                         if (detailsLocation != null) {
@@ -446,7 +450,11 @@ fun LauncherApp(
                                         CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
                                     }, romSources, romEmulators, artworkSummary,
                                     uiScalePercent = display.uiScalePercent, reduceMotion = display.reduceMotion,
-                                    notificationAccessGranted = notificationAccessGranted), bounds, SettingsCallbacks(
+                                    notificationAccessGranted = notificationAccessGranted,
+                                    runningIndicatorsEnabled = runningApps.enabled,
+                                    runningStatusSummary = runningApps.summary), bounds, SettingsCallbacks(
+                                    onSetRunningIndicators = container.runningApps::setEnabled,
+                                    onSetupRunningStatus = { if (!container.runningApps.requestSetup()) showError("Shizuku setup is unavailable.") },
                                     onSetupNotificationAccess = onSetupNotificationAccess,
                                     onSetUiScalePercent = app::setUiScalePercent,
                                     onSetReduceMotion = app::setReduceMotion,
@@ -506,9 +514,12 @@ fun LauncherApp(
                                     onOpenFilters = { rememberModalOrigin(); filterMenuDestination = route },
                                     onOpenSort = { rememberModalOrigin(); sortMenuDestination = route })
                                 when (route) {
-                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput)
-                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput)
-                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput)
+                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) })
+                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) })
+                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) })
                                     LauncherDestination.SEARCH -> SearchScreen(current, bounds, callbacks, vm::query,
                                         searchableActions, container.iconLoader, queryFocusRequest,
                                         restoreFocusRequest = pageActivationRequest, allowFocusRequest = !modalVisible,
@@ -524,6 +535,7 @@ fun LauncherApp(
             CompositionLocalProvider(LocalControlFocusRestoration provides { controlRestoreFocus = it },
                 LocalControllerInput provides controllerInput,
                 LocalPageNavigation provides publishPageNavigation,
+                dev.handheld.launcher.runtime.LocalRunningLabels provides runningApps.labels,
                 LocalEnrichedArtworkLoader provides container.enrichedArtworkLoader) {
             LauncherShell(metrics, LauncherShellState(destination, focusedDock, status.toShellStatus(), footer,
                 dockFocusEnabled = controllerInput && dockFocusAllowed && !modalVisible),
@@ -605,7 +617,7 @@ fun LauncherApp(
                     }
                     sortMenuDestination != null -> sortMenuDestination?.let { sortDestination ->
                         val sortState = pageStates.getValue(sortDestination)
-                        LauncherDialog("Sort by", { sortMenuDestination = null }) {
+                        LauncherDialog("Sort by", { sortMenuDestination = null }, compactDismiss = true) {
                             listOf("recent" to "Recent", "title" to "Title").forEach { (key, label) ->
                                 FilterChip(label, sortState.sort == key, {
                                     pageModels.getValue(sortDestination).sort(key)
@@ -675,46 +687,4 @@ private fun LaunchCoordinatorFailure.message(): String = when (this) {
     LaunchCoordinatorFailure.SNAPSHOT_FAILED -> "Could not save your position. The app was not opened."
     LaunchCoordinatorFailure.RECENCY_WRITE_FAILED -> "The app opened, but its launch history could not be saved."
     else -> "Android could not open the item. Your library order was preserved."
-}
-
-private fun DeviceStatusSnapshot.toShellStatus(): LauncherShellStatus {
-    fun <T : Any> StatusValue<T>.format(format: (T) -> String): StatusValue<String> = when (this) {
-        is StatusValue.Available -> StatusValue.Available(format(value))
-        StatusValue.Unavailable -> StatusValue.Unavailable
-        StatusValue.Unsupported -> StatusValue.Unsupported
-    }
-    fun reading(label: String, value: StatusValue<String>, glyph: ShellStatusGlyph, symbol: LauncherStatusGlyph? = null) =
-        ShellStatusReading(StatusPresentation(label, value, label), glyph, symbol = symbol)
-    val usedMemory = usedMemoryBytes
-    val totalMemory = totalMemoryBytes
-    val memory = if (usedMemory is StatusValue.Available && totalMemory is StatusValue.Available)
-        StatusValue.Available(String.format(Locale.getDefault(), "%.1f / %.0f GB", usedMemory.value / 1_073_741_824.0, totalMemory.value / 1_073_741_824.0))
-        else StatusValue.Unavailable
-    val temperature = (batteryTemperatureCelsius as? StatusValue.Available)?.value
-    val memoryRatio = if (usedMemory is StatusValue.Available && totalMemory is StatusValue.Available && totalMemory.value > 0)
-        usedMemory.value.toDouble() / totalMemory.value else 0.0
-    val percent = (batteryPercent as? StatusValue.Available)?.value
-    val batterySymbol = when (percent) {
-        null -> LauncherStatusGlyph.BatteryUnknown
-        in 0..14 -> LauncherStatusGlyph.Battery0
-        in 15..28 -> LauncherStatusGlyph.Battery1
-        in 29..42 -> LauncherStatusGlyph.Battery2
-        in 43..56 -> LauncherStatusGlyph.Battery3
-        in 57..70 -> LauncherStatusGlyph.Battery4
-        in 71..85 -> LauncherStatusGlyph.Battery5
-        in 86..97 -> LauncherStatusGlyph.Battery6
-        else -> LauncherStatusGlyph.BatteryFull
-    }
-    return LauncherShellStatus(readings = listOf(
-        reading("Battery temperature", batteryTemperatureCelsius.format { String.format(Locale.getDefault(), "%.0f°C", it) }, ShellStatusGlyph.Temperature,
-            when { temperature == null -> LauncherStatusGlyph.Temperature; temperature < 15 -> LauncherStatusGlyph.TemperatureLow; temperature >= 45 -> LauncherStatusGlyph.TemperatureHigh; else -> LauncherStatusGlyph.Temperature }),
-        reading("Memory used", memory, ShellStatusGlyph.Memory, if (memoryRatio >= .9) LauncherStatusGlyph.MemoryHigh else LauncherStatusGlyph.Memory),
-        reading("Storage available", freeStorageBytes.format { "${it / 1_073_741_824} GB free" }, ShellStatusGlyph.Storage,
-            if (((freeStorageBytes as? StatusValue.Available)?.value ?: Long.MAX_VALUE) < 1_073_741_824) LauncherStatusGlyph.StorageLow else LauncherStatusGlyph.Storage),
-    ), rightReadings = listOf(
-        reading("Wi-Fi", wifiEnabled.format { if (it) "Enabled" else "Disabled" }, ShellStatusGlyph.Wifi,
-            if ((wifiEnabled as? StatusValue.Available)?.value == false) LauncherStatusGlyph.WifiOff else LauncherStatusGlyph.Wifi),
-        reading("Battery", batteryPercent.format { "$it%" }, ShellStatusGlyph.Battery, batterySymbol),
-    ), bluetoothEnabled = bluetoothEnabled == StatusValue.Available(true),
-        notificationsPresent = notificationsPresent == StatusValue.Available(true))
 }

@@ -42,6 +42,8 @@ adb -s SERIAL shell am start -n dev.handheld.launcher/.MainActivity
 
 Use the D-pad or left stick to move, A to activate, B to go back, X to search, Y for item details, Start for the item/page menu, L1/R1 to switch destinations and L2/R2 to change supported filters or move through Home cards. Settings → Controls swaps A/B and updates the footer. Touch uses the same controls. Search uses A Apply, B Cancel and Y Clear while editing; closing Search clears its query and filter, while opening details preserves the Search session for return.
 
+Controller navigation has subtle original tick, confirm, back and page-change sounds. They are enabled by default and can be turned off in Settings → Controls → **Controller sounds**. They use media volume, including its mute and Android's media interruption policy; Android touch-sound settings are independent. Touch and ordinary text entry remain silent.
+
 Home shows up to 20 cards: available recently opened games and apps first, then one stable game from each console not already represented, one Android-game representative where needed, and remaining apps. Returning Home, selecting Home again or returning from another Activity while Home is open resets selection and scrolling to the first card. Library, Apps and Favorites each remember their own Grid/List choice. Settings → Display offers 90%, 100%, 110% and 120% UI scale and Reduce motion.
 
 To make this the Home screen, use Settings → Launcher → Set as Home launcher and choose it in Android. Declining leaves normal browsing available. To switch away later, use Android Settings → Apps → Default apps → Home app.
@@ -56,7 +58,7 @@ Running indicators are off by default. They need the separate official Shizuku h
 2. If needed, install Shizuku from its [official download page](https://shizuku.rikka.app/download/). Start it using its USB/computer or wireless-debugging instructions in the [official setup guide](https://shizuku.rikka.app/guide/setup/).
 3. Allow Handheld Launcher when Shizuku asks. Its normal persistent authorization avoids a prompt on every reading. After a reboot, restart Shizuku; the debugging-based helper does not remain running across reboots. If permission was revoked, authorize the launcher again through Shizuku.
 
-While the launcher is foreground, it checks requested current-user package processes every three seconds. An app badge means its process was observed. A ROM badge names its last dispatched emulator, or the configured/unique supported installed emulator, only when that emulator process is observed. It may be paused, cached or showing its menu; the badge does not mean that ROM is playing.
+While the launcher is foreground, it checks requested current-user package processes every three seconds. Badges appear only on Home. An app badge means its process was observed. A ROM badge names its last dispatched emulator, or the configured/unique supported installed emulator, only when that emulator process is observed. It may be paused, cached or showing its menu; the badge does not mean that ROM is playing. Android on the Flip 2 denies access to those emulators' open-file lists, so there is no exact-ROM badge.
 
 Turn **Running indicators** off to stop sampling and remove badges, or revoke the launcher's authorization in Shizuku's authorized-app list. No Usage Access or session-history inference is used. This integration bundles Shizuku API 13.1.5; the development device setup uses the official Shizuku 13.6.0 helper started over USB.
 

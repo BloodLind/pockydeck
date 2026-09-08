@@ -69,7 +69,8 @@ import org.junit.runner.RunWith
  * Opt-in real-app coverage: run this class explicitly against an installed, populated launcher.
  * No test fixtures replace repositories, no app data is reset, and no card is activated.
  * Only normal UI navigation, text editing, display settings and their saved preferences change.
- * The display test restores its original scale; direct preference access is an emergency
+ * The grid tests restore the user's original layout; the display test restores its original scale.
+ * Direct preference access is an emergency
  * restoration only if a failed test makes the normal Settings UI inaccessible.
  */
 @RunWith(AndroidJUnit4::class)
@@ -83,6 +84,7 @@ class MainActivityInputDeviceTest {
     private lateinit var app: LauncherAppViewModel
     private lateinit var mapping: ConfirmBackMapping
     private var originalFilter: String? = null
+    private var originalListMode: Boolean? = null
     private val heldKeys = mutableMapOf<Int, Long>()
     private var joystickUsed = false
     private var originalWindowCallback: Window.Callback? = null
@@ -137,8 +139,15 @@ class MainActivityInputDeviceTest {
         compose.waitUntil(TIMEOUT_MS) { !library.state.value.loading && !search.state.value.loading }
         mapping = runBlocking { container.controllerPreferenceRepository.confirmBackMapping.first() }
         originalFilter = library.state.value.filter
+        originalListMode = runBlocking {
+            LauncherDestination.LIBRARY in container.displayPreferenceRepository.preferences.first().listDestinations
+        }
         tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
         waitForImeHidden()
+        if (originalListMode == true) {
+            tapTag("collection-layout")
+            compose.waitUntil(TIMEOUT_MS) { LauncherDestination.LIBRARY !in app.display.value.listDestinations }
+        }
         cycleToFilter("all")
         // On a fresh process, repository publication can finish before the Activity's
         // lifecycle collector has rendered that snapshot. Wait for the actual page too.
@@ -164,6 +173,12 @@ class MainActivityInputDeviceTest {
             tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
             waitForImeHidden()
             originalFilter?.let { if (it in filterKeys()) cycleToFilter(it) }
+            originalListMode?.let { wasList ->
+                if ((LauncherDestination.LIBRARY in app.display.value.listDestinations) != wasList) {
+                    tapTag("collection-layout")
+                    compose.waitUntil(TIMEOUT_MS) { (LauncherDestination.LIBRARY in app.display.value.listDestinations) == wasList }
+                }
+            }
         }
       } finally {
           originalWindowCallback?.let { original ->

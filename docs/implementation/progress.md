@@ -1,6 +1,6 @@
 # Implementation progress
 
-Updated: 8 September 2026. Coordinator owns this record; story specifications remain the acceptance criteria.
+Updated: 9 September 2026. Coordinator owns this record; story specifications remain the acceptance criteria.
 
 ## Current delivery workflow
 
@@ -43,6 +43,10 @@ The **0.9.0 (code 12)** revision preserves all available recent Home entries bef
 The user explicitly approved optional Shizuku integration and completed its persistent per-app permission dialog. Running indicators use live current-user process readings while the launcher is foreground. ROM badges name the associated emulator without claiming which game is active. The feature defaults off; the official helper is configured on the Flip 2 and requires restarting after reboot. The status strip adds charging/low-battery colors, battery-temperature colors, a distinct RAM tint and internal/all-mounted-external free space. [0.9 verification and reconciliation](evidence/F14/home-layout-status-090.md) records the helper scope, corrected findings, precise checks and delivered artifact.
 
 **399 tests passed** (276 JVM and 123 Android), with one Windows fixture skipped. Lint reports zero errors, and debug/release builds pass. All 20 app checks pass on the same final APK across the combined and focused corrective runs; the shared design-system suite also passes after the card-status change. Version 0.9.0 is installed with its recorded release checksum, the 3,768-game Library and All files access preserved. Home, Grid/List, Sort, Apps, Settings and 100/110/120% layouts were inspected. The device is left at 110% UI scale with verified running indicators enabled and Home at the first card.
+
+The follow-up **0.9.1 (code 13)** gives filters more padding and less rounding, fixes clipped neighbors after later console selections, reduces START within its existing hint, restricts running badges to Home and adds five original controller cues with a Controls toggle. Sounds use media volume and existing input de-duplication/acceleration. Android denies exact-ROM open-file inspection on the Flip 2; the approved helper continues to report emulator process names only.
+
+**167 distinct checks pass** for this revision (122 JVM, 45 Android); debug/release builds pass and lint has zero errors. The initial native run caught an obsolete badge fixture, corrected and verified against the unchanged app binary. The installed APK checksum matches the delivered file. The 3,768-game Library, 110% UI scale and PSX/Recent/List preference are preserved, and the sound toggle survives a launcher restart. [0.9.1 evidence](evidence/F14/controller-feedback-091.md) records checks, screenshots, sound dispatch, the exact-ROM limitation and artifact.
 
 Full rich metadata import, manual artwork/match correction and the complete emulator/game-boot matrix remain later work. The large-catalog discovery/search work requested in this batch is implemented; no universal storage-scan time is promised.
 

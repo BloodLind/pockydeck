@@ -3,6 +3,7 @@ package dev.handheld.launcher
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -29,8 +30,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import dev.handheld.launcher.audio.ControllerSoundEffects
+import dev.handheld.launcher.audio.ControllerSoundPreferences
 import dev.handheld.launcher.contract.ActivityRequestAcknowledgement
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.domain.model.LauncherDestination
@@ -57,6 +61,9 @@ class MainActivity : ComponentActivity() {
     private var touchInput: () -> Unit = {}
     private var searchEditorActive = false
     private var searchClearEnabled = false
+    private var foregroundResumed = false
+    private val soundPreferences by lazy { ControllerSoundPreferences(this) }
+    private val controllerSounds by lazy { ControllerSoundEffects(this) { soundPreferences.enabled.value } }
     private val notificationAccess by lazy { NotificationStatusAccess(this) }
     private lateinit var inputHost: FrameLayout
     private val nativeFocusFallback = ViewTreeObserver.OnGlobalFocusChangeListener { _, next ->
@@ -75,7 +82,8 @@ class MainActivity : ComponentActivity() {
         ControllerInputHandler(lifecycleScope, { appViewModel.mapping.value }, {
             ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
         }, imeFaceActionsEnabled = { searchEditorActive },
-            onSearchClearEnabled = { searchClearEnabled }, dispatch = { dispatchSemantic(it) })
+            onSearchClearEnabled = { searchClearEnabled },
+            dispatch = { controllerSounds.dispatch(it, dispatchSemantic) })
     }
     private val rolePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         roleHandler.completeCurrent(it.resultCode)
@@ -95,6 +103,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_MUSIC
+        controllerSounds.prepare()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         immersiveWindow()
         roleHandler = HomeRoleActivityRequestHandler(this, container.activityRequestPort, container.homeRoleRequests)
@@ -121,17 +131,20 @@ class MainActivity : ComponentActivity() {
             override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean =
                 if (controller.onKeyEvent(event)) true else super.dispatchKeyEventPreIme(event)
         }.apply {
+            isSoundEffectsEnabled = false
             isFocusableInTouchMode = true
             descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         val content = ComposeView(this).apply {
+            isSoundEffectsEnabled = false
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         }
         inputHost.addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         setContentView(inputHost)
         inputHost.viewTreeObserver.addOnGlobalFocusChangeListener(nativeFocusFallback)
         content.setContent {
+          val controllerSoundsEnabled by soundPreferences.enabled.collectAsStateWithLifecycle()
           InterceptPlatformTextInput(inlineTextInput) {
             LauncherApp(container, appViewModel, homeViewModel, reducedMotion, homeRoleHeld,
                 bindInput = { dispatchSemantic = it }, nativeConfirm = ::activateNativeFocusedControl,
@@ -142,9 +155,15 @@ class MainActivity : ComponentActivity() {
                 notificationAccessGranted = notificationAccessGranted,
                 onSetupNotificationAccess = ::setupNotificationAccess,
                 onPickRomFolder = ::pickRomFolder,
-                onSetupStorageAccess = ::setupStorageAccess)
+                onSetupStorageAccess = ::setupStorageAccess,
+                controllerSoundsEnabled = controllerSoundsEnabled,
+                onSetControllerSoundsEnabled = ::setControllerSoundsEnabled)
           }
         }
+        // The inner AndroidComposeView can emit a native DPAD click itself. Scope its
+        // suppression to this app's view tree so our Confirm cue remains a single sound.
+        disableNativeClickSounds(inputHost)
+        inputHost.post { disableNativeClickSounds(inputHost) }
     }
 
     // This is the public Android Window.Callback hook. Core ComponentActivity's inherited
@@ -177,6 +196,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun disableNativeClickSounds(view: View) {
+        view.isSoundEffectsEnabled = false
+        if (view is ViewGroup) for (index in 0 until view.childCount) disableNativeClickSounds(view.getChildAt(index))
+    }
+
+    private fun setControllerSoundsEnabled(enabled: Boolean) {
+        soundPreferences.setEnabled(enabled)
+        if (!enabled) controllerSounds.stop()
+    }
+
     @SuppressLint("RestrictedApi") // Continue through the same public Window.Callback path.
     private fun activateNativeFocusedControl(): Boolean {
         val down = super.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER))
@@ -200,6 +229,8 @@ class MainActivity : ComponentActivity() {
     }
     override fun onResume() {
         super.onResume()
+        foregroundResumed = true
+        controllerSounds.setActive(window.decorView.hasWindowFocus())
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
         homeRoleHeld = roleHandler.isHomeRoleHeld()
         notificationAccessGranted = notificationAccess.isAccessGranted()
@@ -211,15 +242,22 @@ class MainActivity : ComponentActivity() {
         container.romController.refreshEmulators()
         immersiveWindow()
     }
-    override fun onPause() { controller.reset(); super.onPause() }
+    override fun onPause() {
+        foregroundResumed = false
+        controllerSounds.setActive(false)
+        controller.reset()
+        super.onPause()
+    }
     override fun onStop() { container.androidCatalog.stop(); super.onStop() }
     override fun onDestroy() {
+        controllerSounds.release()
         if (::inputHost.isInitialized && inputHost.viewTreeObserver.isAlive)
             inputHost.viewTreeObserver.removeOnGlobalFocusChangeListener(nativeFocusFallback)
         super.onDestroy()
     }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        controllerSounds.setActive(foregroundResumed && hasFocus)
         if (hasFocus) immersiveWindow() else controller.reset()
     }
 

@@ -83,7 +83,7 @@ fun LibraryItemCard(
         else -> model.platformLabel
     }
     val badge: @Composable () -> Unit = { PlatformBadge(tagLabel, accentColor = model.platformAccent, compact = true) }
-    val runningLabel = LocalRunningLabels.current[model.itemId]
+    val runningLabel = if (variant == LibraryItemCardVariant.Home) LocalRunningLabels.current[model.itemId] else null
     val status: (@Composable () -> Unit)? = if (runningLabel != null) ({ RunningIndicator(runningLabel) }) else null
     val contextualSubtitle = model.subtitle?.takeUnless {
         it.equals(model.platformLabel, ignoreCase = true) || it in setOf("App", "Game", "Emulator", "System")

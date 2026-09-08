@@ -15,6 +15,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import dev.handheld.launcher.core.designsystem.foundation.LauncherSurface
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.foundation.launcherContentColor
@@ -129,6 +131,26 @@ fun LauncherIconButton(
     ) { content() }
 }
 
+/** Shared padding and width arithmetic for rendered filters and finite lazy strips. */
+@Immutable
+data class FilterChipGeometry(
+    val horizontalPadding: Dp,
+    val verticalPadding: Dp,
+    val cornerRadius: Dp,
+    val iconGap: Dp,
+) {
+    fun widthFor(labelWidth: Dp, trailingIconWidth: Dp = 0.dp): Dp =
+        (labelWidth + horizontalPadding * 2f +
+            (if (trailingIconWidth > 0.dp) trailingIconWidth + iconGap else 0.dp) + 1.dp)
+            .coerceAtLeast(48.dp) // Allow native text/padding rounding without clipping a whole strip target.
+}
+
+@Composable
+fun filterChipGeometry(): FilterChipGeometry {
+    val scale = LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    return FilterChipGeometry(12.dp * scale, 6.dp * scale, 8.dp * scale, LauncherTheme.spacing.xxs / 2f)
+}
+
 /** A selected filter whose selection and controller focus are independent states. */
 @Composable
 fun FilterChip(
@@ -144,6 +166,7 @@ fun FilterChip(
     compact: Boolean = true,
     trailingIcon: (@Composable () -> Unit)? = null,
 ) {
+    val geometry = filterChipGeometry()
     val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -170,18 +193,17 @@ fun FilterChip(
         unavailable = unavailable,
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
-        shape = if (compact) RoundedCornerShape(50) else RoundedCornerShape(LauncherTheme.shapes.smallControl),
+        shape = RoundedCornerShape(if (compact) geometry.cornerRadius else LauncherTheme.shapes.smallControl),
         compact = compact,
     ) {
-        Row(Modifier.padding(horizontal = 10.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale,
-            vertical = 4.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
+        Row(Modifier.padding(horizontal = geometry.horizontalPadding, vertical = geometry.verticalPadding),
             verticalAlignment = Alignment.CenterVertically) {
             LauncherText(label, style = LauncherTheme.typography.controlLabel,
                 color = if (selected) LauncherTheme.colors.destinationSelectedContent
                     else if (focused && LocalControllerInput.current) LauncherTheme.colors.textPrimary else LauncherTheme.colors.textSecondary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             trailingIcon?.let {
-                Spacer(Modifier.width(LauncherTheme.spacing.xxs / 2))
+                Spacer(Modifier.width(geometry.iconGap))
                 it()
             }
         }

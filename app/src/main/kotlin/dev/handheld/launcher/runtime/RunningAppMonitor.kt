@@ -42,12 +42,12 @@ data class RunningAppState(
 ) {
     val enabled: Boolean get() = access != RunningAccess.OFF
     val summary: String get() = when (access) {
-        RunningAccess.OFF -> "Show verified app and emulator process status"
+        RunningAccess.OFF -> "Show verified app and emulator status on Home"
         RunningAccess.INSTALL -> "Install Shizuku to enable live process readings"
         RunningAccess.START -> "Start Shizuku; it needs restarting after a device reboot"
         RunningAccess.ALLOW -> "Allow this launcher in Shizuku"
         RunningAccess.CONNECTING -> "Connecting to Shizuku…"
-        RunningAccess.READY -> "Live process readings · An emulator may be paused or in its menu"
+        RunningAccess.READY -> "Live status on Home · An emulator may be paused or in its menu"
         RunningAccess.UNAVAILABLE -> "Process reading unavailable · Open Shizuku to reconnect"
     }
 }

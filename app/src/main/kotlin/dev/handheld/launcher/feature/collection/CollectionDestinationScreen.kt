@@ -70,6 +70,7 @@ import dev.handheld.launcher.contract.LauncherActionDescriptor
 import dev.handheld.launcher.contract.LauncherActionMeaning
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.designsystem.controls.FilterChip
+import dev.handheld.launcher.core.designsystem.controls.filterChipGeometry
 import dev.handheld.launcher.core.designsystem.controls.ControllerGlyph
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
@@ -421,19 +422,43 @@ private fun CollectionFilters(
         if (categories.isNotEmpty()) {
             Box(Modifier.width(1.dp).height(20.dp).border(1.dp, LauncherTheme.colors.borderEmphasis))
             ControllerGlyph("L2", semanticLabel = "L2: previous filter; hold to accelerate")
-            val reducedMotion = LauncherTheme.motion.reducedMotion
-            // Fit whole intrinsic chip allocations, then show one fewer category when
-            // another complete target still fits. No fixed blank gap grows with UI scale.
             BoxWithConstraints(Modifier.weight(1f, fill = false)) {
-            val stripWidth = collectionStripWidth(maxWidth, controls.categoryWidths)
-            LaunchedEffect(state.filter, categories.map { it.key }, stripWidth) {
-                val selected = categories.indexOfFirst { it.key == state.filter }
-                if (selected >= 0) {
-                    val item = row.layoutInfo.visibleItemsInfo.firstOrNull { it.index == selected }
-                    if (item == null || item.offset < 0 || item.offset + item.size > row.layoutInfo.viewportEndOffset) {
-                        if (reducedMotion) row.scrollToItem(selected) else row.animateScrollToItem(selected)
+            val density = LocalDensity.current
+            val widthsPx = with(density) { controls.categoryWidths.map { it.roundToPx() } }
+            val availablePx = with(density) { maxWidth.roundToPx() }
+            val gapPx = with(density) { 2.dp.roundToPx() }
+            var windowStart by remember { mutableIntStateOf(0) }
+            val currentFilter by rememberUpdatedState(state.filter)
+            val stripWidth = with(density) { collectionStripWidth(availablePx, widthsPx, windowStart, gapPx).toDp() }
+            // One owner settles the viewport after a selection or touch scroll. Size
+            // the actual visible window, not the prefix of the complete category list.
+            LaunchedEffect(row, categories.map { it.key }, widthsPx, availablePx, gapPx) {
+                var handledFilter: String? = null
+                snapshotFlow { Triple(currentFilter, row.isScrollInProgress,
+                    row.firstVisibleItemIndex to row.firstVisibleItemScrollOffset) }
+                    .distinctUntilChanged().collect { (filter, scrolling, position) ->
+                        val restoreSelection = handledFilter == null
+                        val selectionChanged = handledFilter != filter
+                        if (!selectionChanged && scrolling) return@collect
+                        handledFilter = filter
+                        val selected = categories.indexOfFirst { it.key == filter }
+                        val layout = row.layoutInfo
+                        val selectedVisible = layout.visibleItemsInfo.any {
+                            it.index == selected && it.offset >= layout.viewportStartOffset &&
+                                it.offset + it.size <= layout.viewportEndOffset
+                        }
+                        val first = position.first.coerceIn(widthsPx.indices)
+                        val nearest = (first + if (position.second > widthsPx[first] / 2) 1 else 0)
+                            .coerceAtMost(widthsPx.lastIndex)
+                        val target = if (selectionChanged && selected >= 0 && (restoreSelection || !selectedVisible)) selected else nearest
+                        if (windowStart == target && position == (target to 0) && !scrolling) return@collect
+                        windowStart = target
+                        // Let the new width reach measurement before a near-end jump;
+                        // otherwise LazyRow clamps it against the previous wider window.
+                        repeat(2) { withFrameNanos { } }
+                        if (currentFilter != filter || (!selectionChanged && row.isScrollInProgress)) return@collect
+                        row.scrollToItem(target)
                     }
-                }
             }
             LazyRow(state = row,
                 modifier = Modifier.width(stripWidth).clipToBounds().testTag("collection-filter-strip")
@@ -442,7 +467,7 @@ private fun CollectionFilters(
                 items(categories.size, key = { categories[it].key }) { index ->
                     val option = categories[index]
                     FilterChip(option.label, option.key == state.filter, { callbacks.onFilter(option.key) },
-                        Modifier.testTag("collection-filter-${option.key}")
+                        Modifier.width(with(density) { widthsPx[index].toDp() }).testTag("collection-filter-${option.key}")
                             .focusRequester(categoryRequesters.getOrPut(option.key) { FocusRequester() }),
                         contentDescription = "Filter ${collectionFilterLabel(option.key)}, ${option.count} items",
                         onFocusChanged = { focused ->
@@ -486,12 +511,12 @@ private fun collectionControlWidths(
 ): CollectionControlWidths {
     val spacing = LauncherTheme.spacing
     val style = LauncherTheme.typography.controlLabel
-    val chipPadding = 20.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    val geometry = filterChipGeometry()
     fun chipWidth(label: String, trailingWidth: Dp = 0.dp) =
-        (textWidth(label, style) + chipPadding + trailingWidth + 1.dp).coerceAtLeast(48.dp)
+        geometry.widthFor(textWidth(label, style), trailingWidth)
     val categories = collectionFilterOptions(state).filter { it.key != "all" }
     val categoryWidths = categories.map { chipWidth(it.label) }
-    val moreWidth = if (callbacks.onOpenFilters != null) chipWidth("All filters", 16.dp + spacing.xxs / 2f) else 0.dp
+    val moreWidth = if (callbacks.onOpenFilters != null) chipWidth("All filters", 16.dp) else 0.dp
     val minimumWidth = if (categories.isEmpty()) chipWidth("All") + moreWidth + spacing.xs
         else chipWidth("All") + 1.dp +
             textWidth("L2", style) + textWidth("R2", style) + spacing.xs * 4f +
@@ -500,15 +525,19 @@ private fun collectionControlWidths(
     return CollectionControlWidths(categoryWidths, minimumWidth)
 }
 
-private fun collectionStripWidth(available: Dp, widths: List<Dp>): Dp {
-    var used = 0.dp
-    val fitted = widths.takeWhile { width ->
-        val next = used + (if (used > 0.dp) 2.dp else 0.dp) + width
+private fun collectionStripWidth(available: Int, widths: List<Int>, firstIndex: Int, gap: Int): Int {
+    if (widths.isEmpty()) return 0
+    var used = 0
+    val window = widths.drop(firstIndex.coerceIn(widths.indices))
+    val fitted = window.takeWhile { width ->
+        val next = used + (if (used > 0) gap else 0) + width
         (next <= available).also { if (it) used = next }
     }
     val keep = if (fitted.size > 1) fitted.dropLast(1) else fitted
-    val wholeTargetsWidth = keep.foldIndexed(0.dp) { index, total, width -> total + width + if (index > 0) 2.dp else 0.dp }
-    return maxOf(wholeTargetsWidth, widths.maxOrNull() ?: 48.dp).coerceAtMost(available).coerceAtLeast(0.dp)
+    // Sum the same rounded widths and gap used by LazyRow. A widest-category floor
+    // or per-item rounding mismatch would expose part of the following cell.
+    return (if (keep.isEmpty()) window.first() else keep.sum() + gap * (keep.size - 1))
+        .coerceIn(0, available.coerceAtLeast(0))
 }
 
 private fun CollectionScreenCallbacks.focused(label: String, meaning: LauncherActionMeaning, action: () -> Unit, focused: Boolean) {

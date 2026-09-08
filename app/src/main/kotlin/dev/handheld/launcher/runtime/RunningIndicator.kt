@@ -20,6 +20,7 @@ import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ItemId
 
+/** Only Home supplies labels; other routes stay empty even when reusing Home card styling. */
 val LocalRunningLabels = staticCompositionLocalOf<Map<ItemId, String>> { emptyMap() }
 
 @Composable

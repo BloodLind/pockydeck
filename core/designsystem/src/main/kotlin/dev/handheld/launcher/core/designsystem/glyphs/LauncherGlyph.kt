@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -78,7 +79,12 @@ fun LauncherFaceGlyph(
 ) {
     BasicText(
         text = button.legend,
-        modifier = modifier.clearAndSetSemantics {
+        // Keep the hint's original allocation/outline; only the long START legend shrinks.
+        modifier = modifier.graphicsLayer {
+            val legendScale = if (button == LauncherFaceButton.Start) .85f else 1f
+            scaleX = legendScale
+            scaleY = legendScale
+        }.clearAndSetSemantics {
             if (semanticLabel != null) contentDescription = semanticLabel
         },
         style = LauncherTheme.typography.controlLabel.copy(color = color, textAlign = TextAlign.Center),

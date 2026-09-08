@@ -52,7 +52,6 @@ class RunningIndicatorPresentationTest {
         val app = LibraryItem.AndroidApp(CurrentUserAndroidComponentId("fixture.eden", "fixture.eden.Main"),
             "Eden", LibraryCategory.EMULATOR, Availability.Available, setOf(SupportedItemAction.OPEN))
         var scale by mutableFloatStateOf(1f)
-        var variant by mutableStateOf(LibraryItemCardVariant.Home)
         var actualDensity = 1f
         compose.setContent {
             Box(Modifier.size(350.dp, 300.dp)) {
@@ -62,35 +61,32 @@ class RunningIndicatorPresentationTest {
                     LocalRunningLabels provides mapOf(app.id to "Running"),
                 ) {
                     LauncherTheme(reducedMotion = true, referenceScale = (2f / 3f) / scale, uiScaleFactor = scale) {
-                        LibraryItemCard(app.toTileUiModel(), variant, selected = false,
-                            modifier = (if (variant == LibraryItemCardVariant.Home) Modifier.size(160.dp) else Modifier.width(160.dp))
-                                .testTag("running-app-card"), onActivate = {})
+                        LibraryItemCard(app.toTileUiModel(), LibraryItemCardVariant.Home, selected = false,
+                            modifier = Modifier.size(160.dp).testTag("running-app-card"), onActivate = {})
                     }
                 }
             }
         }
-        for (cardVariant in listOf(LibraryItemCardVariant.Home, LibraryItemCardVariant.Collection)) {
-            for (percent in listOf(100, 110, 120)) {
-                compose.runOnIdle { variant = cardVariant; scale = percent / 100f }
-                compose.onNodeWithContentDescription("Live process detected: Running", useUnmergedTree = true).assertIsDisplayed()
-                assertFullLabel("Running", "$cardVariant/$percent%")
-                val status = compose.onNodeWithContentDescription("Live process detected: Running", useUnmergedTree = true)
-                    .fetchSemanticsNode().boundsInRoot
-                val card = compose.onNodeWithTag("running-app-card").fetchSemanticsNode().boundsInRoot
-                val iconLimit = if (cardVariant == LibraryItemCardVariant.Home) 80f * 2f / 3f else 56f
-                assertTrue("$cardVariant at $percent% lets the badge extend beyond the fitted icon's width",
-                    status.width > iconLimit * actualDensity)
-                assertTrue("$cardVariant at $percent% places status at the square's top edge", status.top < card.top + card.height * .22f)
-                assertTrue("$cardVariant at $percent% keeps the whole badge inside the card", fits(status, card))
-                compose.onAllNodes(hasClickAction()).assertCountEquals(1)
-            }
+        for (percent in listOf(100, 110, 120)) {
+            compose.runOnIdle { scale = percent / 100f }
+            compose.onNodeWithContentDescription("Live process detected: Running", useUnmergedTree = true).assertIsDisplayed()
+            assertFullLabel("Running", "Home/$percent%")
+            val status = compose.onNodeWithContentDescription("Live process detected: Running", useUnmergedTree = true)
+                .fetchSemanticsNode().boundsInRoot
+            val card = compose.onNodeWithTag("running-app-card").fetchSemanticsNode().boundsInRoot
+            val iconLimit = 80f * 2f / 3f
+            assertTrue("Home at $percent% lets the badge extend beyond the fitted icon's width",
+                status.width > iconLimit * actualDensity)
+            assertTrue("Home at $percent% places status at the square's top edge", status.top < card.top + card.height * .22f)
+            assertTrue("Home at $percent% keeps the whole badge inside the card", fits(status, card))
+            compose.onAllNodes(hasClickAction()).assertCountEquals(1)
         }
     }
 
-    @Test fun listRomStatusKeepsFullEmulatorLabelBesideArtworkAndOneStableActivationTarget() {
+    @Test fun homeRomStatusKeepsFullEmulatorLabelAndOneStableActivationTarget() {
         val rom = LibraryItem.RomGame(ItemId("fixture:running-rom"), "Sample GBA game", CatalogSourceId("fixture:roms"),
             Availability.Available, setOf(SupportedItemAction.OPEN), "gba", "gba")
-        val label = "RetroArch (64-bit) running"
+        val label = "RetroArch running"
         var labels by mutableStateOf(mapOf(rom.id to label))
         var activations = 0
         compose.setContent {
@@ -99,25 +95,51 @@ class RunningIndicatorPresentationTest {
                 LocalRunningLabels provides labels,
             ) {
                 LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
-                    LibraryItemCard(rom.toTileUiModel(), LibraryItemCardVariant.SearchResult, selected = false,
-                        modifier = Modifier.width(320.dp).testTag("running-rom-row"), onActivate = { activations++ })
+                    LibraryItemCard(rom.toTileUiModel(), LibraryItemCardVariant.Home, selected = false,
+                        modifier = Modifier.size(160.dp, 200.dp).testTag("running-rom-card"), onActivate = { activations++ })
                 }
             }
         }
-        assertFullLabel(label)
+        assertFullLabel(label, "Home")
         val status = compose.onNodeWithContentDescription("Live process detected: $label", useUnmergedTree = true)
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val console = compose.onNodeWithContentDescription("GBA", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        val card = compose.onNodeWithTag("running-rom-row").fetchSemanticsNode()
-        assertTrue("The status uses caption width beside the image", status.left > console.right)
-        assertTrue("The full status fits the row", fits(status, card.boundsInRoot))
+        val card = compose.onNodeWithTag("running-rom-card").fetchSemanticsNode()
+        assertTrue("The full status fits the Home card", fits(status, card.boundsInRoot))
         compose.onAllNodes(hasClickAction()).assertCountEquals(1)
-        compose.onNodeWithTag("running-rom-row").performClick()
+        compose.onNodeWithTag("running-rom-card").performClick()
         compose.runOnIdle { assertEquals(1, activations); labels = emptyMap() }
         compose.onNodeWithContentDescription("Live process detected: $label", useUnmergedTree = true).assertDoesNotExist()
         compose.onAllNodes(hasClickAction()).assertCountEquals(1)
         assertEquals("Status updates preserve the card's activation target", card.id,
-            compose.onNodeWithTag("running-rom-row").fetchSemanticsNode().id)
+            compose.onNodeWithTag("running-rom-card").fetchSemanticsNode().id)
+    }
+
+    @Test fun collectionAndSearchCardsIgnoreProcessLabelsForAppsAndRoms() {
+        val items = listOf(
+            LibraryItem.AndroidApp(CurrentUserAndroidComponentId("fixture.eden", "fixture.eden.Main"),
+                "Eden", LibraryCategory.EMULATOR, Availability.Available, setOf(SupportedItemAction.OPEN)),
+            LibraryItem.RomGame(ItemId("fixture:running-rom"), "Sample GBA game", CatalogSourceId("fixture:roms"),
+                Availability.Available, setOf(SupportedItemAction.OPEN), "gba", "gba"),
+        )
+        var item by mutableStateOf(items.first())
+        var variant by mutableStateOf(LibraryItemCardVariant.Collection)
+        val label = "Fixture emulator running"
+        compose.setContent {
+            CompositionLocalProvider(LocalRunningLabels provides items.associate { it.id to label }) {
+                LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
+                    LibraryItemCard(item.toTileUiModel(), variant, selected = false,
+                        modifier = Modifier.width(260.dp).testTag("non-home-card"), onActivate = {})
+                }
+            }
+        }
+        for (cardItem in items) {
+            for (cardVariant in listOf(LibraryItemCardVariant.Collection, LibraryItemCardVariant.SearchResult)) {
+                compose.runOnIdle { item = cardItem; variant = cardVariant }
+                compose.onNodeWithContentDescription("Live process detected: $label", useUnmergedTree = true).assertDoesNotExist()
+                compose.onNodeWithText(cardItem.title, useUnmergedTree = true).assertIsDisplayed()
+                compose.onAllNodes(hasClickAction()).assertCountEquals(1)
+            }
+        }
     }
 
     private fun assertFullLabel(label: String, context: String = "List") {

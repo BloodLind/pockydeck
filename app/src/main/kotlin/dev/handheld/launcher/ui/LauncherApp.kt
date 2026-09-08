@@ -79,6 +79,8 @@ fun LauncherApp(
     onSearchClearEnabledChanged: (Boolean) -> Unit = {},
     notificationAccessGranted: Boolean = false,
     onSetupNotificationAccess: () -> Unit = {},
+    controllerSoundsEnabled: Boolean = true,
+    onSetControllerSoundsEnabled: (Boolean) -> Unit = {},
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
@@ -438,12 +440,16 @@ fun LauncherApp(
                                 ), container.iconLoader)
                             else EmptyState("Item unavailable", "This item is no longer in the catalog.", "Back", ::goBack, bounds)
                         } else when (route) {
-                            LauncherDestination.HOME -> HomeRoute(home, metrics, container.iconLoader, bounds,
-                                onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
-                                onOpenDetails = ::openDetails,
-                                allowFocusRequest = !modalVisible && controllerInput,
-                                pageActivationRequest = pageActivationRequest,
-                                onFocusedActionChanged = { focused = it?.let { value -> FocusedControlAction(value.descriptor, value.onActivate, value.itemId) } })
+                            LauncherDestination.HOME -> CompositionLocalProvider(
+                                dev.handheld.launcher.runtime.LocalRunningLabels provides runningApps.labels,
+                            ) {
+                                HomeRoute(home, metrics, container.iconLoader, bounds,
+                                    onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
+                                    onOpenDetails = ::openDetails,
+                                    allowFocusRequest = !modalVisible && controllerInput,
+                                    pageActivationRequest = pageActivationRequest,
+                                    onFocusedActionChanged = { focused = it?.let { value -> FocusedControlAction(value.descriptor, value.onActivate, value.itemId) } })
+                            }
                             LauncherDestination.SETTINGS -> SettingsScreen(
                                 SettingsScreenState(mapping, homeRoleSummary(homeRoleHeld, roleState),
                                     listOf(LibraryCategory.GAME, LibraryCategory.EMULATOR, LibraryCategory.OTHER).map { category ->
@@ -451,8 +457,10 @@ fun LauncherApp(
                                     }, romSources, romEmulators, artworkSummary,
                                     uiScalePercent = display.uiScalePercent, reduceMotion = display.reduceMotion,
                                     notificationAccessGranted = notificationAccessGranted,
+                                    controllerSoundsEnabled = controllerSoundsEnabled,
                                     runningIndicatorsEnabled = runningApps.enabled,
                                     runningStatusSummary = runningApps.summary), bounds, SettingsCallbacks(
+                                    onSetControllerSoundsEnabled = onSetControllerSoundsEnabled,
                                     onSetRunningIndicators = container.runningApps::setEnabled,
                                     onSetupRunningStatus = { if (!container.runningApps.requestSetup()) showError("Shizuku setup is unavailable.") },
                                     onSetupNotificationAccess = onSetupNotificationAccess,
@@ -535,7 +543,6 @@ fun LauncherApp(
             CompositionLocalProvider(LocalControlFocusRestoration provides { controlRestoreFocus = it },
                 LocalControllerInput provides controllerInput,
                 LocalPageNavigation provides publishPageNavigation,
-                dev.handheld.launcher.runtime.LocalRunningLabels provides runningApps.labels,
                 LocalEnrichedArtworkLoader provides container.enrichedArtworkLoader) {
             LauncherShell(metrics, LauncherShellState(destination, focusedDock, status.toShellStatus(), footer,
                 dockFocusEnabled = controllerInput && dockFocusAllowed && !modalVisible),

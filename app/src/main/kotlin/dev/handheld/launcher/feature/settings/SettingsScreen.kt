@@ -66,7 +66,8 @@ data class SettingsScreenState(
     val reduceMotion: Boolean = false,
     val notificationAccessGranted: Boolean = false,
     val runningIndicatorsEnabled: Boolean = false,
-    val runningStatusSummary: String = "Show verified app and emulator process status",
+    val runningStatusSummary: String = "Show verified app and emulator status on Home",
+    val controllerSoundsEnabled: Boolean = true,
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -82,6 +83,7 @@ data class SettingsCallbacks(
     val onSetupNotificationAccess: () -> Unit = {},
     val onSetRunningIndicators: (Boolean) -> Unit = {},
     val onSetupRunningStatus: () -> Unit = {},
+    val onSetControllerSoundsEnabled: (Boolean) -> Unit = {},
 )
 
 private val settingsSections = listOf("Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
@@ -165,6 +167,11 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
                 modifier = if (section == "All" || section == "Controls") Modifier.focusRequester(initial) else Modifier,
                 onSelect = swapConfirmBack, supportingText = "Back uses ${state.confirmBackMapping.back.name}",
                 onFocusChanged = settingsFocus("Swap Confirm and Back", LauncherActionMeaning.CHANGE_FILTER, swapConfirmBack, callbacks.onFocusedAction))
+            val toggleSounds = { latestCallbacks.onSetControllerSoundsEnabled(!latestState.controllerSoundsEnabled) }
+            ToggleRow("Controller sounds", state.controllerSoundsEnabled, callbacks.onSetControllerSoundsEnabled,
+                supportingText = "Soft feedback for controller actions. Uses media volume.",
+                onFocusChanged = settingsFocus("Toggle controller sounds", LauncherActionMeaning.CHANGE_FILTER,
+                    toggleSounds, callbacks.onFocusedAction))
         }
         if (section == "All" || section == "Display") {
             PageHeading("Display")

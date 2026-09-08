@@ -17,6 +17,19 @@ sdk/
 .reference/
 .local/
 
+# Release artifacts and signing material
+*.apk
+*.aab
+*.apks
+*.idsig
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+.env
+.env.*
+!.env.example
+
 # Operating-system files
 .DS_Store
 Thumbs.db

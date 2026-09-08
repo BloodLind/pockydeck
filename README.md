@@ -1,71 +1,80 @@
-# Handheld Launcher
+# PockyDeck
 
-An Android HOME launcher for the Retroid Pocket Flip 2, built in Kotlin and Jetpack Compose with MVVM.
+**Your games. One pocket-sized home.**
 
-The native application base includes Home, Library, Apps, Favorites, Search, Settings and item details in one persistent shell. It discovers installed Android apps, opens them through one acknowledged launch path, stores successful-open order, favorites and category overrides, and offers user-controlled default-HOME setup. The Home proportions, colors, typography, carousel, dock and controller footer follow the supplied design with real device content.
+An open-source Android launcher for handheld gaming devices, built with Kotlin and Jetpack Compose. Bring Android games, ROMs, and exported PC games together in a controller-friendly home screen.
 
-The ROM feature batch adds granted folder scanning, console detection, selectable ROMs, emulator/core choices, automatic archive preparation, existing ES-DE artwork reuse and bounded Libretro cover lookup. Optional Shizuku integration reports observed app or emulator processes; it does not identify the active ROM or infer a game session from launch history.
+[![Android](https://img.shields.io/badge/Android-13%2B-3DDC84?logo=android&logoColor=white)](docs/getting-started.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Build](https://github.com/BloodLind/pockydeck/actions/workflows/build.yml/badge.svg)](https://github.com/BloodLind/pockydeck/actions/workflows/build.yml)
+[![Preview](https://img.shields.io/badge/preview-0.10.3-orange)](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.3)
 
-See the [ROM setup and recovery guide](docs/rom-setup-guide.md), [recognized formats](docs/implementation/evidence/F15/format-support.md), and [emulator compatibility contracts](docs/implementation/evidence/F16/emulator-contracts.md). Recognizing a file format does not imply that every emulator can launch it.
+[Download 0.10.3](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.3) · [Getting started](docs/getting-started.md) · [ROM setup](docs/rom-setup-guide.md) · [Contributing](CONTRIBUTING.md)
 
-- [Implementation progress](docs/implementation/progress.md): current story status, ownership, evidence, and dependency gates.
-- [Foundation launch evidence](docs/implementation/evidence/F01/US-001-launch.md): Android 13 emulator smoke test and screenshot.
+## What it does
 
-- [Project plan](docs/project-plan.md): scope, architecture, application behavior, delivery stages, and acceptance criteria.
-- [Design system](docs/design-system.md): shared shell, reference measurements, typography, styles, controls, and page templates.
-- [Feature implementation plan](docs/implementation/feature-plan.md): individual agent tasks, dependencies, ownership, and acceptance gates.
-- [User-story backlog](docs/implementation/user-stories/README.md): smaller stories under every feature, with testable acceptance criteria and required evidence.
-- [Agent workflow](docs/implementation/agent-workflow.md): model assignments, execution order, and copy-ready coordinator, worker, and review prompts.
-- [Home reference](docs/references/home.png): authoritative visual reference for proportions and alignment.
-- [Library template](docs/references/library-template.png): content template; its shell dimensions are not authoritative.
+- **One Home for your games:** up to 20 cards, recent launches first, with console representatives before your history fills out.
+- **Separate collections:** Library for games, Apps for other Android applications, Favorites for anything you star, and Search across games, ROMs, apps, and launcher actions.
+- **Controller and touch navigation:** D-pad/stick movement, accelerated holds, analog-trigger handling, A/B remapping, contextual footer hints, and soft original sound effects.
+- **Flexible collections:** grid and split-pane list views, adjustable card size and UI scale, compact console filters, sorting, and reduced motion.
+- **Background ROM discovery:** populated console folders on internal, SD, and USB storage; incremental results; explicit folder selection when broad storage access is unwanted.
+- **Emulator selection:** compatible installed apps, per-console and per-game preferences, RetroArch core choices, and automatic preparation of supported archives.
+- **Artwork:** reuse ES-DE metadata and covers, or optionally look up missing console covers through Libretro.
+- **PC frontend exports:** import GameNative shortcuts; compatible GameHub Lite packages support Steam exports.
+- **Device status:** battery, battery temperature, RAM, available storage, Wi-Fi, and optional Bluetooth/notification indicators. Optional Shizuku support adds observed app/emulator process badges on Home.
 
-The latest user decisions take precedence over the attached [design source](docs/references/design-source.txt). That source includes generated PRD/HTML material, demonstration data, and features excluded from this project.
+No games, BIOS files, emulator binaries, or emulator cores are bundled.
 
-## Build locally
+## Current release
 
-Use JDK 17, Android SDK platform 34 and the checked-in Gradle 8.9 wrapper. Point Android Studio or the ignored `local.properties` at your SDK. The application requires Android 13 or later.
+**0.10.3 is the first public preview**, designed and tested primarily on the Retroid Pocket Flip 2 running Android 13. Other Android 13+ landscape devices may work but need device-specific verification.
 
-```powershell
-.\gradlew.bat :app:assembleDebug :app:lintDebug :core:domain:test :core:data:testDebugUnitTest :app:testDebugUnitTest :core:designsystem:testDebugUnitTest
+The APK still appears as **Handheld Launcher** in Android. Its package is `dev.handheld.launcher`. The release uses a non-debuggable release build signed with the existing development certificate; it is a sideloaded preview, not a Play Store release. See [installation and signing details](docs/getting-started.md#install-the-preview).
+
+Recent improvements include compact action buttons, a cleaner Search toolbar, three visible console categories, split-pane lists, softer controller audio, and improved artwork memory handling. Read the [changelog](CHANGELOG.md) and [release notes](docs/releases/0.10.3.md).
+
+## Start playing
+
+1. Download the APK and checksum file from the [release page](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.3), install it, and open Handheld Launcher.
+2. Installed Android applications appear automatically. Add ROM folders in **Settings → ROM folders**, or enable automatic discovery after granting Android's **All files access**.
+3. Install and configure your emulators separately. Open a game and choose an emulator if several are compatible.
+4. Optionally use **Settings → Launcher → Set as Home launcher** to make it your Android Home screen.
+
+Read [recognized formats](docs/rom-formats.md) and [emulator compatibility](docs/emulators.md) before assuming a detected ROM can be launched. BIOS, keys, cores, and game compatibility remain emulator-specific.
+
+## Build from source
+
+Use **JDK 17**, **Android SDK Platform 34 / Build Tools 34.0.0**, and the checked-in **Gradle 8.9** wrapper.
+
+```sh
+git clone https://github.com/BloodLind/pockydeck.git
+cd pockydeck
+./gradlew :app:assembleDebug
 ```
 
-The APK is written to `app/build/outputs/apk/debug/app-debug.apk`. On macOS/Linux, use `./gradlew` with the same tasks. Host-specific commands and the Windows JBR socket workaround used in this session are recorded in [foundation evidence](docs/implementation/evidence/F01/US-003.md).
+On Windows, use `.\gradlew.bat`. Configure the SDK through Android Studio, `ANDROID_HOME`, or an ignored `local.properties` file. The APK is written to `app/build/outputs/apk/debug/app-debug.apk`.
 
-## Install and use on a device
+The [development guide](docs/development.md) covers tests, device checks, modules, and release packaging.
 
-Enable USB debugging, connect the device and accept its Android authorization prompt. Use `adb devices` to find its serial, then replace `SERIAL` below. `install -r` preserves the launcher's existing data.
+## Documentation
 
-```powershell
-adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s SERIAL shell am start -n dev.handheld.launcher/.MainActivity
-```
+| Guide | Contents |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | Installation, controls, display settings, Home setup, running indicators |
+| [ROM setup](docs/rom-setup-guide.md) | Storage access, discovery, extraction, emulator choices, recovery |
+| [ROM formats](docs/rom-formats.md) / [Emulators](docs/emulators.md) | Recognition and dispatch compatibility |
+| [PC games](docs/pc-games.md) | GameNative and compatible GameHub Lite exports |
+| [Development](docs/development.md) / [Architecture](docs/architecture.md) | Build, tests, module boundaries, persistence and input rules |
+| [Design system](docs/design-system.md) | Visual and interaction conventions |
+| [Privacy](docs/privacy.md) / [Security](SECURITY.md) | Local data, optional network/helper access, reporting vulnerabilities |
+| [Roadmap](docs/roadmap.md) | Current limitations and next work |
 
-Use the D-pad or left stick to move, A to activate, B to go back, X to search, Y for item details, Start for the item/page menu, L1/R1 to switch destinations and L2/R2 to change supported filters or move through Home cards. Settings → Controls swaps A/B and updates the footer. Touch uses the same controls. Search uses A Apply, B Cancel and Y Clear while editing; closing Search clears its query and filter, while opening details preserves the Search session for return.
+## Contribute
 
-Controller navigation has soft original movement, selection, confirm, back and page/filter sounds. Selecting a game or app has a distinct warm cue. Only one cue plays at a time; rapid input skips sounds while the current cue finishes, without slowing navigation or queuing playback. They are enabled by default and can be turned off in Settings → Controls → **Controller sounds**. They use media volume, including its mute and Android's media interruption policy; Android touch-sound settings are independent. Touch and ordinary text entry remain silent.
+Bug reports, compatibility reports, documentation fixes, and focused pull requests are welcome. Start with the [contribution guidelines](CONTRIBUTING.md) and [code of conduct](CODE_OF_CONDUCT.md). Include your device, Android version, emulator version, and reproduction steps when reporting a problem.
 
-Home shows up to 20 cards: available recently opened games and apps first, then one stable game from each console not already represented, one Android-game representative where needed, and remaining apps. Returning Home, selecting Home again or returning from another Activity while Home is open resets selection and scrolling to the first card. Library, Apps and Favorites each remember their own Grid/List choice. List mode places the list on the left and the selected item's artwork and information on the right. Touch a row to preview it, then use the round Play/Open, Details or Favorite star controls; controller A launches the selected row. Narrow windows retain Open and Favorite beside the selected title.
+## License and credits
 
-Collection filters show three complete populated categories between L2/R2 when space permits, with fixed All and All filters controls beside them. The last window keeps three categories visible instead of shrinking at the end. Actions use subdued rounded surfaces with full touch targets. Collapsed Search shows the current query with a search icon, a round × to clear, and the result count on the right. Select the query to edit it.
+PockyDeck's original code, documentation, geometric debug artwork, and synthesized controller cues are licensed under [Apache 2.0](LICENSE). Third-party components retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
-Settings → Display offers 90%, 100%, 110% and 120% UI scale, Reduce motion, and a separate grid card size from 70% to 140% in ten-point steps. Grid size changes collection artwork and column density without reducing text size. Internal storage icons are cyan; external storage icons are amber.
-
-To make this the Home screen, use Settings → Launcher → Set as Home launcher and choose it in Android. Declining leaves normal browsing available. To switch away later, use Android Settings → Apps → Default apps → Home app.
-
-The status strip shows local time, battery percentage, **battery temperature**, used/total RAM, internal free space and free space across mounted external volumes, plus Wi-Fi and available optional indicators. Temperature is blue below 15°C and red at 45°C or above; it is not a CPU reading. Battery color is green only while Android reports charging, otherwise red at 10% or below, yellow below 15%, and neutral at higher levels. RAM uses a distinct cool tint and remains separate from storage.
-
-## Optional running indicators
-
-Running indicators are off by default. They need the separate official Shizuku helper and your permission; ordinary launcher features work without them.
-
-1. Open Settings → Launcher, enable **Running indicators**, then choose **Set up Shizuku**.
-2. If needed, install Shizuku from its [official download page](https://shizuku.rikka.app/download/). Start it using its USB/computer or wireless-debugging instructions in the [official setup guide](https://shizuku.rikka.app/guide/setup/).
-3. Allow Handheld Launcher when Shizuku asks. Its normal persistent authorization avoids a prompt on every reading. After a reboot, restart Shizuku; the debugging-based helper does not remain running across reboots. If permission was revoked, authorize the launcher again through Shizuku.
-
-While the launcher is foreground, it checks requested current-user package processes every three seconds. Badges appear only on Home. An app badge means its process was observed. A ROM badge names its last dispatched emulator, or the configured/unique supported installed emulator, only when that emulator process is observed. It may be paused, cached or showing its menu; the badge does not mean that ROM is playing. Android on the Flip 2 denies access to those emulators' open-file lists, so there is no exact-ROM badge.
-
-Turn **Running indicators** off to stop sampling and remove badges, or revoke the launcher's authorization in Shizuku's authorized-app list. No Usage Access or session-history inference is used. This integration bundles Shizuku API 13.1.5; the development device setup uses the official Shizuku 13.6.0 helper started over USB.
-
-## Verification
-
-For the combined emulator checks, set `ANDROID_SERIAL` to an isolated emulator before running `:app:connectedDebugAndroidTest :core:designsystem:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest`. Detailed verification and remaining physical controller/lid checks are recorded in [implementation progress](docs/implementation/progress.md).
+Built with AndroidX and Jetpack Compose, Plus Jakarta Sans, Material Symbols, Apache Commons, XZ for Java, and the optional Shizuku API. PockyDeck is an independent project and is not affiliated with the device, game, emulator, or frontend projects it integrates with.

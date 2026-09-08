@@ -1,6 +1,6 @@
 # ROM folders, consoles and emulators
 
-This guide covers the 0.3.1 development build. Library contains ROMs and Android games, Apps contains other Android apps, and Favorites includes any available item you have marked. Home shows the most recently opened available item first, followed by Android games, ROMs, and other apps alphabetically within each group.
+This guide covers the 0.10.3 preview. Library contains ROMs and Android games, Apps contains other Android apps, and Favorites includes any available item you have marked. Home shows up to 20 items, prioritizing successful recent launches and then representatives from consoles not already covered by recency.
 
 ## Automatic discovery
 
@@ -22,7 +22,7 @@ Turning **Discover new console folders** off stops adding new roots; folders alr
 
 Folder names and deterministic file formats identify consoles. Shared suffixes such as ISO, CHD, BIN and ZIP need a named folder or a user choice. A source-level console choice overrides automatic detection for that source; leave a multi-console parent on automatic. BIOS/support files are excluded where identifiable, and valid disc descriptors/playlists group their tracks/discs into one game. Damaged sets remain visible with an explanation and need repair; assigning a console does not bypass missing files.
 
-The [format matrix](implementation/evidence/F15/format-support.md) lists the 56 recognized console/computer families and grouping limits. Cards use short console names and console-specific tag colors. Archives remain one source item; when preparation discovers multiple game entries, opening it offers a game chooser.
+The [format matrix](rom-formats.md) lists the 56 recognized console/computer families and grouping limits. Cards use short console names and console-specific tag colors. Archives remain one source item; when preparation discovers multiple game entries, opening it offers a game chooser.
 
 ## Choose the emulator
 
@@ -30,11 +30,11 @@ With one compatible installed app, the launcher selects it automatically. When s
 
 For RetroArch, install the desired core inside RetroArch, then choose that core for the console in launcher settings. Android prevents this app from inspecting RetroArch's private installed-core directory, so the core list is a supported-choice list, not an installation inventory. RetroArch's folder adapter requires a compatible hierarchical document provider; the launcher's prepared-game provider also supplies that layout.
 
-The [emulator matrix](implementation/evidence/F16/emulator-contracts.md) distinguishes verified intent contracts, installed versions inspected, and actual game-boot evidence. Some detected apps require opening their own library because no compatible external launch contract has been verified. Installation alone is not a promise that all formats, firmware, BIOS, encryption or core combinations work.
+The [emulator matrix](emulators.md) distinguishes verified intent contracts, installed versions inspected, and actual game-boot evidence. Some detected apps require opening their own library because no compatible external launch contract has been verified. Installation alone is not a promise that all formats, firmware, BIOS, encryption or core combinations work.
 
 ## Automatic extraction and cache
 
-ZIP/7Z and supported gzip, xz, bzip2 and ordinary TAR wrappers are prepared before opening their contents, so an archive containing several games always offers a choice. Native arcade and DOS archive collections retain their required containers. Emulator-native image containers such as CHD, CSO and RVZ are not converted. The [extraction contract](implementation/evidence/F15/archive-extraction.md) lists decoder and archive limits. RAR is recognized but cannot be extracted by this build; nested archives and encrypted archives require manual preparation. If a disc descriptor or playlist inside an archive is damaged, repair the archive before opening it; surviving tracks are not treated as a complete game.
+ZIP/7Z and supported gzip, xz, bzip2 and ordinary TAR wrappers are prepared before opening their contents, so an archive containing several games always offers a choice. Native arcade and DOS archive collections retain their required containers. Emulator-native image containers such as CHD, CSO and RVZ are not converted. The [extraction contract](archive-extraction.md) lists decoder and archive limits. RAR is recognized but cannot be extracted by this build; nested archives and encrypted archives require manual preparation. If a disc descriptor or playlist inside an archive is damaged, repair the archive before opening it; surviving tracks are not treated as a complete game.
 
 The original archive is kept. Prepared games are served through a read-only document provider, including required companion files. The default cache budget is **8 GiB**, adjustable to 2, 4, 8 or 16 GiB in **Settings → ROM folders**. The budget includes a compressed working copy and its extracted content; at least 512 MiB free space is reserved. Large archives may require a higher limit. Unsafe paths, links, corrupted data, excessive entries/output and excessive decoder memory stop extraction with a recoverable message. Canceling discards partial output.
 

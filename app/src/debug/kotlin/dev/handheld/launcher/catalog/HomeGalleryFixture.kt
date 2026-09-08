@@ -50,11 +50,11 @@ import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 private data class HomeFixtureItem(val id: String, val title: String, val platform: String, val art: Int?)
 
 private val homeFixtures = listOf(
-    HomeFixtureItem("zelda", "The Legend of Zelda: The Wind Waker", "GAMECUBE", R.drawable.fixture_home_cover_1),
-    HomeFixtureItem("dead-cells", "Dead Cells", "ANDROID", R.drawable.fixture_home_cover_2),
-    HomeFixtureItem("persona", "Persona 3 Portable", "PSP", R.drawable.fixture_home_cover_3),
-    HomeFixtureItem("colossus", "Shadow of the Colossus", "PS2", R.drawable.fixture_home_cover_4),
-    HomeFixtureItem("dolphin", "Dolphin", "ANDROID APP", null),
+    HomeFixtureItem("island", "Island Journey", "GC", R.drawable.fixture_home_cover_1),
+    HomeFixtureItem("orbit", "Quiet Orbit", "ANDROID", R.drawable.fixture_home_cover_2),
+    HomeFixtureItem("horizon", "Evening Horizon", "PSP", R.drawable.fixture_home_cover_3),
+    HomeFixtureItem("summit", "Emerald Summit", "PS2", R.drawable.fixture_home_cover_4),
+    HomeFixtureItem("files", "File Browser", "APP", null),
 )
 
 /** Debug content only. Root owns backdrop/status/dock/footer and the content rectangle. */
@@ -122,7 +122,7 @@ fun HomeGalleryFixture(metrics: ShellMetrics, modifier: Modifier = Modifier, var
                                 tileModifier, artwork = {
                                     if (variant == "failed" && item.id == selectedId) ArtworkFallback()
                                     else CoverArtwork(painterResource(item.art))
-                                }, badge = if (item.id == "zelda") null else ({ PlatformBadge(item.platform) }),
+                                }, badge = { PlatformBadge(item.platform) },
                                 focusFrameWidth = metrics.focusFrameReservation,
                                 focusLift = metrics.focusLiftReservation)
                         }

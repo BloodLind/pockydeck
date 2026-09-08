@@ -1,6 +1,11 @@
 Dependency and icon license and notice sources
 =============================================
 
+PockyDeck original code, documentation, geometric debug fixtures and controller cues
+  Apache-2.0.txt <- Apache License, Version 2.0
+  pockydeck-NOTICE.txt <- repository NOTICE
+  https://github.com/BloodLind/pockydeck
+
 This directory contains unmodified upstream license and notice texts for the
 dependency additions and icon assets. The source mapping below is maintained by
 the launcher; it does not change any upstream license or notice.

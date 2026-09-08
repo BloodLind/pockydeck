@@ -1,6 +1,6 @@
 # Material Symbols from the HTML preview
 
-The launcher uses the Material Symbols Outlined glyphs named in [the HTML design source](../design-source.txt). The user's 8 September 2026 correction restores its lighter icon weight. Official static SVG exports were retrieved on that date; exact URLs and SHA-256 hashes are in [sources.json](sources.json).
+The launcher uses Material Symbols Outlined at weight 200, following the original design preview. Official static SVG exports were retrieved on 8–9 September 2026; exact URLs and SHA-256 hashes are in [sources.json](sources.json). The original design reference is retained in Git history; the current UI rules are in [the design system](../../design-system.md).
 
 | Role | Symbol | Weight | Fill |
 | --- | --- | --- | --- |

@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a focused improvement.
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the user workflow and current limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include relevant alternatives or constraints.
+    validations:
+      required: true
+  - type: textarea
+    id: references
+    attributes:
+      label: Context or references
+      description: For emulator support, include the package/version and official launch-contract documentation if available.

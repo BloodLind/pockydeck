@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a launcher, controller, layout, scanning, or compatibility problem.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check existing issues first. Do not attach ROMs, BIOS files, keys, saves, or personal data.
+        Report vulnerabilities privately through Security → Report a vulnerability.
+  - type: input
+    id: version
+    attributes:
+      label: PockyDeck version
+      placeholder: "0.10.3 preview"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android version
+      placeholder: "Retroid Pocket Flip 2, Android 13"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected behavior, and actual behavior
+      description: Include the starting page and whether this happens every time.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Input, display, and game context
+      description: Controller/touch, UI/font scale, console folder, extensions, emulator package/version, and direct-emulator result when relevant.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or redacted logs
+      description: Remove account details, notifications, personal paths, and tokens.

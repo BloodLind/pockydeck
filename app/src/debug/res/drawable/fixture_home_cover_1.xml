@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original PockyDeck geometric fixture. SPDX-License-Identifier: Apache-2.0 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="256dp" android:height="256dp"
+    android:viewportWidth="256" android:viewportHeight="256">
+    <path android:fillColor="#17394A" android:pathData="M0,0 H256 V256 H0 Z" />
+    <path android:fillColor="#315665" android:pathData="M0,150 L80,90 L145,146 L202,118 L256,156 L256,256 L0,256 Z" />
+    <path android:fillColor="#E6C786" android:pathData="M179,36 A28,28 0,1 0,179,92 A28,28 0,1 0,179,36" />
+    <path android:fillColor="#65A9A0" android:pathData="M0,188 Q60,160 120,188 Q188,216 256,180 L256,256 L0,256 Z" />
+    <path android:fillColor="#9DCEC0" android:pathData="M0,217 Q70,188 137,218 Q202,245 256,212 L256,256 L0,256 Z" />
+</vector>

@@ -25,8 +25,8 @@ License resources in dependency JARs are not automatically retained in the APK: 
 
 The eight Commons files are byte-for-byte copies of `META-INF/LICENSE.txt` and `META-INF/NOTICE.txt` from the resolved versioned JARs. XZ's JAR has no bundled license resource, so its unmodified [`v1.10/COPYING`](https://github.com/tukaani-project/xz-java/blob/v1.10/COPYING) is supplied. Both WorkManager 2.9.1 AARs, including their nested `classes.jar`, and Guava ListenableFuture 1.0 have no separate distributed notice. The [official Apache-2.0 text](https://www.apache.org/licenses/LICENSE-2.0.txt) matches their published license declaration. The packaged README identifies these sources; this record covers the ROM dependency additions rather than every existing project dependency.
 
-No emulator binary, core, ROM, BIOS, or provider credential is bundled. Debug builds contain the existing UI fixture artwork.
+No emulator binary, core, ROM, BIOS, or provider credential is bundled. Debug builds contain original geometric vector fixtures.
 
-Emulator integration is independently implemented from public Android intent contracts, current upstream sources and read-only installed-version inspection. The [F16 compatibility record](implementation/evidence/F16/emulator-contracts.md) lists exact sources and where the separately cloned Argosy reference corroborated mappings. No Argosy implementation source or architecture was copied into the application.
+Emulator integration is independently implemented from public Android intent contracts, current upstream sources and read-only installed-version inspection. The [emulator compatibility record](emulators.md) lists the inspected primary sources and any corroborating references. No reference launcher implementation source was copied into the application.
 
 Synthetic verification archives contain generated test bytes. Native test execution validates decoding and file access; synthetic contents do not establish game-boot compatibility.

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup and documentation
+    url: https://github.com/BloodLind/pockydeck#documentation
+    about: Installation, ROM folders, emulators, and known limits.
+  - name: Report a security vulnerability
+    url: https://github.com/BloodLind/pockydeck/security/advisories/new
+    about: Use private reporting instead of a public issue.

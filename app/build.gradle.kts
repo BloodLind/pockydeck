@@ -12,8 +12,8 @@ android {
         applicationId = "dev.handheld.launcher"
         minSdk = 33
         targetSdk = 33
-        versionCode = 16
-        versionName = "0.10.2"
+        versionCode = 17
+        versionName = "0.10.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

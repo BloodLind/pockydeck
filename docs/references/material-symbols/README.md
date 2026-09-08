@@ -14,6 +14,7 @@ The launcher uses the Material Symbols Outlined glyphs named in [the HTML design
 | Sort | `sort` | 200 | 0 |
 | Play | `play_arrow` | 200 | 0 |
 | Information | `info` | 200 | 0 |
+| Clear search | `close` | 200 | 0 |
 | Temperature | `device_thermostat`, `thermometer_loss`, `thermometer_gain` | 200 | 0 |
 | Memory | `memory` | 200 | 0 |
 | Storage | `sd_card`, `sd_card_alert` | 200 | 0 |

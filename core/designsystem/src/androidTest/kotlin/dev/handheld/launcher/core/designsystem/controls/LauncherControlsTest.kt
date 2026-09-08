@@ -151,7 +151,7 @@ class LauncherControlsTest {
     }
 
     @Test
-    fun actionButtonsPaintTheirWholeMinimumTargetAndFullWidthCallerAllocation() {
+    fun slimmerActionSurfacesKeepTheirFullTouchTargetsAndCallerWidth() {
         var activations = 0
         compose.setContent {
             LauncherTheme(referenceScale = 2f / 3f) {
@@ -163,17 +163,19 @@ class LauncherControlsTest {
         }
         for (tag in listOf("short-action", "wide-action")) {
             val button = compose.onNodeWithTag(tag)
-            button.assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(80.dp)
+            button.assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(64.dp)
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
             val pixels = button.captureToImage().toPixelMap()
-            assertTrue("$tag paints the top of its touch target", pixels[pixels.width / 2, 2].red > .1f)
-            assertTrue("$tag paints the bottom of its touch target", pixels[pixels.width / 2, pixels.height - 3].red > .1f)
+            assertTrue("$tag has visual breathing room above its surface", pixels[pixels.width / 2, 2].red < .05f)
+            assertTrue("$tag has visual breathing room below its surface", pixels[pixels.width / 2, pixels.height - 3].red < .05f)
+            val paintedRows = (0 until pixels.height).count { pixels[pixels.width / 2, it].red > .1f }
+            assertTrue("$tag paints a compact surface within its 48dp target", paintedRows in (pixels.height * .65f).toInt()..(pixels.height * .85f).toInt())
             assertTrue("$tag paints the left side of its full allocation", pixels[2, pixels.height / 2].red > .1f)
             assertTrue("$tag paints the right side of its full allocation", pixels[pixels.width - 3, pixels.height / 2].red > .1f)
         }
         compose.onNodeWithTag("wide-action").assertWidthIsAtLeast(280.dp)
-            .performTouchInput { click(Offset(8f, centerY)) }
-        compose.runOnIdle { assertEquals("The filled edge is part of the actual button", 1, activations) }
+            .performTouchInput { click(Offset(centerX, 4f)) }
+        compose.runOnIdle { assertEquals("The transparent inset is still part of the actual button", 1, activations) }
     }
 
     @Test

@@ -166,5 +166,11 @@
     "variant": "wght200",
     "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/info/wght200/24px.svg",
     "sha256": "392b4146a85d1d5f4a905637f799c7012a179a91c0928251b30a844bf66dd464"
+  },
+  {
+    "name": "close",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/close/wght200/24px.svg",
+    "sha256": "b4d9b2e06e87479e9fb7a85456d0bf47fe146b109056d6d1f1528fbc4e99706a"
   }
 ]

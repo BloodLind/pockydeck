@@ -168,7 +168,7 @@ class LauncherModalTest {
         }
         compose.runOnIdle { inputMode.requestInputMode(InputMode.Keyboard); origin.requestFocus() }
         compose.onNodeWithText("Open chooser").performKeyInput { pressKey(Key.Enter) }
-        compose.onNodeWithText("Close").assertIsFocused().assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(80.dp)
+        compose.onNodeWithText("Close").assertIsFocused().assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(64.dp)
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
             .performKeyInput { pressKey(Key.Enter) }
         compose.onNodeWithText("Open chooser").assertIsFocused()

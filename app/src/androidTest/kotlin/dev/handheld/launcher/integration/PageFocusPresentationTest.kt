@@ -75,6 +75,13 @@ class PageFocusPresentationTest {
         compose.runOnIdle { assertEquals("Sample", state.query) }
         compose.onNodeWithContentDescription(game.title).assertIsFocused()
         compose.onNodeWithTag(SearchScreenTags.Edit).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Edit search").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Clear search").assertIsDisplayed().performTouchInput { click() }
+        compose.runOnIdle { assertEquals("", state.query) }
+        compose.onNode(hasSetTextAction(), useUnmergedTree = true).assertIsFocused()
+        compose.runOnIdle { requireNotNull(editorActions).cancel() }
+        compose.runOnIdle { assertEquals("Clear must also reset the Cancel baseline", "", state.query) }
+        compose.onNodeWithTag(SearchScreenTags.Clear).assertDoesNotExist()
     }
 
     @Test fun resultScrollingCollapsesSearchAndUpwardScrollingRevealsIt() {
@@ -114,8 +121,8 @@ class PageFocusPresentationTest {
             }
         }
         compose.onNodeWithContentDescription(second.title).assertIsFocused()
-        compose.onNodeWithContentDescription("All").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        compose.onNodeWithContentDescription("All").assertIsFocused()
+        compose.onNodeWithTag("collection-filter-all").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithTag("collection-filter-all").assertIsFocused()
         compose.runOnIdle { request++ }
         compose.onNodeWithContentDescription(second.title).assertIsFocused()
         compose.onNodeWithContentDescription(first.title).performTouchInput { click() }
@@ -134,7 +141,7 @@ class PageFocusPresentationTest {
             LauncherTheme(referenceScale = 2f / 3f) {
                 SearchScreen(state, Modifier.size(820.dp, 400.dp), callbacks(), onQuery = { query ->
                     state = state.copy(query = query, items = if (query.trim().equals("sample", true)) listOf(game) else emptyList())
-                }, systemActions = listOf(system))
+                }, systemActions = listOf(system), queryFocusRequest = 1)
             }
         }
         compose.onNodeWithText("Search your library").assertIsDisplayed()
@@ -157,7 +164,7 @@ class PageFocusPresentationTest {
         compose.onNodeWithContentDescription(system.title).assertDoesNotExist()
     }
 
-    @Test fun systemResultsUseCatalogCardGeometryAndReceivePageActivationFocus() {
+    @Test fun systemResultsMatchCardGeometryAndReceiveFocusAfterApplyingEdits() {
         val game = game("geometry", "Sample game")
         val system = SupportedSystemAction("fixture", "Wireless setting", "Sample connection controls", "fixture")
         var state by mutableStateOf(CollectionUiState(
@@ -165,12 +172,14 @@ class PageFocusPresentationTest {
             selectedItemId = game.id, query = "Sample", loading = false,
         ))
         var request by mutableStateOf(1)
+        var editorActions: SearchEditorActions? = null
         compose.setContent {
             LauncherTheme(referenceScale = 2f / 3f) {
                 SearchScreen(state, Modifier.size(820.dp, 400.dp),
                     callbacks(onSelect = { state = state.copy(selectedItemId = it) }),
                     onQuery = { state = state.copy(query = it, items = emptyList()) },
-                    systemActions = listOf(system), restoreFocusRequest = request)
+                    systemActions = listOf(system), restoreFocusRequest = request,
+                    onEditorActionsChanged = { editorActions = it })
             }
         }
         compose.onNodeWithContentDescription(game.title).assertIsFocused()
@@ -183,6 +192,8 @@ class PageFocusPresentationTest {
         editor.performTextReplacement("Wireless")
         editor.assertIsFocused()
         compose.runOnIdle { request++ }
+        editor.assertIsFocused() // A passive restoration never steals an active edit.
+        compose.runOnIdle { requireNotNull(editorActions).apply() }
         compose.onNodeWithContentDescription(system.title).assertIsFocused()
         compose.onNodeWithContentDescription(game.title).assertDoesNotExist()
     }

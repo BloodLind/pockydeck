@@ -60,6 +60,10 @@ The **0.10.2 (code 16)** correction gives List previews grouped round Open, Deta
 
 **356 distinct checks pass** (309 JVM and 47 Android), with one existing Windows fixture skipped; lint has zero errors and both builds pass. The physical Flip 2 checks cover scaled category windows, favorite state/current-item callbacks, Search editing, sustained accelerated input, and shared action/dialog behavior. The actual star was toggled, verified after leaving/returning, then restored. The installed APK checksum matches the saved artifact. See [0.10.2 action-control evidence](evidence/F14/action-controls-0102.md) for initial sleeping-device failures, the corrected label check, final reruns and screenshots.
 
+The **0.10.3 (code 17)** visual refinement replaces oversized action blocks with subdued 36dp pill/circle surfaces inside unchanged 48dp touch targets. Labels use medium-weight control typography. Collapsed Search displays the query with a search icon, a round × to clear, and a right-aligned count. List actions are grouped more closely; filter/dock/footer styling stays consistent.
+
+**359 distinct checks pass** (309 JVM and 50 Android), with one existing Windows fixture skipped; lint has zero errors and debug/release builds pass. The update is installed on the physical Flip 2 and its checksum is verified. Three older presentation fixtures were reconciled with the current focus contract; no production navigation change was needed. [0.10.3 compact-action evidence](evidence/F14/compact-actions-0103.md) records the full coverage, visual review and APK hash.
+
 Full rich metadata import, manual artwork/match correction and the complete emulator/game-boot matrix remain later work. The large-catalog discovery/search work requested in this batch is implemented; no universal storage-scan time is promised.
 
 ## Baseline and authorization

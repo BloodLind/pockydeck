@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -39,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
@@ -63,14 +66,16 @@ fun LauncherButton(
     unavailableReason: String = DefaultUnavailableReason,
     onFocusChanged: (Boolean) -> Unit = {},
     contentDescription: String? = label,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = RoundedCornerShape(50),
+    leadingIcon: LauncherGlyph? = null,
+    maxLines: Int = 2,
 ) {
     val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     var focused by remember { mutableStateOf(false) }
     LauncherSurface(
-        modifier = modifier.widthIn(min = 80.dp).heightIn(min = 48.dp).focusRequester(restoration.requester)
+        modifier = modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).focusRequester(restoration.requester)
             .onFocusChanged { state ->
                 focused = state.isFocused
                 onFocusChanged(state.isFocused)
@@ -90,14 +95,18 @@ fun LauncherButton(
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
         shape = shape,
-        emphasized = true,
+        visualPadding = PaddingValues(vertical = 6.dp),
     ) {
-        Box(Modifier.padding(horizontal = LauncherTheme.spacing.md.coerceAtLeast(16.dp), vertical = 6.dp),
+        Box(Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center) {
-            // Keep the centered paragraph and its accessibility bounds at the same width.
-            LauncherText(label, Modifier.width(IntrinsicSize.Max),
-                style = LauncherTheme.typography.settingValue.copy(textAlign = TextAlign.Center),
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(Modifier.width(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                if (leadingIcon != null) LauncherGlyphIcon(leadingIcon, Modifier.size(18.dp), contentDescription = null)
+                // The visible control stays compact while its complete target remains 48dp.
+                LauncherText(label, Modifier.weight(1f),
+                    style = LauncherTheme.typography.controlLabel.copy(fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
+                    maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }
@@ -144,6 +153,7 @@ fun LauncherIconButton(
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
         shape = shape,
+        visualPadding = PaddingValues(6.dp),
     ) {
         // The target fills the surface; its decorative glyph keeps the caller's size.
         Box(contentAlignment = Alignment.Center) { content() }

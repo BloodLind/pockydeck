@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -48,6 +50,7 @@ import dev.handheld.launcher.contract.LauncherActionDescriptor
 import dev.handheld.launcher.contract.LauncherActionMeaning
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
+import dev.handheld.launcher.core.designsystem.controls.LauncherIconButton
 import dev.handheld.launcher.core.designsystem.controls.SearchField
 import dev.handheld.launcher.core.designsystem.cards.SearchResultCard
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
@@ -390,19 +393,27 @@ fun SearchScreen(
         }
         if (headerCollapsed) Row(Modifier.fillMaxWidth().height(48.dp), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
             verticalAlignment = Alignment.CenterVertically) {
-            LauncherButton("Edit search", ::beginEditing,
-                Modifier.focusRequester(compactEditRequester).testTag(SearchScreenTags.Edit),
+          Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs),
+              verticalAlignment = Alignment.CenterVertically) {
+            LauncherButton(editQuery.ifBlank { "Search" }, ::beginEditing,
+                Modifier.weight(1f, fill = false).widthIn(max = 320.dp).focusRequester(compactEditRequester).testTag(SearchScreenTags.Edit),
+                contentDescription = "Edit search", leadingIcon = LauncherGlyph.Search, maxLines = 1,
                 onFocusChanged = { hasFocus ->
                     if (hasFocus) focusedHeaderKey = "edit" else if (focusedHeaderKey == "edit") focusedHeaderKey = null
                     if (hasFocus) callbacks.onFocusedAction(FocusedControlAction(
                         LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.OPEN_SEARCH, "Edit search"), ::beginEditing,
                     )) else callbacks.onFocusedAction(null)
                 })
-            LauncherText("${results.size} results", color = LauncherTheme.colors.textSecondary)
-            if (hasQuery) LauncherButton("Clear", ::clearQuery, Modifier.testTag(SearchScreenTags.Clear),
+            if (hasQuery) LauncherIconButton("Clear search", ::clearQuery,
+                Modifier.size(48.dp).testTag(SearchScreenTags.Clear), shape = CircleShape,
                 onFocusChanged = { focused -> if (focused) callbacks.onFocusedAction(FocusedControlAction(
                     LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Clear"), ::clearQuery,
-                )) else callbacks.onFocusedAction(null) })
+                )) else callbacks.onFocusedAction(null) }) {
+                LauncherGlyphIcon(LauncherGlyph.Close, Modifier.size(20.dp), contentDescription = null)
+            }
+          }
+            LauncherText("${results.size} results", style = LauncherTheme.typography.tileSubtitle,
+                color = LauncherTheme.colors.textSecondary, maxLines = 1)
         } else SearchField(
             query = editQuery,
             onQueryChange = {

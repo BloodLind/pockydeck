@@ -166,7 +166,7 @@ private fun PreviewActionButtons(
     onFocused: (PreviewAction, Boolean) -> Unit,
     includeDetails: Boolean = true,
 ) {
-    Row(Modifier.testTag("collection-preview-actions"), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
+    Row(Modifier.testTag("collection-preview-actions"), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
         LauncherIconButton(model.primaryActionLabel, open,
             Modifier.size(48.dp).focusRequester(openFocus).testTag("collection-preview-open"),
             enabled = model.canOpen, shape = CircleShape,

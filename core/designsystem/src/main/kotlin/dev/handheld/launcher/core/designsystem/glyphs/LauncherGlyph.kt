@@ -27,6 +27,7 @@ enum class LauncherGlyph(val label: String, internal val resourceId: Int) {
     ExpandMore("More", R.drawable.ic_material_expand_more),
     Play("Play", R.drawable.ic_material_play_arrow),
     Info("Information", R.drawable.ic_material_info),
+    Close("Close", R.drawable.ic_material_close),
 }
 
 /** Official Material Symbols Outlined at weight 200. Values choose an appropriate variant. */

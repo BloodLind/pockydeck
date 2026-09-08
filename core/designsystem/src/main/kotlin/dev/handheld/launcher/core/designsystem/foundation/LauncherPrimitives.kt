@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -111,6 +112,7 @@ fun LauncherSurface(
     shape: Shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
     compact: Boolean = false,
     emphasized: Boolean = false,
+    visualPadding: PaddingValues = PaddingValues(0.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
     val colors = LauncherTheme.colors
@@ -137,7 +139,8 @@ fun LauncherSurface(
         propagateMinConstraints = !compact,
     ) {
         Box(
-            Modifier.heightIn(min = if (compact) 24.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale else 48.dp)
+            Modifier.padding(visualPadding)
+                .then(if (compact) Modifier.heightIn(min = 24.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale) else Modifier)
                 .background(background, shape)
                 .border(if (focused) 2.dp else if (compact) 1.dp * LauncherTheme.referenceScale else 1.dp,
                     when {

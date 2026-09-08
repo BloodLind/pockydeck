@@ -1,6 +1,6 @@
 # Handheld Launcher shared contracts
 
-Current shared implementation contracts through v0.10.2. Story headings preserve traceability; this file records code semantics, while progress and story evidence record acceptance. Kotlin symbols live under `dev.handheld.launcher.core.domain` unless stated otherwise.
+Current shared implementation contracts through v0.10.3. Story headings preserve traceability; this file records code semantics, while progress and story evidence record acceptance. Kotlin symbols live under `dev.handheld.launcher.core.domain` unless stated otherwise.
 
 ## Catalog identity and item model
 
@@ -176,7 +176,9 @@ Home card allocation now reserves two lift widths on each axis, plus the frame. 
 
 `LauncherButton`, `LauncherIconButton`, and `FilterChip` each own one real clickable/selectable focus target and press interaction. Callers can attach a `FocusRequester` through `modifier`; `onFocusChanged` reports actual focus, not selection. Disabled controls cannot activate. `SortSelector` is a trigger whose caller owns the option overlay. `SearchField` uses native `BasicTextField`, caller-owned query state and IME Search callback; it does not intercept Android keyboard behavior.
 
-`LauncherButton` uses an emphasized full-allocation surface, 12dp corners, minimum 80×48dp target and centered `settingValue` typography with up to two lines. Parent constraints must permit the target. `LauncherSurface.emphasized` is additive and defaults to false; filter pills, Sort and footer geometry are unaffected. `LauncherIconButton.selected` defaults to false, and optional `checked` exposes toggle state and checkbox semantics without changing ordinary icon-button behavior. List-preview actions supply a 48dp circular shape and decorative 24dp light glyphs. Dialog `compactDismiss` means an end-aligned action-sized Close; it no longer uses a reduced filter chip.
+`LauncherButton` uses the normal subdued control surface, pill corners, a minimum 64×48dp target and medium-weight `controlLabel` typography with up to two lines. Optional `leadingIcon` is decorative; `maxLines` can restrict query controls to one line. Parent constraints must permit the target. `LauncherSurface.visualPadding` defaults to zero and insets only the painted surface/content, preserving the outer clickable allocation. Text actions inset vertically by 6dp; icon actions inset on all sides by 6dp, giving 36dp visible surfaces inside standard 48dp targets. Filters, Sort and footer geometry are unaffected. `LauncherIconButton.selected` defaults to false, and optional `checked` exposes toggle state and checkbox semantics. Dialog `compactDismiss` means an end-aligned action Close.
+
+Collapsed Search retains separate Edit and Clear focus targets and existing stable tags. Edit shows the current query and search icon while its accessible name and controller descriptor remain Edit search. Clear is a round × with the accessible name Clear search. Long query labels truncate within remaining width, reserving space for Clear and the right-aligned count. Query/session/Cancel-baseline rules are unchanged.
 
 `CoverTile` uses `CardVariant.HomeCover` for an image-only square and `CollectionCover` for square art with a reserved two-line title and one-line subtitle area. Allocate a Home tile with the shared `homeCardAllocatedSize`, `focusFrameReservation`, and `focusLiftReservation`; its inner image then matches `homeCardArtworkSize` exactly. `AppIconTile` places a bounded, fitted native icon and a two-line title inside the tile. `SearchResultCard` uses horizontal square artwork and bounded captions. Cards own one activation/focus target; presentation state does not trigger external effects.
 

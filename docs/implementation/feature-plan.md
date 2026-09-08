@@ -6,7 +6,7 @@ Read [the project plan](../project-plan.md), [the design contract](../design-sys
 
 The [user-story backlog](user-stories/README.md) divides F01–F18 into traceable acceptance criteria. On 8 September the user authorized building the complete native application base first, followed by a combined verification and documentation reconciliation. Per-story dispatch and intermediate wave gates are superseded for this delivery; packet scope, shared-file ownership and truthful device evidence still apply.
 
-## Current v0.10.2 integration scope
+## Current v0.10.3 integration scope
 
 The current batch implements all available recent Home games/apps before a stable showcase containing one game per otherwise unrepresented console and one Android-game group, followed by deterministic app fillers, with a 20-card limit. Every Home entry/reselection and actual Activity return to Home resets selection and scrolling to first, including delayed recency publication; modal dismissal alone preserves its opener.
 
@@ -21,6 +21,8 @@ The v0.10 batch adds wider separation around decorative filter hints and All fil
 The v0.10.1 follow-up softens the original audio cues, adds a distinct changed-card selection sound, and drops audio requests while one cue is playing. Fixed All and All filters surround a compact console group with balanced L2/R2 spacing. The grid worker keeps focus progressing during sustained maximum-speed repeats; Search also uses visible-only artwork requests, disposed focus requesters and settled scroll saves. Physical input coverage includes a seven-second D-pad hold, reversal and accelerated horizontal row traversal through the populated Search results.
 
 The v0.10.2 correction groups round Open, Details and Favorite controls in List previews, makes explicit text actions visibly fill their 48dp targets, and keeps three whole console categories in the finite filter window. The header measures that three-category requirement before deciding whether to wrap. Category filters and footer controls retain their existing visual scale. Validation covers scaled geometry, touch/controller activation, current-item favorite behavior and the populated-device Search regression.
+
+The v0.10.3 visual follow-up supersedes the large action surfaces with subdued 36dp pills/circles inside unchanged 48dp touch targets. Search uses a query-and-icon action, an adjacent round Clear control and a right-aligned count. Shared button labels use medium-weight control typography; preview actions are grouped more closely. The three-category filter behavior is retained.
 
 The status revision labels battery temperature accurately (blue below 15°C, red from 45°C), colors the battery green only when Android reports CHARGING, otherwise red at 10% or below, yellow below 15%, and neutral above that. RAM has a distinct cool tint; storage covers internal and all mounted external free space, with cyan internal and amber external glyphs. [Current contracts](contracts.md) define behavior and lifecycle limits; [progress](progress.md) records the separate validation outcomes. Code inclusion is not a claim that every physical check has passed.
 

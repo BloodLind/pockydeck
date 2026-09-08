@@ -1,6 +1,6 @@
 # Handheld Launcher — design system and UI contract
 
-Planning baseline: 7 September 2026; current behavior reconciled through v0.10.2. Reference measurements remain distinct from native dimensions. Calibration and acceptance evidence are recorded in [implementation progress](implementation/progress.md).
+Planning baseline: 7 September 2026; current behavior reconciled through v0.10.3. Reference measurements remain distinct from native dimensions. Calibration and acceptance evidence are recorded in [implementation progress](implementation/progress.md).
 
 ## 1. Reference authority
 
@@ -43,7 +43,9 @@ The v0.9.1 filter correction increases horizontal/vertical padding from 10/4 to 
 
 The v0.10.1 filter row places fixed All first, a quiet rounded console group in the middle, and fixed All filters after it. L2 and R2 sit inside that group with equal spacing around the complete visible console cells. The loose divider is removed, and the row shares a common vertical center. D-pad navigation still exits at the visible strip edges; only triggers change categories while held.
 
-The v0.10.2 action correction distinguishes explicit actions from filter pills. `LauncherButton` paints its full allocated area with a visible fill and outline, a 12dp corner radius, at least 80×48dp, and the larger Settings-value type. Long labels can occupy two lines. Clear, Edit search, Scan and dialog actions use this shared treatment. Filter, Sort and footer controls keep their existing geometry. List previews group round 48dp Open, Details and Favorite controls with 24dp light Material symbols; the star reflects the saved favorite state. Narrow previews retain Open and Favorite.
+The v0.10.3 correction replaces v0.10.2's oversized, emphasized action blocks with subdued pill surfaces. A standard single-line action paints 36dp of height within a 48dp touch target, uses medium-weight control typography, 14dp horizontal padding and at least 64dp target width. Longer labels may wrap and grow vertically. Preview icon actions use a 36dp visible circle within their 48dp target and retain 24dp light glyphs, with tighter grouping. Filters, Sort, the dock and footer keep their existing geometry.
+
+Collapsed Search presents the current query with the existing search glyph, an adjacent small round × to clear it, and a muted result count at the right. The query action keeps its Edit search accessibility/controller meaning and truncates long queries on one line. Clear retains the existing query-reset and edit-session behavior. This uses the launcher's existing colors and symbols rather than introducing another visual system.
 
 Continuous grid navigation keeps focus moving while repeats accelerate. Discrete steps retain their short scroll animation; repeats closer than 150ms move the viewport immediately so animation cannot trail a 55ms input cadence. Search derives header collapse from the actual scroll direction, loads only visible result artwork, and saves its scroll anchor once scrolling settles.
 

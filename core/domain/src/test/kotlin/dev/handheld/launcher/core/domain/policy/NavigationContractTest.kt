@@ -28,11 +28,12 @@ class NavigationContractTest {
             LauncherDestination.dockOrder.map { it.persistedKey },
         )
 
-        val library = LauncherLocation.Destination(LauncherDestination.LIBRARY)
-        assertEquals(
-            LauncherLocation.Destination(LauncherDestination.HOME),
-            NavigationBackPolicy.resolve(library),
-        )
+        for (destination in LauncherDestination.dockOrder) {
+            val root = LauncherLocation.Destination(destination)
+            assertEquals("Back must stay on root ${destination.persistedKey}", root, NavigationBackPolicy.resolve(root))
+            val details = LauncherLocation.ItemDetails(ItemId("android:fixture/Details"), NavigationOrigin.Destination(destination))
+            assertEquals(root, NavigationBackPolicy.resolve(details))
+        }
         val shortcutSearch = LauncherLocation.ShortcutSearch(LauncherDestination.APPS)
         assertEquals(
             LauncherLocation.Destination(LauncherDestination.APPS),
@@ -46,8 +47,6 @@ class NavigationContractTest {
             LauncherLocation.ShortcutSearch(LauncherDestination.FAVORITES),
             NavigationBackPolicy.resolve(detailsFromShortcut),
         )
-        val home = LauncherLocation.Destination(LauncherDestination.HOME)
-        assertEquals(home, NavigationBackPolicy.resolve(home))
     }
 
     @Test

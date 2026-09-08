@@ -128,8 +128,8 @@ private val DefaultTypography = TextStyle(fontFamily = PlusJakartaSans).let { ba
 
 private fun LauncherTypography.scaled(scale: Float): LauncherTypography {
     // Apply the readability correction after reference scaling, before Android font scaling.
-    // The earlier small-text correction tapers at 14sp. A further 8% increase applies to
-    // every role, while Android's independent font scale remains fully respected.
+    // The earlier small-text correction tapers at 14sp. The established 8% increase
+    // gets another 10% across all roles; Android's independent font scale is respected.
     fun TextStyle.scaled(multiplier: Float = 1f): TextStyle {
         val referenceSize = fontSize.value * scale * multiplier
         val readableSize = when {
@@ -137,7 +137,7 @@ private fun LauncherTypography.scaled(scale: Float): LauncherTypography {
             referenceSize < 9f -> 6f + (referenceSize - 3f) * (5f / 6f)
             referenceSize < 14f -> 11f + (referenceSize - 9f) * (3f / 5f)
             else -> referenceSize
-        } * 1.08f
+        } * 1.08f * 1.10f
         return copy(
             fontSize = readableSize.sp,
             lineHeight = lineHeight * scale * multiplier * (readableSize / referenceSize),
@@ -207,9 +207,12 @@ object LauncherTheme {
     operator fun invoke(
         reducedMotion: Boolean = false,
         referenceScale: Float = 1f,
+        uiScaleFactor: Float = 1f,
         content: @Composable () -> Unit,
     ) {
-        val scale = referenceScale.takeIf { it.isFinite() && it > 0f }?.coerceIn(.5f, 1.5f) ?: 1f
+        val reference = referenceScale.takeIf { it.isFinite() && it > 0f } ?: 1f
+        val uiScale = uiScaleFactor.takeIf { it.isFinite() && it > 0f }?.coerceIn(.9f, 1.2f) ?: 1f
+        val scale = (reference * uiScale).coerceIn(.5f, 1.5f)
         val spacing = LauncherSpacing()
         val shapes = LauncherShapes()
         val depth = LauncherDepth()

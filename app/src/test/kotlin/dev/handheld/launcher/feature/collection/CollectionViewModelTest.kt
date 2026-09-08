@@ -57,6 +57,28 @@ class CollectionViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
+    fun `trigger categories stop at ends and retain viewport on repeated boundary input`() = runTest(dispatcher) {
+        val items = collectionItems() + listOf(collectionRom("gba", "gba"), collectionRom("ps2", "ps2"))
+        val viewModel = collectionViewModel(items, releasedSnapshots())
+        advanceUntilIdle()
+        viewModel.cycleFilter(-1)
+        advanceUntilIdle()
+        assertEquals("all", viewModel.state.value.filter)
+        repeat(8) { viewModel.cycleFilter(1); advanceUntilIdle() }
+        assertEquals("console:gba", viewModel.state.value.filter)
+        val selected = viewModel.state.value.items.single().id
+        viewModel.rememberAnchor(selected, 23)
+        advanceUntilIdle()
+        repeat(3) { viewModel.cycleFilter(1) }
+        advanceUntilIdle()
+        assertEquals("console:gba", viewModel.state.value.filter)
+        assertEquals(selected, viewModel.state.value.firstVisibleItemId)
+        assertEquals(23, viewModel.state.value.firstVisibleOffsetPx)
+        repeat(8) { viewModel.cycleFilter(-1); advanceUntilIdle() }
+        assertEquals("all", viewModel.state.value.filter)
+    }
+
+    @Test
     fun `initial selection and viewport callbacks do not suppress delayed snapshot`() =
         runTest(dispatcher) {
             val items = collectionItems().map { (it as LibraryItem.AndroidApp).copy(category = LibraryCategory.GAME) }

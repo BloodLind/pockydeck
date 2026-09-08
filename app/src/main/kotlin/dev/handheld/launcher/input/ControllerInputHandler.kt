@@ -122,7 +122,7 @@ internal class ControllerInputEngine(
             stick == Direction.None && !leftAnalog && !rightAnalog
     }
 
-    private class RepeatSession(val action: SemanticInputAction, val startedAt: Long) {
+    private class RepeatSession(val action: SemanticInputAction, val startedAt: Long, val holdDelayMillis: Long) {
         var job: Job? = null
     }
 
@@ -262,7 +262,7 @@ internal class ControllerInputEngine(
         directionRepeat?.job?.cancel()
         directionRepeat = null
         val action = next.action ?: return
-        val session = RepeatSession(action, monotonicTimeMillis())
+        val session = RepeatSession(action, monotonicTimeMillis(), DIRECTION_REPEAT_DELAY_MILLIS)
         directionRepeat = session
         engage(session) { directionRepeat === session }
     }
@@ -278,7 +278,7 @@ internal class ControllerInputEngine(
             leftRepeat?.job?.cancel()
             leftRepeat = null
             if (left) {
-                val session = RepeatSession(SemanticInputAction.PREVIOUS_FILTER, monotonicTimeMillis())
+                val session = RepeatSession(SemanticInputAction.PREVIOUS_FILTER, monotonicTimeMillis(), TRIGGER_REPEAT_DELAY_MILLIS)
                 leftRepeat = session
                 engage(session) { leftRepeat === session }
             }
@@ -289,7 +289,7 @@ internal class ControllerInputEngine(
             rightRepeat?.job?.cancel()
             rightRepeat = null
             if (right) {
-                val session = RepeatSession(SemanticInputAction.NEXT_FILTER, monotonicTimeMillis())
+                val session = RepeatSession(SemanticInputAction.NEXT_FILTER, monotonicTimeMillis(), TRIGGER_REPEAT_DELAY_MILLIS)
                 rightRepeat = session
                 engage(session) { rightRepeat === session }
             }
@@ -302,13 +302,13 @@ internal class ControllerInputEngine(
         if (!stillOwner()) return
         if (imeVisible()) { clearActiveState(clearDownOwnership = false); return }
         session.job = scope.launch {
-            delay((INITIAL_REPEAT_DELAY_MILLIS - (monotonicTimeMillis() - session.startedAt)).coerceAtLeast(0))
+            delay((session.holdDelayMillis - (monotonicTimeMillis() - session.startedAt)).coerceAtLeast(0))
             while (isActive && stillOwner()) {
                 if (imeVisible()) { clearActiveState(clearDownOwnership = false); break }
                 dispatch(session.action)
                 if (!stillOwner()) break
                 val heldMillis = (monotonicTimeMillis() - session.startedAt).coerceAtLeast(0)
-                val accelerated = (heldMillis - INITIAL_REPEAT_DELAY_MILLIS).coerceIn(0, ACCELERATION_MILLIS)
+                val accelerated = (heldMillis - session.holdDelayMillis).coerceIn(0, ACCELERATION_MILLIS)
                 val interval = REPEAT_INTERVAL_MILLIS -
                     (REPEAT_INTERVAL_MILLIS - MIN_REPEAT_INTERVAL_MILLIS) * accelerated / ACCELERATION_MILLIS
                 delay(interval)
@@ -378,7 +378,8 @@ internal class ControllerInputEngine(
         const val STICK_EXIT_THRESHOLD = .3f
         const val TRIGGER_ENTER_THRESHOLD = .55f
         const val TRIGGER_EXIT_THRESHOLD = .25f
-        const val INITIAL_REPEAT_DELAY_MILLIS = 360L
+        const val DIRECTION_REPEAT_DELAY_MILLIS = 360L
+        const val TRIGGER_REPEAT_DELAY_MILLIS = 650L
         const val REPEAT_INTERVAL_MILLIS = 115L
         const val MIN_REPEAT_INTERVAL_MILLIS = 55L
         const val ACCELERATION_MILLIS = 2_500L

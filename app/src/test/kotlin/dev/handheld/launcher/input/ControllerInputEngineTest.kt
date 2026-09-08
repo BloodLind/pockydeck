@@ -182,9 +182,12 @@ class ControllerInputEngineTest {
                 if (analogFirst) engine.onButtonDown(button, false, testScheduler.currentTime, 8) else pressure(.8f)
                 engine.onButtonDown(button, true, testScheduler.currentTime + 1, 8)
                 assertEquals(listOf(action to started), events)
-                advanceTimeBy(180)
+                advanceTimeBy(469)
                 runCurrent()
-                assertEquals(listOf(action to started, action to started + 360), events)
+                assertEquals("Only one step before the deliberate hold threshold", listOf(action to started), events)
+                advanceTimeBy(1)
+                runCurrent()
+                assertEquals(listOf(action to started, action to started + 650), events)
 
                 // Releasing one duplicate report does not re-arm the still-held logical input.
                 if (analogFirst) engine.onButtonUp(button, 8) else pressure(0f)
@@ -199,22 +202,50 @@ class ControllerInputEngineTest {
     }
 
     @Test
+    fun `trigger taps released before 650ms never repeat including duplicate reports`() = runTest {
+        for (button in listOf(ControllerButton.LeftTrigger, ControllerButton.RightTrigger)) {
+            val actions = mutableListOf<SemanticInputAction>()
+            val engine = ControllerInputEngine(this, { ConfirmBackMapping.Default }, { false },
+                monotonicTimeMillis = { testScheduler.currentTime }) { actions += it; true }
+            val started = testScheduler.currentTime
+            engine.onButtonDown(button, false, started)
+            advanceTimeBy(400)
+            runCurrent()
+            engine.onAxes(ControllerAxes(
+                leftTrigger = if (button == ControllerButton.LeftTrigger) .9f else 0f,
+                rightTrigger = if (button == ControllerButton.RightTrigger) .9f else 0f,
+                eventTimeMillis = testScheduler.currentTime,
+            ))
+            engine.onButtonDown(button, true, testScheduler.currentTime)
+            advanceTimeBy(249)
+            runCurrent()
+            assertEquals("A sub-threshold squeeze must still be one step", 1, actions.size)
+            engine.onButtonUp(button, eventTimeMillis = testScheduler.currentTime)
+            engine.onAxes(ControllerAxes(eventTimeMillis = testScheduler.currentTime))
+            advanceTimeBy(1_000)
+            runCurrent()
+            assertEquals("Release immediately before the threshold cancels the pending repeat", 1, actions.size)
+            engine.reset()
+        }
+    }
+
+    @Test
     fun `a late analog report joins an already repeating trigger without another edge or delay`() = runTest {
         val actions = mutableListOf<SemanticInputAction>()
         val engine = ControllerInputEngine(this, { ConfirmBackMapping.Default }, { false },
             monotonicTimeMillis = { testScheduler.currentTime }) { actions += it; true }
         engine.onButtonDown(ControllerButton.LeftTrigger, false, 0)
-        advanceTimeBy(700)
+        advanceTimeBy(1_000)
         runCurrent()
         val beforeAnalog = actions.size
         assertTrue(beforeAnalog >= 3)
-        engine.onAxes(ControllerAxes(leftTrigger = .7f, eventTimeMillis = 700))
+        engine.onAxes(ControllerAxes(leftTrigger = .7f, eventTimeMillis = testScheduler.currentTime))
         assertEquals(beforeAnalog, actions.size)
         advanceTimeBy(115)
         runCurrent()
         assertTrue("The existing repeat cadence continues", actions.size > beforeAnalog)
         engine.onButtonUp(ControllerButton.LeftTrigger)
-        engine.onAxes(ControllerAxes(eventTimeMillis = 820))
+        engine.onAxes(ControllerAxes(eventTimeMillis = testScheduler.currentTime))
         val releasedCount = actions.size
         advanceTimeBy(1_000)
         runCurrent()
@@ -260,8 +291,10 @@ class ControllerInputEngineTest {
             advanceTimeBy(3_500)
             runCurrent()
             assertEquals(started, times.first())
-            assertEquals(started + 360, times[1])
+            val holdDelay = if (button == ControllerButton.LeftTrigger || button == ControllerButton.RightTrigger) 650L else 360L
+            assertEquals(started + holdDelay, times[1])
             val repeatIntervals = times.drop(1).zipWithNext { previous, next -> next - previous }
+            assertEquals("Acceleration starts after the hold threshold", 115L, repeatIntervals.first())
             assertTrue(repeatIntervals.all { it in 55L..115L })
             assertTrue(repeatIntervals.zipWithNext().all { (previous, next) -> next <= previous })
             assertTrue(repeatIntervals.any { it < 90 })

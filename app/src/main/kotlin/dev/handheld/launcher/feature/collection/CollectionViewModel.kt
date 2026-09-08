@@ -187,10 +187,17 @@ class CollectionViewModel(
     fun filter(value: String) = update { copy(filter = value, firstVisibleId = null, offset = 0) }
     fun toggleSort() = update { copy(sort = if (sort == "recent") "title" else "recent") }
     fun sort(value: String) = update { copy(sort = if (value == "title") "title" else "recent", firstVisibleId = null, offset = 0) }
-    fun cycleFilter(delta: Int) {
+    fun cycleFilter(delta: Int): Boolean {
         val current = state.value
         val keys = collectionFilterKeys(destination, current.allItems, current.overrides, current.favorites)
-        if (keys.isNotEmpty()) filter(keys[Math.floorMod(keys.indexOf(options.value.filter).coerceAtLeast(0) + delta, keys.size)])
+        // All is a fixed shortcut before the finite category sequence. Reaching an end
+        // consumes the input without wrapping or resetting the current grid position.
+        if (keys.isNotEmpty()) {
+            val index = keys.indexOf(options.value.filter).coerceAtLeast(0)
+            val next = (index + delta).coerceIn(0, keys.lastIndex)
+            if (next != index) { filter(keys[next]); return true }
+        }
+        return false
     }
     fun rememberAnchor(id: ItemId?, offset: Int) = update(userInitiated = false) {
         copy(selectedId = selectedId?.takeIf { it in previousIdSet } ?: state.value.selectedItemId,

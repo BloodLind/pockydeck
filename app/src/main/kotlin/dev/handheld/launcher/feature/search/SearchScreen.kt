@@ -407,7 +407,6 @@ fun SearchScreen(
                                     resultRequesters.getOrPut(result.key) { FocusRequester() },
                                 ),
                                 iconLoader = iconLoader,
-                                statusLabel = callbacks.activityLabels[item.id],
                                 onActivate = open,
                                 onFocusChanged = { focused -> if (focused) {
                                     focusedResultKey = result.key

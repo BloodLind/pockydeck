@@ -28,6 +28,7 @@ import dev.handheld.launcher.core.designsystem.contract.rememberControlFocusRest
 import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.core.designsystem.foundation.LauncherSurface
@@ -88,7 +89,7 @@ private fun RowScope.SettingLabel(label: String, supportingText: String?, select
             maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (supportingText != null) {
             LauncherText(supportingText, style = LauncherTheme.typography.settingSupporting,
-                color = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textSecondary, maxLines = 1,
+                color = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textSecondary, maxLines = 2,
                 overflow = TextOverflow.Ellipsis)
         }
     }
@@ -168,10 +169,12 @@ fun ChoiceRow(
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     onFocusChanged: (Boolean) -> Unit = {},
+    selected: Boolean = false,
 ) {
-    SettingRow(label, supportingText, enabled, modifier, onFocusChanged, onSelect) {
+    SettingRow(label, supportingText, enabled, modifier, onFocusChanged, onSelect, selected = selected) {
         Box(Modifier.weight(.65f), contentAlignment = Alignment.CenterEnd) {
-            LauncherText(value, style = LauncherTheme.typography.settingValue, color = LauncherTheme.colors.textSecondary,
+            LauncherText(value, style = LauncherTheme.typography.settingValue.copy(textAlign = TextAlign.End),
+                color = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textSecondary,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.handheld.launcher.core.domain.model.*
 import dev.handheld.launcher.core.domain.repository.ControllerPreferenceRepository
+import dev.handheld.launcher.core.domain.repository.DisplayPreferenceRepository
 import dev.handheld.launcher.navigation.LauncherNavigationController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 class LauncherAppViewModel(
     private val preferences: ControllerPreferenceRepository,
     saved: SavedStateHandle,
+    private val displayPreferences: DisplayPreferenceRepository? = null,
 ) : ViewModel() {
     private val initialDestination = LauncherDestination.fromPersistedKey(saved["destination"] ?: "home") ?: LauncherDestination.HOME
     private val initialOrigin = if (saved.get<Boolean>("shortcutOrigin") == true) NavigationOrigin.ShortcutSearch(initialDestination)
@@ -28,6 +30,8 @@ class LauncherAppViewModel(
         else -> LauncherLocation.Destination(initialDestination)
     })
     val mapping = preferences.confirmBackMapping.stateIn(viewModelScope, SharingStarted.Eagerly, ConfirmBackMapping.Default)
+    val display = (displayPreferences?.preferences ?: kotlinx.coroutines.flow.flowOf(DisplayPreferences()))
+        .stateIn(viewModelScope, SharingStarted.Eagerly, DisplayPreferences())
     val error = MutableStateFlow<String?>(null)
 
     init {
@@ -61,6 +65,17 @@ class LauncherAppViewModel(
             try { preferences.setConfirmBackMapping(value) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { error.value = "Could not save controller mapping. Try again." }
+        }
+    }
+
+    fun setUiScalePercent(value: Int) = saveDisplay { displayPreferences?.setUiScalePercent(value) }
+    fun setReduceMotion(value: Boolean) = saveDisplay { displayPreferences?.setReduceMotion(value) }
+
+    private fun saveDisplay(write: suspend () -> Unit) {
+        viewModelScope.launch {
+            try { write() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { error.value = "Could not save display settings. Try again." }
         }
     }
 }

@@ -20,9 +20,11 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
@@ -36,6 +38,8 @@ import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.LauncherDestination
+import dev.handheld.launcher.core.domain.model.LauncherLocation
+import dev.handheld.launcher.di.LauncherAppViewModel
 import dev.handheld.launcher.di.LauncherApplication
 import dev.handheld.launcher.feature.collection.CollectionViewModel
 import dev.handheld.launcher.feature.collection.collectionFilterKeys
@@ -63,7 +67,9 @@ import org.junit.runner.RunWith
 /**
  * Opt-in real-app coverage: run this class explicitly against an installed, populated launcher.
  * No test fixtures replace repositories, no app data is reset, and no card is activated.
- * Only normal UI navigation, text editing and its usual saved snapshots are changed.
+ * Only normal UI navigation, text editing, display settings and their saved preferences change.
+ * The display test restores its original scale; direct preference access is an emergency
+ * restoration only if a failed test makes the normal Settings UI inaccessible.
  */
 @RunWith(AndroidJUnit4::class)
 class MainActivityInputDeviceTest {
@@ -73,6 +79,7 @@ class MainActivityInputDeviceTest {
     private val container get() = (compose.activity.application as LauncherApplication).appContainer
     private lateinit var library: CollectionViewModel
     private lateinit var search: CollectionViewModel
+    private lateinit var app: LauncherAppViewModel
     private lateinit var mapping: ConfirmBackMapping
     private var originalFilter: String? = null
     private var originalSearch: String? = null
@@ -125,6 +132,8 @@ class MainActivityInputDeviceTest {
                 .get("collection.library", CollectionViewModel::class.java)
             search = ViewModelProvider(compose.activity, container.collectionViewModelFactory(LauncherDestination.SEARCH))
                 .get("collection.search", CollectionViewModel::class.java)
+            app = ViewModelProvider(compose.activity, container.launcherViewModelFactory())
+                .get(LauncherAppViewModel::class.java)
         }
         compose.waitUntil(TIMEOUT_MS) { !library.state.value.loading && !search.state.value.loading }
         mapping = runBlocking { container.controllerPreferenceRepository.confirmBackMapping.first() }
@@ -244,8 +253,52 @@ class MainActivityInputDeviceTest {
         compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SEARCH)).assertIsSelected()
     }
 
+    @Test fun displayScaleKeepsDockAndFooterInsideTheNativeWindowAndRestoresOriginalSetting() {
+        val originalScale = runBlocking { container.displayPreferenceRepository.preferences.first().uiScalePercent }
+        tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+        val displaySection = hasContentDescription("Display") and hasClickAction()
+        if (compose.onAllNodes(displaySection).fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNode(displaySection).performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+        }
+
+        fun chooseScale(percent: Int) {
+            val choice = hasContentDescription("UI scale $percent%") and hasClickAction()
+            compose.onNode(choice).performScrollTo()
+                .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.uiScalePercent == percent }
+            compose.onNode(choice).assertIsSelected()
+            assertEquals("Settings must persist the chosen scale", percent,
+                runBlocking { container.displayPreferenceRepository.preferences.first().uiScalePercent })
+        }
+
+        var testFailure: Throwable? = null
+        try {
+            for (percent in listOf(120, 100)) {
+                chooseScale(percent)
+                compose.waitForIdle()
+                assertChromeInsideNativeWindow(percent)
+            }
+        } catch (failure: Throwable) {
+            testFailure = failure
+            throw failure
+        } finally {
+            try {
+                chooseScale(originalScale)
+            } catch (restoreFailure: Throwable) {
+                // A cropping regression may hide the Settings controls. Restore this one
+                // preference without touching the catalog, and retain the test failure.
+                recordInput("Settings UI could not restore $originalScale%; restoring the display preference after failure")
+                try {
+                    runBlocking { container.displayPreferenceRepository.setUiScalePercent(originalScale) }
+                    compose.waitUntil(TIMEOUT_MS) { app.display.value.uiScalePercent == originalScale }
+                } catch (fallbackFailure: Throwable) { restoreFailure.addSuppressed(fallbackFailure) }
+                testFailure?.addSuppressed(restoreFailure) ?: throw restoreFailure
+            }
+        }
+    }
+
     @Test fun slowTriggerReportsMergeAndAHeldTriggerAcceleratesThenStopsOnRelease() {
-        assertTrue("Trigger cycling requires at least two detected console filters", filterKeys().size >= 2)
+        assertTrue("Trigger hold coverage requires at least two detected console filters", filterKeys().size >= 3)
         val changes = CopyOnWriteArrayList<FilterChange>()
         val observer = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         compose.runOnIdle {
@@ -256,22 +309,33 @@ class MainActivityInputDeviceTest {
             }
         }
         try {
-            // Both report orders exceed the old 65ms dedup window but finish before hold repeat.
+            // Both report orders merge, and a deliberate short squeeze exceeds the old
+            // 360ms repeat delay while remaining below the trigger's new 650ms threshold.
             checkSlowSqueeze(changes, keyFirst = true, right = true)
             checkSlowSqueeze(changes, keyFirst = false, right = false)
+            val keys = filterKeys()
             changes.clear()
             val began = SystemClock.uptimeMillis()
             try {
                 keyDown(KeyEvent.KEYCODE_BUTTON_R2)
-                SystemClock.sleep(3_400)
+                SystemClock.sleep(3_700)
             } finally { keyUp(KeyEvent.KEYCODE_BUTTON_R2) }
             compose.waitForIdle()
             val times = changes.map { it.at - began }
-            val early = gaps(times.filter { it in 450L..1_400L })
-            val late = gaps(times.filter { it in 2_600L..3_350L })
-            assertTrue("Need enough observed early hold steps: $times", early.size >= 4)
-            assertTrue("Need enough observed accelerated hold steps: $times", late.size >= 5)
-            assertTrue("Hold should accelerate; early=$early late=$late", median(late) < median(early) * .82)
+            assertTrue("No trigger repeat before its deliberate 650ms threshold: $times", times.size >= 2 && times[1] >= 640L)
+            val indices = changes.map { keys.indexOf(it.filter) }
+            assertTrue("A hold must advance through the finite filter sequence without wrapping: $changes",
+                indices.all { it > 0 } && indices.zipWithNext().all { (first, second) -> second > first })
+            val early = gaps(times.filter { it in 750L..1_700L })
+            val late = gaps(times.filter { it in 2_900L..3_650L })
+            if (early.size >= 4 && late.size >= 5) {
+                assertTrue("Hold should accelerate; early=$early late=$late", median(late) < median(early) * .82)
+            } else {
+                // A finite catalog can run out of categories before the late timing window.
+                // Engine JVM coverage still checks the full acceleration curve unconditionally.
+                assertEquals("A short filter sequence must stop at its last category", keys.last(), library.state.value.filter)
+                recordInput("Finite boundary ended observable cadence after ${changes.size} steps: $times")
+            }
             SystemClock.sleep(100)
             val releasedCount = changes.size
             SystemClock.sleep(500)
@@ -285,25 +349,107 @@ class MainActivityInputDeviceTest {
         }
     }
 
+    @Test fun filterStripDirectionsExitWithoutSelectingAndTriggersStopAtFiniteEnds() {
+        val keys = filterKeys()
+        assertTrue("Strip navigation requires at least one detected console filter", keys.size >= 2)
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        waitForFocusedCard()
+        cycleToFilter(keys[1])
+        waitForFocusedCard()
+        val selectedFilter = library.state.value.filter
+        val firstCategoryTag = "collection-filter-${keys[1]}"
+        fun focusFirstCategory() {
+            compose.onNodeWithTag(FILTER_STRIP).performScrollToIndex(0)
+            compose.onNodeWithTag(firstCategoryTag).performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            compose.onNodeWithTag(firstCategoryTag).assertIsFocused()
+        }
+
+        focusFirstCategory()
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        compose.onNodeWithTag(FILTER_ALL).assertIsFocused()
+        assertEquals("Left exits to All without applying it", selectedFilter, library.state.value.filter)
+
+        focusFirstCategory()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        compose.onNode(hasContentDescription("Show all console filters in a grid")).assertIsFocused()
+        assertEquals("Right exits to All filters without applying a category", selectedFilter, library.state.value.filter)
+
+        focusFirstCategory()
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        waitForFocusedCard()
+        assertEquals("Down returns to the grid without applying a category", selectedFilter, library.state.value.filter)
+
+        cycleToFilter(keys.last())
+        repeat(3) {
+            press(KeyEvent.KEYCODE_BUTTON_R2)
+            assertEquals("R2 at the final category must not wrap to All", keys.last(), library.state.value.filter)
+        }
+        try {
+            keyDown(KeyEvent.KEYCODE_BUTTON_R2)
+            SystemClock.sleep(900)
+        } finally { keyUp(KeyEvent.KEYCODE_BUTTON_R2) }
+        compose.waitForIdle()
+        assertEquals("Held R2 repeats must also stop at the final category", keys.last(), library.state.value.filter)
+
+        cycleToFilter("all")
+        repeat(3) {
+            press(KeyEvent.KEYCODE_BUTTON_L2)
+            assertEquals("L2 at All must not wrap to the final category", "all", library.state.value.filter)
+        }
+    }
+
+    @Test fun backStaysOnRootPagesAndDismissesMenuWithoutNavigatingOrCyclingFilters() {
+        for (destination in LauncherDestination.dockOrder) {
+            tapTag(LauncherShellTags.destination(destination))
+            compose.onNodeWithTag(LauncherShellTags.destination(destination)).assertIsSelected()
+            press(faceKey(mapping.back))
+            assertEquals("Back must stay on ${destination.persistedKey}",
+                LauncherLocation.Destination(destination), app.navigation.location.value)
+            compose.onNodeWithTag(LauncherShellTags.destination(destination)).assertIsSelected()
+        }
+
+        tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+        waitForImeHidden()
+        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        waitForFocusedCard()
+        val before = library.state.value
+        val menu = hasAnyAncestor(hasTestTag(LauncherShellTags.Overlay)) and hasText("Menu")
+        press(KeyEvent.KEYCODE_BUTTON_START)
+        waitWithDiagnostics("Menu must open above the Library") { compose.onAllNodes(menu).fetchSemanticsNodes().isNotEmpty() }
+        press(KeyEvent.KEYCODE_BUTTON_R2)
+        press(KeyEvent.KEYCODE_BUTTON_R1)
+        assertEquals("A modal must block underlying filter cycling", before.filter, library.state.value.filter)
+        assertEquals(LauncherLocation.Destination(LauncherDestination.LIBRARY), app.navigation.location.value)
+        press(faceKey(mapping.back))
+        waitWithDiagnostics("Back must dismiss Menu") { compose.onAllNodes(menu).fetchSemanticsNodes().isEmpty() }
+        assertEquals(before.selectedItemId, library.state.value.selectedItemId)
+        assertEquals(LauncherLocation.Destination(LauncherDestination.LIBRARY), app.navigation.location.value)
+        press(faceKey(mapping.back))
+        assertEquals("A second Back must remain at the Library root",
+            LauncherLocation.Destination(LauncherDestination.LIBRARY), app.navigation.location.value)
+    }
+
     private fun checkSlowSqueeze(changes: CopyOnWriteArrayList<FilterChange>, keyFirst: Boolean, right: Boolean) {
         compose.waitForIdle()
         changes.clear()
         val keys = filterKeys()
         val before = keys.indexOf(library.state.value.filter)
-        val expected = keys[Math.floorMod(before + if (right) 1 else -1, keys.size)]
+        val next = (before + if (right) 1 else -1).coerceIn(0, keys.lastIndex)
+        assertTrue("Slow-squeeze coverage must start away from the tested boundary", next != before)
+        val expected = keys[next]
         val key = if (right) KeyEvent.KEYCODE_BUTTON_R2 else KeyEvent.KEYCODE_BUTTON_L2
         val began = SystemClock.uptimeMillis()
         try {
             if (keyFirst) keyDown(key) else triggers(left = if (right) 0f else .8f, right = if (right) .8f else 0f)
             SystemClock.sleep(180)
             if (keyFirst) triggers(left = if (right) 0f else .8f, right = if (right) .8f else 0f) else keyDown(key)
-            SystemClock.sleep(30)
+            SystemClock.sleep(260)
         } finally {
             keyUp(key)
             triggers()
         }
         val elapsed = SystemClock.uptimeMillis() - began
-        assertTrue("Injection took ${elapsed}ms; cannot isolate engagement from the 360ms hold threshold", elapsed < 340)
+        assertTrue("Injection took ${elapsed}ms; cannot isolate engagement from the 650ms hold threshold", elapsed < 620)
         compose.waitUntil(TIMEOUT_MS) { changes.isNotEmpty() }
         compose.waitForIdle()
         assertEquals("One physical squeeze must change the filter once: $changes", 1, changes.size)
@@ -314,11 +460,41 @@ class MainActivityInputDeviceTest {
         collectionFilterKeys(LauncherDestination.LIBRARY, it.allItems, it.overrides, it.favorites)
     }
 
+    private fun assertChromeInsideNativeWindow(percent: Int) {
+        val nativeSize = IntArray(2)
+        compose.runOnIdle {
+            nativeSize[0] = compose.activity.window.decorView.width
+            nativeSize[1] = compose.activity.window.decorView.height
+        }
+        assertTrue("The real Activity window must be laid out", nativeSize.all { it > 0 })
+        val tags = listOf(LauncherShellTags.Root, LauncherShellTags.Dock, LauncherShellTags.Footer) +
+            LauncherDestination.dockOrder.map(LauncherShellTags::destination) +
+            listOf(SemanticInputAction.CONFIRM, SemanticInputAction.SECONDARY, SemanticInputAction.MENU)
+                .map(LauncherShellTags::footerAction)
+        for (tag in tags) {
+            val target = compose.onNodeWithTag(tag)
+            target.assertIsDisplayed()
+            val node = target.fetchSemanticsNode()
+            // boundsInRoot is clipped by ancestors and can hide an oversized layout. Use
+            // its actual placed size/position to catch chrome extending past the window.
+            val position = node.positionInRoot
+            val size = node.size
+            val bounds = Rect(position.x, position.y, position.x + size.width, position.y + size.height)
+            assertTrue("$percent% $tag must fit the native ${nativeSize[0]}x${nativeSize[1]} window: $bounds",
+                bounds.width > 0f && bounds.height > 0f && bounds.left >= -1f && bounds.top >= -1f &&
+                    bounds.right <= nativeSize[0] + 1f && bounds.bottom <= nativeSize[1] + 1f)
+        }
+    }
+
     private fun cycleToFilter(target: String) {
         repeat(filterKeys().size + 1) {
             val before = library.state.value.filter
             if (before == target) return
-            press(KeyEvent.KEYCODE_BUTTON_R2)
+            val keys = filterKeys()
+            val targetIndex = keys.indexOf(target)
+            val currentIndex = keys.indexOf(before)
+            assertTrue("Both current and target filters must remain available: $before -> $target", currentIndex >= 0 && targetIndex >= 0)
+            press(if (targetIndex > currentIndex) KeyEvent.KEYCODE_BUTTON_R2 else KeyEvent.KEYCODE_BUTTON_L2)
             compose.waitUntil(TIMEOUT_MS) { library.state.value.filter != before }
         }
         assertEquals("Could not restore Library filter through controller input", target, library.state.value.filter)
@@ -514,6 +690,8 @@ class MainActivityInputDeviceTest {
 
     private companion object {
         const val GRID = "collection-grid"
+        const val FILTER_ALL = "collection-filter-all"
+        const val FILTER_STRIP = "collection-filter-strip"
         const val TIMEOUT_MS = 30_000L
     }
 }

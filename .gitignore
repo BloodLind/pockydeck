@@ -1,5 +1,6 @@
 # Gradle and module build caches
 .gradle/
+.kotlin/
 **/build/
 build/
 *.hprof

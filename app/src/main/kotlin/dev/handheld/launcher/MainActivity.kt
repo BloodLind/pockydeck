@@ -10,6 +10,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import android.view.inputmethod.EditorInfo
 import androidx.activity.ComponentActivity
@@ -54,6 +55,9 @@ class MainActivity : ComponentActivity() {
     private var touchInput: () -> Unit = {}
     private var searchEditorActive = false
     private lateinit var inputHost: FrameLayout
+    private val nativeFocusFallback = ViewTreeObserver.OnGlobalFocusChangeListener { _, next ->
+        if (next == null) inputHost.post { retainNativeInputFocus() }
+    }
     private val inlineTextInput = PlatformTextInputInterceptor { request, next ->
         next.startInputMethod { attributes ->
             request.createInputConnection(attributes).also {
@@ -121,6 +125,7 @@ class MainActivity : ComponentActivity() {
         }
         inputHost.addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         setContentView(inputHost)
+        inputHost.viewTreeObserver.addOnGlobalFocusChangeListener(nativeFocusFallback)
         content.setContent {
           InterceptPlatformTextInput(inlineTextInput) {
             LauncherApp(container, appViewModel, homeViewModel, reducedMotion, homeRoleHeld,
@@ -149,7 +154,19 @@ class MainActivity : ComponentActivity() {
             touchInput()
             if (!searchEditorActive) inputHost.requestFocus()
         }
-        return super.dispatchTouchEvent(event)
+        val handled = super.dispatchTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP) inputHost.post { retainNativeInputFocus() }
+        return handled
+    }
+
+    private fun retainNativeInputFocus() {
+        if (!searchEditorActive && inputHost.hasWindowFocus() && currentFocus == null) {
+            // A route can clear Compose/native focus after the touch-down fallback. Keep
+            // pre-IME dispatch reachable without implicitly selecting a Compose control.
+            inputHost.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            try { inputHost.requestFocus() }
+            finally { inputHost.descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS }
+        }
     }
 
     @SuppressLint("RestrictedApi") // Continue through the same public Window.Callback path.
@@ -169,7 +186,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        container.recentActivity.start()
         container.androidCatalog.start()
         container.romScanner.refresh()
         container.romController.refreshEmulators()
@@ -179,14 +195,18 @@ class MainActivity : ComponentActivity() {
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
         homeRoleHeld = roleHandler.isHomeRoleHeld()
         container.androidCatalog.onResume()
-        container.recentActivity.refresh()
         container.romController.refreshStorageAccess()
         container.romScanner.refresh()
         container.romController.refreshEmulators()
         immersiveWindow()
     }
     override fun onPause() { controller.reset(); super.onPause() }
-    override fun onStop() { container.androidCatalog.stop(); container.recentActivity.stop(); super.onStop() }
+    override fun onStop() { container.androidCatalog.stop(); super.onStop() }
+    override fun onDestroy() {
+        if (::inputHost.isInitialized && inputHost.viewTreeObserver.isAlive)
+            inputHost.viewTreeObserver.removeOnGlobalFocusChangeListener(nativeFocusFallback)
+        super.onDestroy()
+    }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) immersiveWindow() else controller.reset()

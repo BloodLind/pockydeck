@@ -76,7 +76,6 @@ fun HomeRoute(
     allowFocusRequest: Boolean = true,
     pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
-    activityLabels: Map<ItemId, String> = emptyMap(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     HomeScreen(
@@ -93,7 +92,6 @@ fun HomeRoute(
         onRefresh = viewModel::refresh,
         onViewportChanged = viewModel::rememberViewport,
         onFocusedActionChanged = onFocusedActionChanged,
-        activityLabels = activityLabels,
     )
 }
 
@@ -113,7 +111,6 @@ fun HomeScreen(
     allowFocusRequest: Boolean = true,
     pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
-    activityLabels: Map<ItemId, String> = emptyMap(),
 ) {
     val selected = state.selectedItem
     val rowState = rememberLazyListState()
@@ -199,7 +196,6 @@ fun HomeScreen(
                             focusFrameWidth = metrics.focusFrameReservation,
                             focusLift = metrics.focusLiftReservation,
                             iconLoader = iconLoader,
-                            statusLabel = activityLabels[item.itemId],
                             onActivate = activate,
                             onFocusChanged = { focused ->
                                 if (focused) {

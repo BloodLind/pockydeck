@@ -81,13 +81,13 @@ fun ArtworkFallback(
 /** Two readable title lines; list results may reserve a subtitle line to keep rows aligned. */
 @Composable
 fun TileCaption(title: String, subtitle: String? = null, modifier: Modifier = Modifier, subtitleColor: Color? = null,
-    reserveSubtitle: Boolean = true) {
+    reserveSubtitle: Boolean = true, textAlign: TextAlign = TextAlign.Start) {
     val type = LauncherTheme.typography
     Column(modifier.fillMaxWidth()) {
-        LauncherText(title, Modifier.fillMaxWidth(), style = type.tileTitle,
+        LauncherText(title, Modifier.fillMaxWidth(), style = type.tileTitle.copy(textAlign = textAlign),
             minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (subtitle != null || reserveSubtitle) {
-            LauncherText(subtitle.orEmpty(), Modifier.fillMaxWidth(), style = type.tileSubtitle,
+            LauncherText(subtitle.orEmpty(), Modifier.fillMaxWidth(), style = type.tileSubtitle.copy(textAlign = textAlign),
                 color = subtitleColor ?: LauncherTheme.colors.textSecondary, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
@@ -178,7 +178,8 @@ fun CoverTile(
         onActivate, onFocusChanged, modifier,
         RoundedCornerShape(if (isCollection) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
-        caption = if (isCollection) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), subtitleColor, reserveSubtitle = false) }) else null,
+        caption = if (isCollection) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), subtitleColor,
+            reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {
         CardArtwork(Modifier.fillMaxSize(), artwork, badge, status,
             shape = RoundedCornerShape(if (isCollection) (LauncherTheme.shapes.collectionOuter - 2.dp).coerceAtLeast(2.dp) else LauncherTheme.shapes.homeInner))
@@ -231,7 +232,8 @@ fun AppIconTile(
         onActivate, onFocusChanged, modifier,
         RoundedCornerShape(if (showCaption) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
-        caption = if (showCaption) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), reserveSubtitle = false) }) else null,
+        caption = if (showCaption) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
+            reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {
       Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(LauncherTheme.spacing.sm), contentAlignment = Alignment.Center) {

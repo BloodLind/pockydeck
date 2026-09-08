@@ -16,6 +16,7 @@ import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.CurrentUserAndroidComponentId
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
+import dev.handheld.launcher.core.domain.model.DisplayPreferences
 import dev.handheld.launcher.core.domain.model.InventoryScope
 import dev.handheld.launcher.core.domain.model.ItemId
 import dev.handheld.launcher.core.domain.model.LaunchOperationId
@@ -47,6 +48,7 @@ class DataStorePreferencesInstrumentedTest {
     private lateinit var store: LauncherPreferencesStore
     private lateinit var controllerPreferences: DataStoreControllerPreferenceRepository
     private lateinit var navigationSnapshots: DataStoreNavigationSnapshotRepository
+    private lateinit var displayPreferences: DataStoreDisplayPreferenceRepository
     private lateinit var fileName: String
 
     @Before
@@ -77,6 +79,79 @@ class DataStorePreferencesInstrumentedTest {
 
             assertEquals(swapped, controllerPreferences.confirmBackMapping.first())
         }
+    }
+
+    @Test
+    fun displayDefaultsAndSavedChoicesSurviveReopenAlongsideControllerAndNavigationPreferences() = runBlocking {
+        assertEquals(DisplayPreferences(uiScalePercent = 100, reduceMotion = false), displayPreferences.preferences.first())
+        val mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        val snapshot = DestinationSnapshot(
+            destination = LauncherDestination.SETTINGS,
+            selectedItemId = ItemId("settings:display"),
+            firstVisibleItemId = ItemId("settings:scale"),
+            firstVisibleOffsetPx = 23,
+            query = "display",
+            filterKey = PageStateKey("display"),
+            sortKey = PageStateKey("title"),
+        )
+        controllerPreferences.setConfirmBackMapping(mapping)
+        navigationSnapshots.save(snapshot)
+
+        displayPreferences.setUiScalePercent(120)
+        displayPreferences.setReduceMotion(true)
+        reopenStore()
+
+        assertEquals(DisplayPreferences(uiScalePercent = 120, reduceMotion = true), displayPreferences.preferences.first())
+        assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+        assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.SETTINGS).first())
+    }
+
+    @Test
+    fun invalidStoredDisplayFieldsFallBackIndependentlyWithoutClearingOtherPreferences() = runBlocking {
+        val mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        val snapshot = DestinationSnapshot(LauncherDestination.SEARCH, query = "retained search")
+        controllerPreferences.setConfirmBackMapping(mapping)
+        navigationSnapshots.save(snapshot)
+        displayPreferences.setReduceMotion(true)
+
+        for (invalidScale in listOf(0, 89, 95, 121, Int.MAX_VALUE)) {
+            store.dataStore.edit { it[LauncherPreferenceKeys.uiScalePercent] = invalidScale }
+            assertEquals(DisplayPreferences(uiScalePercent = 100, reduceMotion = true), displayPreferences.preferences.first())
+        }
+        reopenStore()
+        assertEquals(DisplayPreferences(uiScalePercent = 100, reduceMotion = true), displayPreferences.preferences.first())
+
+        store.dataStore.edit { it[stringPreferencesKey("display.ui_scale_percent")] = "120" }
+        assertEquals(DisplayPreferences(uiScalePercent = 100, reduceMotion = true), displayPreferences.preferences.first())
+        displayPreferences.setUiScalePercent(110)
+        store.dataStore.edit { it[intPreferencesKey("display.reduce_motion")] = 1 }
+        reopenStore()
+
+        assertEquals(DisplayPreferences(uiScalePercent = 110, reduceMotion = false), displayPreferences.preferences.first())
+        assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+        assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.SEARCH).first())
+    }
+
+    @Test
+    fun unsupportedScaleWritesAreRejectedWithoutChangingAnyStoredPreference() = runBlocking {
+        displayPreferences.setUiScalePercent(90)
+        displayPreferences.setReduceMotion(true)
+        val mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        val snapshot = DestinationSnapshot(LauncherDestination.APPS, query = "keep app state")
+        controllerPreferences.setConfirmBackMapping(mapping)
+        navigationSnapshots.save(snapshot)
+        val before = store.dataStore.data.first().asMap()
+
+        for (invalidScale in listOf(Int.MIN_VALUE, 0, 89, 95, 105, 121, Int.MAX_VALUE)) {
+            val failure = runCatching { displayPreferences.setUiScalePercent(invalidScale) }.exceptionOrNull()
+            assertTrue("Unsupported scale $invalidScale must be rejected", failure is IllegalArgumentException)
+            assertEquals("Rejected writes must preserve every stored preference", before, store.dataStore.data.first().asMap())
+        }
+        reopenStore()
+
+        assertEquals(DisplayPreferences(uiScalePercent = 90, reduceMotion = true), displayPreferences.preferences.first())
+        assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+        assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.APPS).first())
     }
 
     @Test
@@ -268,6 +343,7 @@ class DataStorePreferencesInstrumentedTest {
         store = LauncherPreferencesStore.open(context, fileName)
         controllerPreferences = DataStoreControllerPreferenceRepository(store)
         navigationSnapshots = DataStoreNavigationSnapshotRepository(store)
+        displayPreferences = DataStoreDisplayPreferenceRepository(store)
     }
 
     private suspend fun reopenStore() {

@@ -26,6 +26,12 @@ The same batch moves preparation away from selection/scroll updates, publishes e
 
 Version 0.6.0 is installed on the Flip 2 without resetting its library. **343 tests passed** (244 JVM and 99 Android), with one Windows-only fixture skipped; lint has zero errors and both APK builds passed. The final main-app device class passed all four tests, including native mixed-trigger timing, row wrapping and Search touch/controller editing. Home, Library, the filter chooser, inline keyboard and 130% system text were inspected; the device's font scale was restored to 1.0. The final SHA-256 and exact coverage are in the linked evidence.
 
+The **0.7.0 (code 10)** follow-up makes the filter gallery finite, separates All, closes excess chip gaps and lets D-pad/stick input leave the strip while L2/R2 change categories. Triggers now wait 650ms before accelerating. Dock focus no longer flashes during bumper navigation, root Back stays on the current page, and modal/editor Back restores its origin. App captions are centered, type is 10% larger, the dock is slightly larger and the footer has more bottom clearance. Settings adds persisted 90/100/110/120% UI scale and Reduce motion using consistent shared controls.
+
+Recently active badges and optional Usage Access polling are removed; successful-open ordering remains. Ordinary Android process visibility cannot reliably establish another app's live state or the ROM inside an emulator. Real-device verification also corrected native focus loss after touch and a live scaling calculation that could push chrome outside the screen. The final installed APK matches the recorded release checksum, preserves the 3,768-game Library and retains All files access.
+
+**347 tests passed** (242 JVM, 105 Android), one Windows fixture skipped; lint has zero errors and both APK builds passed. All seven MainActivity tests passed together on the final APK, including live 120% scaling and restoration to 100%. Home, Library, Apps and Settings were inspected on the physical Flip 2. See [0.7 verification and reconciliation](evidence/F14/finite-controls-070.md) for exact coverage, primary process-status references, artifact and remaining limits. Earlier revision descriptions above are historical.
+
 Full rich metadata import, manual artwork/match correction and the complete emulator/game-boot matrix remain later work. The large-catalog discovery/search work requested in this batch is implemented; no universal storage-scan time is promised.
 
 ## Baseline and authorization

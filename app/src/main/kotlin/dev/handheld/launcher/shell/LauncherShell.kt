@@ -104,6 +104,7 @@ data class LauncherShellState(
     val focusedDestination: LauncherDestination? = null,
     val status: LauncherShellStatus = LauncherShellStatus(),
     val footer: ControllerActionFooter = ControllerActionFooter(emptyList()),
+    val dockFocusEnabled: Boolean = true,
 )
 
 /** Stable tags for shell-level tests and debug inspection. */
@@ -162,6 +163,7 @@ fun LauncherShell(
             layout = layout,
             selectedDestination = state.selectedDestination,
             focusedDestination = state.focusedDestination,
+            focusEnabled = state.dockFocusEnabled,
             onDestinationSelected = onDestinationSelected,
             onDestinationFocused = onDestinationFocused,
             modifier = Modifier.testTag(LauncherShellTags.Dock),
@@ -296,13 +298,14 @@ private fun NavigationDock(
     layout: LauncherShellLayout,
     selectedDestination: LauncherDestination,
     focusedDestination: LauncherDestination?,
+    focusEnabled: Boolean,
     onDestinationSelected: (LauncherDestination) -> Unit,
     onDestinationFocused: (LauncherDestination?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var locallyFocusedDestination by remember { mutableStateOf<LauncherDestination?>(null) }
-    val renderedFocus = locallyFocusedDestination ?: focusedDestination
-    val slotSize = (48.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale).coerceAtLeast(48.dp)
+    val renderedFocus = (locallyFocusedDestination ?: focusedDestination).takeIf { focusEnabled }
+    val slotSize = (52.8.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale).coerceAtLeast(48.dp)
     Box(
         modifier = modifier
             .offset(layout.dockBounds.left, layout.dockBounds.top)
@@ -360,7 +363,7 @@ private fun DockDestination(
     onSelected: () -> Unit,
     onFocused: (Boolean) -> Unit,
 ) {
-    val visualSize = 48.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    val visualSize = 52.8.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
     Box(
         modifier = Modifier
             .size(visualSize.coerceAtLeast(48.dp))
@@ -385,7 +388,7 @@ private fun DockDestination(
         ) {
             LauncherGlyphIcon(
                 glyph = destination.glyph(),
-                modifier = Modifier.size(26.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
+                modifier = Modifier.size(28.6.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
                 contentDescription = destination.label(),
                 tint = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textPrimary,
             )
@@ -423,7 +426,7 @@ private fun ShellFooter(
         ) {
             footer.actions.forEach { descriptor ->
                 FooterAction(descriptor, actionPort, confirmBackMapping,
-                    visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f - 3.dp * LauncherTheme.referenceScale)
+                    visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f - 8.dp * LauncherTheme.referenceScale)
             }
         }
     }

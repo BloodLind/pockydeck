@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -35,6 +36,7 @@ import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.settings.ActionRow
 import dev.handheld.launcher.core.designsystem.settings.ChoiceRow
+import dev.handheld.launcher.core.designsystem.settings.ToggleRow
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
@@ -60,7 +62,8 @@ data class SettingsScreenState(
     val romSources: RomSourcesScreenState = RomSourcesScreenState(),
     val emulators: EmulatorSettingsScreenState = EmulatorSettingsScreenState(),
     val artwork: ArtworkSummary = ArtworkSummary(),
-    val usageAccessGranted: Boolean = false,
+    val uiScalePercent: Int = 100,
+    val reduceMotion: Boolean = false,
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -71,10 +74,11 @@ data class SettingsCallbacks(
     val romSources: RomSourcesCallbacks = RomSourcesCallbacks(),
     val emulators: EmulatorSettingsCallbacks = EmulatorSettingsCallbacks(),
     val artwork: ArtworkSettingsCallbacks = ArtworkSettingsCallbacks(),
-    val onUsageAccess: () -> Unit = {},
+    val onSetUiScalePercent: (Int) -> Unit = {},
+    val onSetReduceMotion: (Boolean) -> Unit = {},
 )
 
-private val settingsSections = listOf("Controls", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
+private val settingsSections = listOf("Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -119,16 +123,21 @@ fun SettingsScreen(
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallbacks, systemActions: List<SupportedSystemAction>, section: String, modifier: Modifier, restoreFocusRequest: Int) {
-    val swapped = ConfirmBackMapping(state.confirmBackMapping.back, state.confirmBackMapping.confirm)
+    val latestState by rememberUpdatedState(state)
+    val latestCallbacks by rememberUpdatedState(callbacks)
+    val swapConfirmBack = {
+        val mapping = latestState.confirmBackMapping
+        latestCallbacks.onSetConfirmBackMapping(ConfirmBackMapping(mapping.back, mapping.confirm))
+    }
+    val toggleReduceMotion = { latestCallbacks.onSetReduceMotion(!latestState.reduceMotion) }
     val initial = remember { FocusRequester() }
     val hasInitialControl = when (section) {
-        "Controls", "Launcher", "ROM folders", "Emulators", "Artwork", "All" -> true
+        "Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "All" -> true
         "Android" -> systemActions.isNotEmpty()
         else -> false
     }
     val inputMode = LocalInputModeManager.current
     val fontScale = LocalDensity.current.fontScale
-    val motionSummary = if (LauncherTheme.motion.reducedMotion) "On" else "Off"
     val controllerInput = LocalControllerInput.current
     LaunchedEffect(section, hasInitialControl, restoreFocusRequest, controllerInput) {
         if (hasInitialControl && controllerInput) {
@@ -148,8 +157,24 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
             if (section != "All") PageHeading("Controls")
             ChoiceRow("Confirm button", state.confirmBackMapping.confirm.name,
                 modifier = if (section == "All" || section == "Controls") Modifier.focusRequester(initial) else Modifier,
-                onSelect = { callbacks.onSetConfirmBackMapping(swapped) }, supportingText = "Back uses ${state.confirmBackMapping.back.name}",
-                onFocusChanged = settingsFocus("Swap Confirm and Back", LauncherActionMeaning.CHANGE_FILTER, { callbacks.onSetConfirmBackMapping(swapped) }, callbacks.onFocusedAction))
+                onSelect = swapConfirmBack, supportingText = "Back uses ${state.confirmBackMapping.back.name}",
+                onFocusChanged = settingsFocus("Swap Confirm and Back", LauncherActionMeaning.CHANGE_FILTER, swapConfirmBack, callbacks.onFocusedAction))
+        }
+        if (section == "All" || section == "Display") {
+            PageHeading("Display")
+            LauncherText("UI scale changes text, artwork, and controls. System text size ${(fontScale * 100).toInt()}% also applies.",
+                style = LauncherTheme.typography.settingSupporting, color = LauncherTheme.colors.textSecondary,
+                modifier = Modifier.padding(horizontal = LauncherTheme.spacing.md))
+            listOf(90 to "Compact", 100 to "Default", 110 to "Large", 120 to "Extra large").forEachIndexed { index, (percent, summary) ->
+                val chooseScale = { latestCallbacks.onSetUiScalePercent(percent) }
+                ChoiceRow("UI scale $percent%", summary, onSelect = chooseScale,
+                    selected = state.uiScalePercent == percent,
+                    modifier = if (section == "Display" && index == 0) Modifier.focusRequester(initial) else Modifier,
+                    onFocusChanged = settingsFocus("Set UI scale to $percent%", LauncherActionMeaning.CHANGE_FILTER, chooseScale, callbacks.onFocusedAction))
+            }
+            ToggleRow("Reduce motion", state.reduceMotion, onCheckedChange = callbacks.onSetReduceMotion,
+                supportingText = "Remove decorative movement and animated transitions",
+                onFocusChanged = settingsFocus("Toggle reduced motion", LauncherActionMeaning.CHANGE_FILTER, toggleReduceMotion, callbacks.onFocusedAction))
         }
         if (section == "All" || section == "Launcher") {
             if (section != "All") PageHeading("Launcher")
@@ -157,18 +182,6 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
                 modifier = if (section == "Launcher") Modifier.focusRequester(initial) else Modifier,
                 onActivate = callbacks.onRequestDefaultHome,
                 onFocusChanged = settingsFocus("Set as Home launcher", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onRequestDefaultHome, callbacks.onFocusedAction))
-            ActionRow("Recent activity badges", if (state.usageAccessGranted) "Usage access enabled · Activity from the last 30 minutes"
-                else "Launcher openings are tracked · Enable usage access for other app openings",
-                onActivate = callbacks.onUsageAccess,
-                onFocusChanged = settingsFocus("Recent activity badges", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onUsageAccess, callbacks.onFocusedAction))
-            LauncherText("Recently active does not mean an app or emulator is still running.",
-                style = LauncherTheme.typography.settingSupporting, color = LauncherTheme.colors.textSecondary,
-                modifier = Modifier.padding(horizontal = LauncherTheme.spacing.md))
-            LauncherText(
-                "Display & text size · System text ${(fontScale * 100).toInt()}% · Reduced motion $motionSummary",
-                color = LauncherTheme.colors.textSecondary,
-                modifier = Modifier.padding(horizontal = LauncherTheme.spacing.md),
-            )
             state.categorySummaries.forEach { summary -> ActionRow(category(summary.category), "${summary.count} items", onActivate = { callbacks.onOpenCategory(summary.category) },
                 onFocusChanged = settingsFocus(category(summary.category), LauncherActionMeaning.CHANGE_FILTER, { callbacks.onOpenCategory(summary.category) }, callbacks.onFocusedAction)) }
         }

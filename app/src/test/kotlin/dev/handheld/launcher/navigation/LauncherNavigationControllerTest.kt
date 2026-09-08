@@ -11,16 +11,17 @@ import org.junit.Test
 
 class LauncherNavigationControllerTest {
     @Test
-    fun dockBackReplacesDestinationWithoutHistoryAndHomeStaysHome() {
+    fun dockBackStaysOnEveryRootWithoutReturningToEarlierDestinations() {
         val navigation = LauncherNavigationController()
 
-        navigation.selectDestination(LauncherDestination.LIBRARY)
-        navigation.selectDestination(LauncherDestination.FAVORITES)
-        navigation.back()
-
-        assertEquals(LauncherLocation.Destination(LauncherDestination.HOME), navigation.location.value)
-        navigation.back()
-        assertEquals(LauncherLocation.Destination(LauncherDestination.HOME), navigation.location.value)
+        for (destination in LauncherDestination.dockOrder) {
+            navigation.selectDestination(destination)
+            repeat(2) {
+                navigation.back()
+                assertEquals(LauncherLocation.Destination(destination), navigation.location.value)
+                assertEquals(destination, navigation.location.value.selectedDockDestination())
+            }
+        }
     }
 
     @Test
@@ -36,9 +37,13 @@ class LauncherNavigationControllerTest {
         assertEquals(LauncherLocation.ShortcutSearch(LauncherDestination.APPS), navigation.location.value)
         navigation.back()
         assertEquals(LauncherLocation.Destination(LauncherDestination.APPS), navigation.location.value)
+        navigation.back()
+        assertEquals(LauncherLocation.Destination(LauncherDestination.APPS), navigation.location.value)
 
         navigation.openItemDetails(item, NavigationOrigin.Destination(LauncherDestination.FAVORITES))
         assertEquals(LauncherDestination.FAVORITES, navigation.location.value.selectedDockDestination())
+        navigation.back()
+        assertEquals(LauncherLocation.Destination(LauncherDestination.FAVORITES), navigation.location.value)
         navigation.back()
         assertEquals(LauncherLocation.Destination(LauncherDestination.FAVORITES), navigation.location.value)
     }

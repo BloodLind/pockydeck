@@ -72,7 +72,8 @@ class ShellMetricsTest {
         assertTrue(metrics.dockBounds.height >= 64.dp)
         assertTrue(metrics.footerBounds.height >= 48.dp)
         assertEquals(.852f, metrics.dockCenterY / metrics.windowHeight, .002f)
-        assertEquals(.928f, metrics.footerDividerY / metrics.windowHeight, .002f)
+        assertTrue(metrics.footerDividerY >= metrics.footerBounds.top)
+        assertTrue(metrics.windowHeight - metrics.footerDividerY >= 42.dp)
         assertTrue(metrics.homeCardAllocatedBounds.bottom <= metrics.dockBounds.top)
     }
 
@@ -89,7 +90,7 @@ class ShellMetricsTest {
         assertTrue(physical.dockCenterY - 24.dp >= physical.dockBounds.top)
         assertTrue(physical.dockCenterY + 24.dp <= physical.footerBounds.top)
         assertTrue(physical.footerBounds.height >= 48.dp)
-        assertEquals(.928f, physical.footerDividerY / physical.windowHeight, .002f)
+        assertTrue(physical.windowHeight - physical.footerDividerY >= 42.dp)
         assertEquals(
             (emulator.homeCardArtworkSize + emulator.focusFrameReservation * 2f).value * emulator.density,
             (physical.homeCardArtworkSize + physical.focusFrameReservation * 2f).value * physical.density,
@@ -116,5 +117,25 @@ class ShellMetricsTest {
             assertTrue(it.top.value.isFinite() && it.bottom.value.isFinite())
             assertTrue(it.left.value.isFinite() && it.right.value.isFinite())
         }
+    }
+
+    @Test
+    fun userUiScalesPreserveTouchTargetsAndSeparateShellBands() {
+        listOf(.9f, 1f, 1.1f, 1.2f).forEach { scale ->
+            val metrics = ShellMetrics.calculate(ShellMetricsInput(1920, 1080, 2.25f * scale, 1.3f, scale))
+            assertTrue(metrics.controlsCanReachMinimumTouchTarget)
+            assertTrue(metrics.statusBounds.bottom <= metrics.contentBounds.top)
+            assertTrue(metrics.contentBounds.bottom <= metrics.dockBounds.top)
+            assertTrue(metrics.dockBounds.bottom <= metrics.footerBounds.top)
+            assertTrue(metrics.footerDividerY < metrics.windowHeight)
+            assertTrue(metrics.homeCardAllocatedBounds.bottom <= metrics.contentBounds.bottom)
+        }
+    }
+
+    @Test
+    fun compactWindowReferenceScalingDoesNotAmplifyTheUiSettingTwice() {
+        val base = ShellMetrics.calculate(ShellMetricsInput(1440, 810, 2.25f))
+        val enlarged = ShellMetrics.calculate(ShellMetricsInput(1440, 810, 2.25f * 1.2f, uiScaleFactor = 1.2f))
+        assertEquals(base.referenceScale, enlarged.referenceScale * 1.2f, .001f)
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -28,6 +29,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,6 +61,7 @@ fun LauncherDialog(
     if (!visible) return
     val currentLifecycle by rememberUpdatedState(lifecycle)
     val initialFocus = remember { FocusRequester() }
+    val inputMode = LocalInputModeManager.current
     DisposableEffect(Unit) {
         currentLifecycle.onModalShown()
         onDispose { currentLifecycle.onModalDismissed() }
@@ -95,7 +99,11 @@ fun LauncherDialog(
         }
     }
     // Request the group's first enabled descendant once; Close is always its fallback.
-    LaunchedEffect(Unit) { initialFocus.requestFocus() }
+    LaunchedEffect(Unit) {
+        inputMode.requestInputMode(InputMode.Keyboard)
+        withFrameNanos { }
+        initialFocus.requestFocus()
+    }
 }
 
 @Composable

@@ -14,6 +14,10 @@ The combined revision delivers **0.3.1 (code 4)** with the queued touch/focus, p
 
 The subsequent **0.3.2 (code 5)** icon correction imports the HTML preview's exact Material Symbols, including the lighter weight-200 dock outlines. It preserves the corrected layout and small-control scaling. **20 native design-system tests**, lint (zero errors), and both APK builds passed. The update is installed on the Flip 2, and the awake physical screen was inspected. See [icon revision evidence](evidence/F14/icons-032.md).
 
+The **0.3.3 (code 6)** revision increases the smallest text with the user's 3→6sp and 9→11sp examples, tapering the adjustment to zero at 14sp. Library filters now use the preview's compact counted pills, L2/R2 hints and a More chooser with the exact lighter expand-more symbol. Physical checks exposed and fixed modal focus and focus restoration when filtering out the active card. Known game frontends are correctly classified as Apps. Approved All files access is enabled on the Flip 2, and Library displays **3,773 ROMs**. **152 tests passed**, one Windows fixture skipped; lint has zero errors and both builds passed. Android validation used the physical Flip 2 only. [Revision evidence](evidence/F14/text-filters-033.md) records normal/130% text captures and remaining checks.
+
+The broader discovery/artwork batch remains open. Device inspection found ES-DE gamelists/media and GameNative 1.2.0 with Windows Steam shortcuts; no GameHub package was found. The pending user questions concern targeting GameNative and choosing local ES-DE reuse versus an online metadata provider. This revision does not implement that import, ROM artwork loading/pending indicators, or batched discovery/search performance work.
+
 ## Baseline and authorization
 
 - Planning baseline: `ad2b668`; accepted F01 baseline: `ce09ddc`; previous theme/catalog checkpoint: `b9e68d2`.

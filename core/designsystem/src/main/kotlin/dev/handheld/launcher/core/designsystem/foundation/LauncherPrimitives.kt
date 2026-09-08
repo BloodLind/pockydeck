@@ -132,8 +132,8 @@ fun LauncherSurface(
         Box(
             Modifier.heightIn(min = if (compact) 24.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale else 48.dp)
                 .background(background, shape)
-                .border(if (focused) 2.dp else 1.dp,
-                    if (focused) colors.focus else colors.borderEmphasis, shape),
+                .border(if (focused) 2.dp else if (compact) 1.dp * LauncherTheme.referenceScale else 1.dp,
+                    if (focused) colors.focus else if (compact) colors.borderSubtle else colors.borderEmphasis, shape),
             contentAlignment = Alignment.Center,
             propagateMinConstraints = true,
         ) {

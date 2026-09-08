@@ -127,12 +127,22 @@ private val DefaultTypography = TextStyle(fontFamily = PlusJakartaSans).let { ba
 }
 
 private fun LauncherTypography.scaled(scale: Float): LauncherTypography {
-    // Keep the reference hierarchy. Only small chrome receives a modest size increase.
-    fun TextStyle.scaled(multiplier: Float = 1f) = copy(
-        fontSize = fontSize * scale * multiplier,
-        lineHeight = lineHeight * scale * multiplier,
-        letterSpacing = if (letterSpacing == androidx.compose.ui.unit.TextUnit.Unspecified) letterSpacing else letterSpacing * scale,
-    )
+    // Apply the readability correction after reference scaling, before Android font scaling.
+    // The user's anchors are 3sp -> 6sp and 9sp -> 11sp; the increase tapers to zero at 14sp.
+    fun TextStyle.scaled(multiplier: Float = 1f): TextStyle {
+        val referenceSize = fontSize.value * scale * multiplier
+        val readableSize = when {
+            referenceSize <= 3f -> referenceSize + 3f
+            referenceSize < 9f -> 6f + (referenceSize - 3f) * (5f / 6f)
+            referenceSize < 14f -> 11f + (referenceSize - 9f) * (3f / 5f)
+            else -> referenceSize
+        }
+        return copy(
+            fontSize = readableSize.sp,
+            lineHeight = lineHeight * scale * multiplier * (readableSize / referenceSize),
+            letterSpacing = if (letterSpacing == androidx.compose.ui.unit.TextUnit.Unspecified) letterSpacing else letterSpacing * scale,
+        )
+    }
     return copy(
         homeTitle = homeTitle.scaled(), pageTitle = pageTitle.scaled(),
         tileTitleLarge = tileTitleLarge.scaled(), clock = clock.scaled(LauncherTheme.smallControlScale),

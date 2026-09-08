@@ -22,6 +22,7 @@ enum class LauncherGlyph(val label: String, internal val resourceId: Int) {
     Favorites("Favorites", R.drawable.ic_material_grade),
     Settings("Settings", R.drawable.ic_material_tune),
     Search("Search", R.drawable.ic_material_search),
+    ExpandMore("More", R.drawable.ic_material_expand_more),
 }
 
 /** Status symbols retain the HTML preview's fill variants. Labels belong to the status value. */

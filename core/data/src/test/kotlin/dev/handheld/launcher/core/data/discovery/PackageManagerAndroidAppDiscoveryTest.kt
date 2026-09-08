@@ -68,11 +68,15 @@ class PackageManagerAndroidAppDiscoveryTest {
         val inventory = discover(listOf(
             launcherRecord("dev.fixture.game", ".Main", "Game").copy(declaredGame = true),
             launcherRecord("org.ppsspp.ppsspp", ".Main", "PPSSPP").copy(declaredGame = true),
+            launcherRecord("org.es_de.frontend", ".Main", "ES-DE").copy(declaredGame = true),
+            launcherRecord("app.gamenative", ".Main", "GameNative").copy(declaredGame = true),
+            launcherRecord("com.limelight.noir", ".Main", "Artemis").copy(declaredGame = true),
             launcherRecord("dev.fixture.utility", ".Main", "Utility"),
         ))
         val categories = inventory.observedItems.associate { it.title to it.category }
         assertEquals(LibraryCategory.GAME, categories["Game"])
         assertEquals(LibraryCategory.EMULATOR, categories["PPSSPP"])
+        listOf("ES-DE", "GameNative", "Artemis").forEach { assertEquals(LibraryCategory.OTHER, categories[it]) }
         assertEquals(LibraryCategory.OTHER, categories["Utility"])
     }
 

@@ -64,5 +64,11 @@
     "variant": "fill1",
     "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_5_bar/fill1/24px.svg",
     "sha256": "88abbcf0877ede8024d6c166fdd7d7a524353670476e56cf76626358cecc0eb5"
+  },
+  {
+    "name": "expand_more",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/expand_more/wght200/24px.svg",
+    "sha256": "e2f72411b130bebc4e1ac389eaaeb02e388c6db884e158a38d497b8d44b77961"
   }
 ]

@@ -1,0 +1,51 @@
+Small text and reference filters verification - 8 September 2026
+Version: 0.3.3 (code 6)
+
+Environment:
+  Android Studio JBR; Android SDK; ANDROID_SERIAL=89a34d44
+  Physical Retroid Pocket Flip 2, Android 13, landscape 1920x1080, 360dpi
+  Original/restored system font scale: 1.0; temporary visual check: 1.3
+  No Android emulator used for this revision.
+
+Combined checks:
+  .\gradlew.bat :app:testDebugUnitTest :core:data:testDebugUnitTest lintDebug :app:assembleDebug :app:assembleRelease --console=plain
+  BUILD SUCCESSFUL in 34s; 257 actionable tasks, 59 executed, 198 up-to-date
+  App JVM: 62 passed, 0 failures/errors/skips
+  Data JVM: 70 passed, 0 failures/errors, 1 Windows symlink fixture skipped
+
+After modal focus correction:
+  .\gradlew.bat :core:designsystem:connectedDebugAndroidTest :app:testDebugUnitTest lintDebug :app:assembleDebug :app:assembleRelease --console=plain
+  BUILD SUCCESSFUL in 55s; 279 actionable tasks, 57 executed, 222 up-to-date
+  Native design-system tests: 20 passed on Retroid Pocket Flip2 - 13
+  No failures/errors/skips in native tests.
+
+After filtered-card focus correction:
+  .\gradlew.bat :app:testDebugUnitTest lintDebug :app:assembleDebug :app:assembleRelease --console=plain
+  BUILD SUCCESSFUL in 17s; 251 actionable tasks, 26 executed, 225 up-to-date
+  App JVM: 62 passed, 0 failures/errors/skips
+  Lint: 0 errors; app 74 warnings, data 2, design system 7
+  Debug and unsigned release APKs built successfully.
+
+Unique tests in this revision's validation: 152 passed, 1 skipped.
+Earlier broad feature suites were not rerun for these presentation/classification changes.
+
+Physical checks on final APK:
+  adb install -r: Success
+  Activity start: Status ok, TotalTime 793ms
+  Installed versionName=0.3.3, versionCode=6
+  MANAGE_EXTERNAL_STORAGE: allow (previously authorized by the user)
+  Library All: 3773 ROMs; PSP: 1; PS2: 6; GBA: 440
+  Gamepad-source injected R2: PSP -> PS2; replacement game card focused
+  Gamepad-source injected L2: PS2 -> PSP; replacement game card focused
+  A opens More; initial All option is focused; A applies All and closes chooser
+  B cancels chooser, preserves current filter, and restores More focus
+  Home/Library/Settings physical screenshots inspected at 100% text
+  Library/Settings inspected at 130%; original font_scale=1.0 restored in finally
+  At 130%, the full tall card caption extends below the initial scrollable grid viewport
+  UiAutomator hierarchy unavailable (null root); fresh direct screen captures used
+  Physical button/axis behavior and actual game boots are not certified by injected keys
+
+Stable debug APK:
+  .local/releases/handheld-launcher-0.3.3-debug.apk
+SHA-256:
+  cb62049ec8ba97da8846d90a79ac77a52d60710c0d893b44d1c8fc575ec491bf

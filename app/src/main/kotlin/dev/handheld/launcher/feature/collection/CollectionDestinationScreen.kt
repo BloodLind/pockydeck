@@ -1,8 +1,11 @@
 package dev.handheld.launcher.feature.collection
 
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,17 +13,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -28,15 +35,22 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.contract.LauncherActionDescriptor
 import dev.handheld.launcher.contract.LauncherActionMeaning
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.designsystem.controls.FilterChip
+import dev.handheld.launcher.core.designsystem.controls.ControllerGlyph
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
 import dev.handheld.launcher.core.designsystem.layout.InlineNotice
 import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
@@ -60,6 +74,7 @@ data class CollectionScreenCallbacks(
     val onOpenSystemAction: (String) -> Unit,
     val onOpenLibrary: () -> Unit = onRetry,
     val onFocusedAction: OnFocusedAction = {},
+    val onOpenFilters: (() -> Unit)? = null,
 )
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -101,6 +116,7 @@ private fun CollectionBody(
     // Keep the requester for a stable item ID, then only use it after that exact item is placed.
     val requesters = remember { mutableMapOf<ItemId, FocusRequester>() }
     val renderedItemIds = state.items.map { it.id }
+    val currentRenderedItemIds by rememberUpdatedState(renderedItemIds)
     var focusedGridItem by remember { mutableStateOf<ItemId?>(null) }
     var gridHasLaidOutItems by remember { mutableStateOf(false) }
     var handledFocusRequest by remember { mutableStateOf(0) }
@@ -154,7 +170,7 @@ private fun CollectionBody(
                 Modifier.width(112.dp).height(48.dp),
                 onFocusChanged = { focused -> callbacks.focused("Sort", LauncherActionMeaning.CHANGE_FILTER, callbacks.onToggleSort, focused) })
         }
-        CollectionFilters(state.filter, collectionFilterKeys(state.destination, state.allItems, state.overrides, state.favorites), callbacks)
+        CollectionFilters(state, callbacks)
         if (state.inventoryIncomplete) InlineNotice("Catalog may be incomplete.", "Retry", callbacks.onRetry)
         state.error?.let { InlineNotice(it, "Retry", callbacks.onRetry) }
         when {
@@ -191,7 +207,10 @@ private fun CollectionBody(
                                     if (model.canOpen) open else null, item.id,
                                 ))
                             } else if (focusedGridItem == item.id) {
-                                focusedGridItem = null
+                                // A filtered-out card loses focus as it leaves composition. Keep
+                                // its intent until the replacement card is placed; an intentional
+                                // move to a control still clears it while the card remains present.
+                                if (item.id in currentRenderedItemIds) focusedGridItem = null
                                 callbacks.onFocusedAction(null)
                             }
                         },
@@ -207,14 +226,47 @@ private fun CollectionBody(
 }
 
 @Composable
-private fun CollectionFilters(selected: String, filters: List<String>, callbacks: CollectionScreenCallbacks) = Row(
-    Modifier.fillMaxWidth().height(48.dp).horizontalScroll(rememberScrollState()),
-    horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically,
-) {
-    filters.forEach { filter ->
-        val label = collectionFilterLabel(filter)
-        FilterChip(label, filter == selected, { callbacks.onFilter(filter) },
-            onFocusChanged = { focused -> callbacks.focused("Filter $label", LauncherActionMeaning.CHANGE_FILTER, { callbacks.onFilter(filter) }, focused) })
+private fun CollectionFilters(state: CollectionUiState, callbacks: CollectionScreenCallbacks) {
+    val options = remember(state.destination, state.allItems, state.overrides, state.favorites) { collectionFilterOptions(state) }
+    val primary = remember(options, state.filter, callbacks.onOpenFilters != null) {
+        if (callbacks.onOpenFilters != null) primaryCollectionFilters(options, state.filter) else options
+    }
+    fun cycle(delta: Int) {
+        if (options.isEmpty()) return
+        val index = options.indexOfFirst { it.key == state.filter }.coerceAtLeast(0)
+        callbacks.onFilter(options[(index + delta + options.size) % options.size].key)
+    }
+    Row(Modifier.fillMaxWidth().height(48.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs),
+        verticalAlignment = Alignment.CenterVertically) {
+        FilterDirectionHint("L2", "Previous filter", { cycle(-1) }, callbacks)
+        primary.forEach { option ->
+            key(option.key) {
+                FilterChip(option.label, option.key == state.filter, { callbacks.onFilter(option.key) },
+                    contentDescription = "Filter ${collectionFilterLabel(option.key)}, ${option.count} items",
+                    onFocusChanged = { focused -> callbacks.focused("Filter ${collectionFilterLabel(option.key)}", LauncherActionMeaning.CHANGE_FILTER,
+                        { callbacks.onFilter(option.key) }, focused) })
+            }
+        }
+        if (primary.size < options.size) callbacks.onOpenFilters?.let { open ->
+            FilterChip("More", false, { open() }, contentDescription = "More filters",
+                onFocusChanged = { focused -> callbacks.focused("More filters", LauncherActionMeaning.CHANGE_FILTER, open, focused) },
+                trailingIcon = { LauncherGlyphIcon(LauncherGlyph.ExpandMore,
+                    Modifier.size(13.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale), contentDescription = null) })
+        }
+        FilterDirectionHint("R2", "Next filter", { cycle(1) }, callbacks)
+    }
+}
+
+@Composable
+private fun FilterDirectionHint(glyph: String, label: String, onClick: () -> Unit, callbacks: CollectionScreenCallbacks) {
+    var focused by remember { mutableStateOf(false) }
+    Box(Modifier.size(48.dp).onFocusChanged {
+        focused = it.isFocused
+        callbacks.focused(label, LauncherActionMeaning.CHANGE_FILTER, onClick, focused)
+    }.clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label }
+        .then(if (focused) Modifier.border(2.dp, LauncherTheme.colors.focus, RoundedCornerShape(LauncherTheme.shapes.smallControl)) else Modifier),
+        contentAlignment = Alignment.Center) {
+        ControllerGlyph(glyph, semanticLabel = null)
     }
 }
 

@@ -15,6 +15,22 @@ import org.junit.Test
 
 class CollectionFiltersTest {
     @Test
+    fun `filter counts exclude unavailable entries and More keeps overflow selection visible`() {
+        val items = listOf("gba", "psp", "ps2", "gamecube", "nes", "snes", "psx", "n64").map { rom(it, it) } +
+            rom("missing", "gba").copy(availability = Availability.Unavailable(UnavailabilityReason.REMOVED)) +
+            app("frontend", LibraryCategory.OTHER)
+        val options = collectionFilterOptions(CollectionUiState(LauncherDestination.LIBRARY, allItems = items))
+        assertEquals(8, options.first { it.key == "all" }.count)
+        assertEquals(1, options.first { it.key == "console:gba" }.count)
+        val primary = primaryCollectionFilters(options, "console:psx")
+        assertEquals(6, primary.size)
+        assertEquals("all", primary.first().key)
+        assertEquals("console:gamecube", primary[1].key)
+        assertEquals("console:psx", primary.last().key)
+        assertEquals(primary.size, primary.map { it.key }.toSet().size)
+    }
+
+    @Test
     fun `console pills share compact card labels while preserving readable unassigned recovery`() {
         assertEquals("GBA", collectionFilterLabel("console:gba"))
         assertEquals("PSX", collectionFilterLabel("console:psx"))

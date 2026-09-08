@@ -10,6 +10,7 @@ The launcher uses the Material Symbols Outlined glyphs named in [the HTML design
 | Favorites | `grade` | 200 | 0 |
 | Settings | `tune` | 200 | 0 |
 | Search | `search` | 200 | 0 |
+| More filters | `expand_more` | 200 | 0 |
 | Temperature | `device_thermostat` | 400 | 1 |
 | Memory | `memory` | 400 | 1 |
 | Storage | `sd_card` | 400 | 1 |

@@ -137,6 +137,7 @@ fun FilterChip(
     unavailableReason: String = DefaultUnavailableReason,
     onFocusChanged: (Boolean) -> Unit = {},
     contentDescription: String? = label,
+    trailingIcon: (@Composable () -> Unit)? = null,
 ) {
     val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
@@ -167,9 +168,18 @@ fun FilterChip(
         shape = RoundedCornerShape(50),
         compact = true,
     ) {
-        LauncherText(label, Modifier.padding(horizontal = 10.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale,
+        Row(Modifier.padding(horizontal = 10.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale,
             vertical = 4.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
-            style = LauncherTheme.typography.controlLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            verticalAlignment = Alignment.CenterVertically) {
+            LauncherText(label, style = LauncherTheme.typography.controlLabel,
+                color = if (selected) LauncherTheme.colors.destinationSelectedContent
+                    else if (focused) LauncherTheme.colors.textPrimary else LauncherTheme.colors.textSecondary,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            trailingIcon?.let {
+                Spacer(Modifier.width(LauncherTheme.spacing.xxs / 2))
+                it()
+            }
+        }
     }
 }
 

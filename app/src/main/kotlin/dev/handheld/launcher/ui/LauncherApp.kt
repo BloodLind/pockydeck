@@ -22,6 +22,7 @@ import dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshState
 import dev.handheld.launcher.core.designsystem.contract.ModalFocusLifecycle
 import dev.handheld.launcher.core.designsystem.contract.LocalControlFocusRestoration
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
+import dev.handheld.launcher.core.designsystem.controls.FilterChip
 import dev.handheld.launcher.core.designsystem.foundation.*
 import dev.handheld.launcher.core.designsystem.layout.EmptyState
 import dev.handheld.launcher.core.designsystem.modal.LauncherDialog
@@ -97,6 +98,7 @@ fun LauncherApp(
     var focusedDock by remember(location) { mutableStateOf<LauncherDestination?>(null) }
     var searchEditorActions by remember(location) { mutableStateOf<SearchEditorActions?>(null) }
     var menuVisible by remember { mutableStateOf(false) }
+    var filterMenuDestination by remember { mutableStateOf<LauncherDestination?>(null) }
     var menuItemId by remember { mutableStateOf<ItemId?>(null) }
     var modalOrigin by remember { mutableStateOf<LauncherLocation?>(null) }
     var modalOriginWasDock by remember { mutableStateOf(false) }
@@ -116,7 +118,7 @@ fun LauncherApp(
     }
     val imeVisible = WindowInsets.isImeVisible
     LaunchedEffect(imeVisible) { onImeVisibilityChanged(imeVisible) }
-    val modalVisible = menuVisible || errorMessage != null || romChoice != null || romProgress != null
+    val modalVisible = menuVisible || filterMenuDestination != null || errorMessage != null || romChoice != null || romProgress != null
 
     fun snapshot(): DestinationSnapshot = if (destination == LauncherDestination.HOME) home.state.value.snapshot()
         else pageModels[destination]?.state?.value?.snapshot() ?: DestinationSnapshot(destination)
@@ -186,6 +188,7 @@ fun LauncherApp(
             romChoice != null -> container.romController.dismissChoice()
             romProgress != null -> container.romController.cancelPreparation()
             errorMessage != null -> clearError()
+            filterMenuDestination != null -> filterMenuDestination = null
             menuVisible -> menuVisible = false
             else -> {
                 val previousLocation = app.navigation.location.value
@@ -394,7 +397,8 @@ fun LauncherApp(
                                     onRetry = { vm.clearError(); container.androidCatalog.refresh(); container.romController.rescan() },
                                     onOpenSystemAction = ::openSystem,
                                     onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
-                                    onFocusedAction = { focused = it })
+                                    onFocusedAction = { focused = it },
+                                    onOpenFilters = { rememberModalOrigin(); filterMenuDestination = route })
                                 when (route) {
                                     LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible)
                                     LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible)
@@ -452,6 +456,30 @@ fun LauncherApp(
                                 clearError()
                                 openSystem("launcher-rom-folders")
                             }, Modifier.fillMaxWidth())
+                        }
+                    }
+                    filterMenuDestination != null -> filterMenuDestination?.let { filterDestination ->
+                        val firstFilterFocus = remember { FocusRequester() }
+                        val filterState = pageStates.getValue(filterDestination)
+                        val filterOptions = remember(filterState.allItems, filterState.overrides, filterState.favorites, filterDestination) {
+                            collectionFilterOptions(filterState)
+                        }
+                        LauncherDialog("Filters", { filterMenuDestination = null }) {
+                            filterOptions.forEachIndexed { index, option ->
+                                key(option.key) {
+                                    FilterChip(option.label, option.key == filterState.filter, {
+                                        pageModels.getValue(filterDestination).filter(option.key)
+                                        filterMenuDestination = null
+                                    }, Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstFilterFocus) else Modifier))
+                                }
+                            }
+                        }
+                        LaunchedEffect(filterDestination) {
+                            inputMode.requestInputMode(InputMode.Keyboard)
+                            // Override the scroll group's implicit focus target with a real option.
+                            withFrameNanos { }
+                            withFrameNanos { }
+                            firstFilterFocus.requestFocus()
                         }
                     }
                     menuVisible -> LauncherDialog("Menu", { menuVisible = false }) {

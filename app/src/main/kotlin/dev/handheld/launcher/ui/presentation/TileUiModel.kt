@@ -12,8 +12,6 @@ import dev.handheld.launcher.core.domain.model.LibraryItemKind
 import dev.handheld.launcher.core.domain.model.SupportedItemAction
 import dev.handheld.launcher.core.domain.model.UserArtworkReference
 import dev.handheld.launcher.core.domain.model.UserItemOverrides
-import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
-import java.util.Locale
 
 @Immutable
 sealed interface TileArtwork {
@@ -40,6 +38,7 @@ data class TileUiModel(
     val availability: Availability,
     val supportedActions: Set<SupportedItemAction>,
     val artwork: TileArtwork,
+    val platformId: String? = null,
 ) {
     val canOpen: Boolean
         get() = availability == Availability.Available &&
@@ -81,7 +80,7 @@ fun LibraryItem.toTileUiModel(
         typeLabel = presentation.typeLabel,
         platformLabel = when (kind) {
             LibraryItemKind.ANDROID_APP -> "ANDROID APP"
-            LibraryItemKind.ROM_GAME -> (this as LibraryItem.RomGame).consoleLabel.uppercase(Locale.ROOT)
+            LibraryItemKind.ROM_GAME -> (this as LibraryItem.RomGame).consoleLabel
             LibraryItemKind.SYSTEM_ACTION -> "SYSTEM"
         },
         primaryActionLabel = when {
@@ -100,11 +99,12 @@ fun LibraryItem.toTileUiModel(
             is LibraryItem.AndroidApp -> TileArtwork.AndroidIcon(componentId)
             else -> TileArtwork.Fallback
         },
+        platformId = (this as? LibraryItem.RomGame)?.platformId,
     )
 }
 
 val LibraryItem.RomGame.consoleLabel: String
-    get() = platformId?.let { RomPlatforms.byId(it)?.displayName } ?: "Unassigned console"
+    get() = RomPlatformLabels.shortLabel(platformId)
 
 private val LibraryCategory.presentationLabel: String
     get() = when (this) {

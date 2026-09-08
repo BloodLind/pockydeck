@@ -22,6 +22,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -83,16 +84,16 @@ class LauncherPrimitivesTest {
                 var firstFocused by remember { mutableStateOf(false) }
                 var secondFocused by remember { mutableStateOf(false) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LauncherSurface(
+                    FocusFrame(
                         modifier = Modifier.size(80.dp).testTag("first")
                             .onFocusChanged { firstFocused = it.isFocused }
                             .focusRequester(firstRequester).focusable(),
-                        selected = true, pressed = true, focused = firstFocused,
+                        selected = true, focused = firstFocused,
                         contentDescription = "Home",
                     ) {
                         Box(Modifier.fillMaxSize().onGloballyPositioned { contentBounds = it.boundsInRoot() })
                     }
-                    LauncherSurface(
+                    FocusFrame(
                         modifier = Modifier.size(80.dp).testTag("second")
                             .onFocusChanged { secondFocused = it.isFocused }
                             .focusRequester(secondRequester).focusable(),
@@ -116,18 +117,40 @@ class LauncherPrimitivesTest {
         assertTrue(focusPixels("first", focusColor) > 0)
         assertTrue("The focused lower edge remains inside the allocation", focusPixels("first", lowerEdgeColor) > 0)
         assertEquals(allocation, compose.onNodeWithTag("first").fetchSemanticsNode().boundsInRoot)
+        compose.mainClock.advanceTimeBy(80)
+        val intermediateContent = compose.runOnIdle { contentBounds }
+        compose.mainClock.advanceTimeBy(160)
         val focusedContent = compose.runOnIdle { contentBounds }
         assertContained(allocation, neutralContent)
         assertContained(allocation, focusedContent)
         assertEquals(focusedContent.width, focusedContent.height, .1f)
-        if (reducedMotion) assertEquals(neutralContent, focusedContent)
-        else assertTrue(focusedContent.top < neutralContent.top)
+        if (reducedMotion) {
+            assertEquals(neutralContent, intermediateContent)
+            assertEquals(neutralContent, focusedContent)
+        } else {
+            assertTrue(intermediateContent.top < neutralContent.top)
+            assertTrue(intermediateContent.top > focusedContent.top)
+        }
 
         compose.runOnIdle { assertTrue(focusManager.moveFocus(FocusDirection.Right)) }
         compose.mainClock.advanceTimeByFrame()
         compose.onNodeWithTag("second").assertIsFocused()
         compose.onNodeWithTag("first").assertIsNotFocused().assertIsSelected()
         assertEquals(0, focusPixels("first", focusColor))
+    }
+
+    @Test
+    fun anUnfocusedCardRetainsItsOutline() {
+        var borderColor = Color.Unspecified
+        compose.setContent {
+            LauncherTheme {
+                borderColor = LauncherTheme.colors.borderEmphasis.compositeOver(LauncherTheme.colors.surfaceCard)
+                FocusFrame(Modifier.size(100.dp).testTag("outlined")) {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        assertTrue("An unfocused card keeps a visible border", focusPixels("outlined", borderColor) > 20)
     }
 
     @Test

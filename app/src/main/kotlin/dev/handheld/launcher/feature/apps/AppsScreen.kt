@@ -14,4 +14,6 @@ fun AppsScreen(
     callbacks: CollectionScreenCallbacks,
     iconLoader: AndroidIconLoader? = null,
     restoreFocusRequest: Int = 1,
-) = CollectionDestinationScreen("Apps", state, modifier, callbacks, iconLoader = iconLoader, restoreFocusRequest = restoreFocusRequest)
+    allowFocusRequest: Boolean = true,
+) = CollectionDestinationScreen("Apps", state, modifier, callbacks, iconLoader = iconLoader,
+    restoreFocusRequest = restoreFocusRequest, allowFocusRequest = allowFocusRequest)

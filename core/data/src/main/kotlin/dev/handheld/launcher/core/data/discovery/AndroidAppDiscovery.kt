@@ -2,7 +2,9 @@ package dev.handheld.launcher.core.data.discovery
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import dev.handheld.launcher.core.data.rom.emulator.EmulatorRegistry
 import dev.handheld.launcher.core.domain.model.Availability
 import dev.handheld.launcher.core.domain.model.CatalogInventory
 import dev.handheld.launcher.core.domain.model.CurrentUserAndroidComponentId
@@ -86,6 +88,7 @@ internal data class AndroidLauncherActivity(
     val activityEnabled: Boolean,
     val applicationEnabled: Boolean,
     val exported: Boolean,
+    val declaredGame: Boolean = false,
 )
 
 internal class PackageManagerAndroidLauncherActivitySource(
@@ -106,6 +109,8 @@ internal class PackageManagerAndroidLauncherActivitySource(
                 activityEnabled = activityInfo.enabled,
                 applicationEnabled = activityInfo.applicationInfo.enabled,
                 exported = activityInfo.exported,
+                declaredGame = activityInfo.applicationInfo.category == ApplicationInfo.CATEGORY_GAME ||
+                    activityInfo.applicationInfo.flags and ApplicationInfo.FLAG_IS_GAME != 0,
             )
         }
     }
@@ -135,11 +140,17 @@ private fun AndroidLauncherActivity.toLibraryItem(
     return LibraryItem.AndroidApp(
         componentId = componentId,
         title = title,
-        category = LibraryCategory.OTHER,
+        category = when {
+            packageName in knownEmulatorPackages -> LibraryCategory.EMULATOR
+            declaredGame -> LibraryCategory.GAME
+            else -> LibraryCategory.OTHER
+        },
         availability = Availability.Available,
         supportedActions = ANDROID_APP_ACTIONS,
     )
 }
+
+private val knownEmulatorPackages by lazy { EmulatorRegistry.profiles.map { it.packageName }.toSet() }
 
 private val ANDROID_APP_ACTIONS = setOf(
     SupportedItemAction.OPEN,

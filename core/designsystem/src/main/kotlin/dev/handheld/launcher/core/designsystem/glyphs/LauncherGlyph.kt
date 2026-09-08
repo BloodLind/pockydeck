@@ -54,7 +54,7 @@ fun LauncherFaceGlyph(
 private fun glyphVector(name: String, draw: PathBuilder.() -> Unit): ImageVector =
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
         path(
-            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 2.5f,
             strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
             pathBuilder = draw,
         )

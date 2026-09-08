@@ -40,6 +40,7 @@ private fun SettingSurface(
     modifier: Modifier,
     onFocusChanged: (Boolean) -> Unit,
     onActivate: () -> Unit,
+    selected: Boolean,
     content: @Composable RowScope.() -> Unit,
 ) {
     val restoration = rememberControlFocusRestoration()
@@ -60,6 +61,7 @@ private fun SettingSurface(
         enabled = enabled,
         contentDescription = label,
         shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
+        selected = selected,
     ) {
         SettingContent(content)
     }
@@ -79,13 +81,13 @@ private fun SettingContent(content: @Composable RowScope.() -> Unit) {
 }
 
 @Composable
-private fun RowScope.SettingLabel(label: String, supportingText: String?) {
+private fun RowScope.SettingLabel(label: String, supportingText: String?, selected: Boolean = false) {
     Column(Modifier.weight(1f)) {
         LauncherText(label, style = LauncherTheme.typography.settingLabel,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (supportingText != null) {
-            LauncherText(supportingText, style = LauncherTheme.typography.tileSubtitle,
-                color = LauncherTheme.colors.textSecondary, maxLines = 1,
+            LauncherText(supportingText, style = LauncherTheme.typography.settingSupporting,
+                color = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textSecondary, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
     }
@@ -99,10 +101,11 @@ fun SettingRow(
     modifier: Modifier = Modifier,
     onFocusChanged: (Boolean) -> Unit = {},
     onActivate: () -> Unit,
+    selected: Boolean = false,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    SettingSurface(label, enabled, modifier, onFocusChanged, onActivate) {
-        SettingLabel(label, supportingText)
+    SettingSurface(label, enabled, modifier, onFocusChanged, onActivate, selected) {
+        SettingLabel(label, supportingText, selected)
         trailing()
     }
 }
@@ -167,7 +170,7 @@ fun ChoiceRow(
 ) {
     SettingRow(label, supportingText, enabled, modifier, onFocusChanged, onSelect) {
         Box(Modifier.weight(.65f), contentAlignment = Alignment.CenterEnd) {
-            LauncherText(value, color = LauncherTheme.colors.textSecondary,
+            LauncherText(value, style = LauncherTheme.typography.settingValue, color = LauncherTheme.colors.textSecondary,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -181,4 +184,5 @@ fun ActionRow(
     modifier: Modifier = Modifier,
     onFocusChanged: (Boolean) -> Unit = {},
     onActivate: () -> Unit,
-) = SettingRow(label, supportingText, enabled, modifier, onFocusChanged, onActivate)
+    selected: Boolean = false,
+) = SettingRow(label, supportingText, enabled, modifier, onFocusChanged, onActivate, selected)

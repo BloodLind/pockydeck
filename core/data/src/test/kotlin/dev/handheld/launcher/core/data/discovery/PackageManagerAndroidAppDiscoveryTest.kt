@@ -64,6 +64,19 @@ class PackageManagerAndroidAppDiscoveryTest {
     }
 
     @Test
+    fun `Android declared games are games while known emulator packages remain emulators`() {
+        val inventory = discover(listOf(
+            launcherRecord("dev.fixture.game", ".Main", "Game").copy(declaredGame = true),
+            launcherRecord("org.ppsspp.ppsspp", ".Main", "PPSSPP").copy(declaredGame = true),
+            launcherRecord("dev.fixture.utility", ".Main", "Utility"),
+        ))
+        val categories = inventory.observedItems.associate { it.title to it.category }
+        assertEquals(LibraryCategory.GAME, categories["Game"])
+        assertEquals(LibraryCategory.EMULATOR, categories["PPSSPP"])
+        assertEquals(LibraryCategory.OTHER, categories["Utility"])
+    }
+
+    @Test
     fun `excludes self disabled unexported and malformed records`() {
         val inventory = discover(
             listOf(

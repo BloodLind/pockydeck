@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import dev.handheld.launcher.core.domain.model.*
 import dev.handheld.launcher.core.domain.policy.LibraryItemOrdering
 import dev.handheld.launcher.core.domain.repository.*
-import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
+import dev.handheld.launcher.ui.presentation.RomPlatformLabels
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -73,33 +73,16 @@ class CollectionViewModel(
         catalog.snapshot, favorites.favoriteItemIds, overrides.overridesByItemId,
         recent.records, options,
     ) { catalogState, favoriteIds, overrideMap, records, current ->
-        val active = catalogState.activeItems.filter { it.kind != LibraryItemKind.SYSTEM_ACTION }
-        val effectiveFilter = current.filter.takeUnless {
-            it.startsWith("console:") && it !in collectionFilterKeys(destination, active)
+        val scoped = collectionDestinationItems(destination, catalogState.items, overrideMap, favoriteIds)
+        val effectiveFilter = current.filter.takeIf {
+            it in collectionFilterKeys(destination, scoped, overrideMap, favoriteIds)
         } ?: "all"
-        val matching = active.filter { item ->
-            val category = overrideMap[item.id]?.category ?: item.category
-            val destinationMatches = when (destination) {
-                LauncherDestination.APPS -> item.kind == LibraryItemKind.ANDROID_APP
-                LauncherDestination.FAVORITES -> item.id in favoriteIds
-                else -> true
-            }
-            val filterMatches = when (effectiveFilter) {
-                "games" -> category == LibraryCategory.GAME
-                "emulators" -> category == LibraryCategory.EMULATOR
-                "other" -> category == LibraryCategory.OTHER
-                "android", "apps" -> item.kind == LibraryItemKind.ANDROID_APP
-                "roms" -> item.kind == LibraryItemKind.ROM_GAME
-                "system" -> false // Supported internal actions are provided by the root registry.
-                else -> if (effectiveFilter.startsWith("console:")) {
-                    item is LibraryItem.RomGame && romConsoleFilterKey(item) == effectiveFilter
-                } else true
-            }
-            val query = current.query.trim().lowercase(Locale.ROOT)
-            val consoleName = (item as? LibraryItem.RomGame)?.platformId
-                ?.let { RomPlatforms.byId(it)?.displayName }.orEmpty()
-            destinationMatches && filterMatches && (item.title.lowercase(Locale.ROOT).contains(query) ||
-                consoleName.lowercase(Locale.ROOT).contains(query))
+        val query = current.query.trim().lowercase(Locale.ROOT)
+        val matching = if (destination == LauncherDestination.SEARCH && query.isEmpty()) emptyList() else scoped.filter { item ->
+            val consoleTerms = (item as? LibraryItem.RomGame)?.let { RomPlatformLabels.searchTerms(it.platformId) }.orEmpty()
+            collectionFilterMatches(item, effectiveFilter, overrideMap) &&
+                (item.title.lowercase(Locale.ROOT).contains(query) ||
+                    consoleTerms.any { it.lowercase(Locale.ROOT).contains(query) })
         }
         val ordered = if (current.sort == "title") matching.sortedWith(LibraryItemOrdering.titleThenId)
             else LibraryItemOrdering.recentFirst(matching, records)

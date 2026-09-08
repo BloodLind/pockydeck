@@ -30,6 +30,7 @@ data class LauncherColors(
     val surfaceApp: Color = Color(0xFF23262F),
     val surfaceArtwork: Color = Color(0xFF1C1E24),
     val surfaceDock: Color = Color(0xFF1E2229),
+    val surfaceControl: Color = Color(0xFF21232A),
     val dockInactive: Color = Color(0x33CBD5E1),
     val destinationSelected: Color = Color(0xFFE2E8F0),
     val destinationSelectedContent: Color = Color(0xFF1E2229),
@@ -81,6 +82,8 @@ data class LauncherTypography(
     val tileSubtitle: TextStyle,
     val body: TextStyle,
     val settingLabel: TextStyle,
+    val settingSupporting: TextStyle,
+    val settingValue: TextStyle,
 )
 
 private val PlusJakartaSans = FontFamily(
@@ -107,34 +110,38 @@ private val DefaultTypography = TextStyle(fontFamily = PlusJakartaSans).let { ba
         homeTitle = base.role(34, FontWeight.ExtraBold, 40).copy(letterSpacing = (-.85).sp),
         pageTitle = base.role(24, FontWeight.Bold, 30),
         tileTitleLarge = base.role(18, FontWeight.ExtraBold, 24),
-        clock = base.role(14, FontWeight.ExtraBold, 18),
+        clock = base.role(14, FontWeight.Normal, 18),
         actionPrimary = base.role(13, FontWeight.Bold, 18),
         actionLabel = base.role(12, FontWeight.Medium, 16),
         controlLabel = base.role(12, FontWeight.Bold, 16),
-        statusValue = base.role(11, FontWeight.Bold, 14),
+        statusValue = base.role(11, FontWeight.Normal, 14),
         platformLabel = base.role(11, FontWeight.ExtraBold, 16).copy(letterSpacing = .55.sp),
         badgeLabel = base.role(10, FontWeight.ExtraBold, 13),
         tileTitle = base.role(14, FontWeight.Bold, 18),
         tileSubtitle = base.role(12, FontWeight.Medium, 16),
         body = base.role(16, FontWeight.Normal, 22),
         settingLabel = base.role(14, FontWeight.Medium, 20),
+        settingSupporting = base.role(12, FontWeight.Medium, 16),
+        settingValue = base.role(14, FontWeight.SemiBold, 20),
     )
 }
 
 private fun LauncherTypography.scaled(scale: Float): LauncherTypography {
-    fun TextStyle.scaled() = copy(
-        fontSize = fontSize * scale,
-        lineHeight = lineHeight * scale,
+    // Keep the reference hierarchy. Only small chrome receives a modest size increase.
+    fun TextStyle.scaled(multiplier: Float = 1f) = copy(
+        fontSize = fontSize * scale * multiplier,
+        lineHeight = lineHeight * scale * multiplier,
         letterSpacing = if (letterSpacing == androidx.compose.ui.unit.TextUnit.Unspecified) letterSpacing else letterSpacing * scale,
     )
     return copy(
         homeTitle = homeTitle.scaled(), pageTitle = pageTitle.scaled(),
-        tileTitleLarge = tileTitleLarge.scaled(), clock = clock.scaled(),
-        actionPrimary = actionPrimary.scaled(), actionLabel = actionLabel.scaled(),
-        controlLabel = controlLabel.scaled(), statusValue = statusValue.scaled(),
+        tileTitleLarge = tileTitleLarge.scaled(), clock = clock.scaled(LauncherTheme.smallControlScale),
+        actionPrimary = actionPrimary.scaled(LauncherTheme.smallControlScale), actionLabel = actionLabel.scaled(LauncherTheme.smallControlScale),
+        controlLabel = controlLabel.scaled(LauncherTheme.smallControlScale), statusValue = statusValue.scaled(LauncherTheme.smallControlScale),
         platformLabel = platformLabel.scaled(), badgeLabel = badgeLabel.scaled(),
         tileTitle = tileTitle.scaled(), tileSubtitle = tileSubtitle.scaled(),
-        body = body.scaled(), settingLabel = settingLabel.scaled(),
+        body = body.scaled(), settingLabel = settingLabel.scaled(LauncherTheme.smallControlScale),
+        settingSupporting = settingSupporting.scaled(LauncherTheme.smallControlScale), settingValue = settingValue.scaled(LauncherTheme.smallControlScale),
     )
 }
 
@@ -154,6 +161,7 @@ data class LauncherShapes(
     val homeOuter: Dp = 24.dp,
     val homeInner: Dp = 16.dp,
     val smallControl: Dp = 8.dp,
+    val collectionOuter: Dp = 10.dp,
     val dock: Dp = 999.dp,
 )
 
@@ -169,7 +177,7 @@ data class LauncherDepth(
 data class LauncherMotion(
     val reducedMotion: Boolean = false,
 ) {
-    val focusDurationMillis: Int get() = if (reducedMotion) 0 else 200
+    val focusDurationMillis: Int get() = if (reducedMotion) 0 else 160
     val pressedDurationMillis: Int get() = if (reducedMotion) 0 else 100
 }
 
@@ -183,6 +191,7 @@ val LocalLauncherReferenceScale = staticCompositionLocalOf { 1f }
 
 /** Shared visual language. Font sizes use sp and therefore follow the system font scale. */
 object LauncherTheme {
+    const val smallControlScale = 1.15f
     @Composable
     operator fun invoke(
         reducedMotion: Boolean = false,
@@ -203,6 +212,7 @@ object LauncherTheme {
             LocalLauncherShapes provides shapes.copy(
                 homeOuter = shapes.homeOuter * scale, homeInner = shapes.homeInner * scale,
                 smallControl = shapes.smallControl * scale,
+                collectionOuter = shapes.collectionOuter * scale,
             ),
             LocalLauncherDepth provides depth.copy(
                 cardElevation = depth.cardElevation * scale, focusedElevation = depth.focusedElevation * scale,

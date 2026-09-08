@@ -11,6 +11,16 @@ Planning baseline: 7 September 2026. Native dimensions below require calibration
 
 The screenshot includes an editor border, dotted surroundings, and a black area above the actual launcher. These are not application UI. The content rectangle is approximately x=32–1426, y=21–805 in the Home image; verify its crop before visual comparison.
 
+### 8 September readability and interaction revision
+
+The user clarified that only small elements should increase slightly; the reference design and proportions remain authoritative. Keep reference-scaled typography, corner radii, card/title geometry and shell landmarks. Apply a 1.15 multiplier only to status, footer/control and Settings text plus small control glyphs. Clock and status text are regular weight, and control icons use heavier strokes, as explicitly requested. Android font scaling remains in effect. Preserve 48dp touch allocations independently of smaller visible controls. Filters use compact dock-style pills. Do not introduce fixed text/artwork minimums that enlarge the whole layout on a dense display.
+
+Every card has an unfocused perimeter outline; focused cards use amber and a short lift/press transition, disabled under reduced motion. Collection captions sit outside square artwork. Console captions use abbreviations such as GBA, SNES and PSX, with stable console-specific tag/caption colors. The written abbreviation remains the identity; color supplements it. Navigation into or reselecting a populated page activates its selected surviving card, falling back to its first card. Settings and empty Search focus a meaningful setting or the query. Touch activation selects the touched card before launch, and scrolling does not activate cards.
+
+Library contains ROMs and Android games. Apps contains other Android apps, including emulators. Favorites includes favorited games and apps. Android's declared game classification and recognized emulator packages supply defaults; user category changes take precedence for Android apps. Blank Search shows a prompt, and a query with no matches stays empty. System search results use the same card component and dimensions as catalog results.
+
+Home promotes one most recently opened available item, then shows Android games, ROMs, and remaining apps alphabetically within each group. Its lazy carousel retains the full available catalog. Search collapses its heading/query/filter panel when scrolling results down, retaining an Edit search control; upward scrolling or the Search shortcut reveals editing. Confirm applies the edit, hides the IME and focuses results; Back cancels the edit and restores its entry query. Default legends are A/B and follow the user's Confirm/Back mapping. Hardware keyboard text/caret behavior remains native.
+
 Resolved reference inconsistencies:
 
 - Home puts clock/temperature/memory/storage on the left and Wi-Fi/battery on the right. Follow Home rather than the reversed PRD prose.
@@ -208,13 +218,13 @@ All templates live inside the shell's content slot and use its gutter. Their Vie
 |---|---|---|
 | Home | Platform/title metadata above a horizontal cover carousel | Recent item focused; no apps; long title; missing art; app removed; restored return |
 | Library | Heading/count + sort + platform strip + square-cover grid | All/matching platform/empty platform; six columns as a target when readable, otherwise adapt; A Play/Open, Y Details |
-| Apps | Heading/count + category strip + icon-led grid | All, Games, Emulators, Other; native icons; long names; no apps/icon unavailable |
+| Apps | Heading/count + category strip + icon-led grid | All, populated Emulators/Other filters; native icons; long names; no apps/icon unavailable |
 | Favorites | Library collection layout with All/Games/Apps filters | Mixed favorites; removal keeps nearest focus; empty state links to Library |
-| Search | Query + All/Games/Apps/System categories + optional platform filter + compact results | Empty query/recent items, matches, no results, restricted filters, IME visible |
+| Search | Query + All/Games/Apps/System categories + compact result cards | Empty-query prompt, matches, no results, restricted filters, IME visible; system cards match catalog-card dimensions |
 | Settings | Category list and grouped setting rows | Appearance/readability, controller mapping, default-HOME setup; ROM/emulator/provider settings arrive with those stages |
 | Item details | Shared heading/artwork + full title/platform + supported actions | Open/Play, favorite, Android app info where available; later emulator choice and artwork correction |
 
-Library includes both ROMs and launchable Android software. Apps is a convenient filtered view of the same catalog, not a separately maintained collection. Installed Android game classification uses available metadata with an override; avoid inventing reliable categories where Android supplies insufficient information.
+Library includes ROMs and Android games. Apps shows the remaining Android applications, including emulators, from the same catalog. Installed Android game classification uses declared metadata with a user override; unknown apps remain in Apps until classified. Library filters are All, Android when native games exist, and console abbreviations derived from available ROMs.
 
 Favorites stores references, not duplicate catalog objects. Removing a favorite does not uninstall an app or delete a file. Empty states must not make scanning or scraping the normal maintenance workflow.
 

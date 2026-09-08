@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +46,7 @@ import dev.handheld.launcher.core.data.discovery.AndroidCatalogRefreshState
 import dev.handheld.launcher.core.designsystem.cards.AppIconTile
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.controls.PlatformBadge
+import dev.handheld.launcher.ui.presentation.platformAccent
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.foundation.ShellMetrics
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
@@ -70,6 +74,7 @@ fun HomeRoute(
     onOpenLibrary: () -> Unit,
     onOpenDetails: (ItemId) -> Unit,
     allowFocusRequest: Boolean = true,
+    pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -83,6 +88,7 @@ fun HomeRoute(
         onOpenLibrary = onOpenLibrary,
         onOpenDetails = onOpenDetails,
         allowFocusRequest = allowFocusRequest,
+        pageActivationRequest = pageActivationRequest,
         onRefresh = viewModel::refresh,
         onViewportChanged = viewModel::rememberViewport,
         onFocusedActionChanged = onFocusedActionChanged,
@@ -103,6 +109,7 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onViewportChanged: (ItemId?, Int) -> Unit,
     allowFocusRequest: Boolean = true,
+    pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
 ) {
     val selected = state.selectedItem
@@ -110,9 +117,11 @@ fun HomeScreen(
     val itemIds = state.items.map { it.itemId }
     val requesters = remember(itemIds) { itemIds.associateWith { FocusRequester() } }
     val libraryRequester = remember { FocusRequester() }
+    val recoveryRequester = remember { FocusRequester() }
     val inputMode = LocalInputModeManager.current
     var focusedTarget by remember { mutableStateOf<HomeFocusTarget?>(null) }
     var initialRestorationComplete by remember { mutableStateOf(false) }
+    var handledPageActivation by remember { mutableStateOf(0) }
     var handledFocusRequestSequence by remember {
         mutableLongStateOf(state.focusRequestSequence)
     }
@@ -121,7 +130,7 @@ fun HomeScreen(
     val shadowBlur = with(density) { (3.dp * metrics.referenceScale).toPx() }
 
     Box(modifier) {
-        if (selected != null) {
+        if (selected != null && metrics.hasUsableHomeCard) {
             Column(
                 Modifier
                     .offset(y = metrics.homeMetadataTop - metrics.contentBounds.top)
@@ -129,7 +138,7 @@ fun HomeScreen(
                     .height(metrics.metadataReservation),
                 verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
             ) {
-                PlatformBadge(selected.platformLabel, homeAccent = true)
+                PlatformBadge(selected.platformLabel, homeAccent = true, accentColor = selected.platformAccent)
                 LauncherText(
                     text = selected.title,
                     style = LauncherTheme.typography.homeTitle.copy(
@@ -156,9 +165,7 @@ fun HomeScreen(
                 onFocusChanged = { focused ->
                     focusedTarget = if (focused) HomeFocusTarget.Recovery else null
                 },
-                modifier = Modifier.offset(
-                    y = metrics.homeCardAllocatedBounds.top - metrics.contentBounds.top,
-                ),
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).focusRequester(recoveryRequester),
             )
         } else if (metrics.hasUsableHomeCard) {
             Box(
@@ -177,7 +184,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(metrics.homeCardGap),
                 ) {
                     items(state.items, key = { it.itemId.value }) { item ->
-                        val activate = { onActivate(item.itemId) }
+                        val activate = { onSelect(item.itemId); onActivate(item.itemId) }
                         LibraryItemCard(
                             model = item,
                             variant = LibraryItemCardVariant.Home,
@@ -241,9 +248,7 @@ fun HomeScreen(
                 onFocusChanged = { focused ->
                     focusedTarget = if (focused) HomeFocusTarget.Library else null
                 },
-                modifier = Modifier.offset(
-                    y = metrics.homeCardAllocatedBounds.top - metrics.contentBounds.top,
-                ),
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).focusRequester(recoveryRequester),
             )
         }
     }
@@ -292,13 +297,21 @@ fun HomeScreen(
         if (action != null) onFocusedActionChanged(action)
     }
 
-    LaunchedEffect(itemIds, state.focusRequestSequence, metrics.hasUsableHomeCard, allowFocusRequest) {
-        if (itemIds.isEmpty() || !metrics.hasUsableHomeCard) return@LaunchedEffect
+    LaunchedEffect(itemIds, state.loading, state.focusRequestSequence, pageActivationRequest, metrics.hasUsableHomeCard, allowFocusRequest) {
+        if (!allowFocusRequest) return@LaunchedEffect
+        if (itemIds.isEmpty() || !metrics.hasUsableHomeCard) {
+            if (!state.loading && pageActivationRequest > 0 && pageActivationRequest != handledPageActivation) {
+                inputMode.requestInputMode(InputMode.Keyboard)
+                withFrameNanos { }
+                if (runCatching { recoveryRequester.requestFocus() }.isSuccess) handledPageActivation = pageActivationRequest
+            }
+            return@LaunchedEffect
+        }
         val selectedId = state.selectedItemId ?: return@LaunchedEffect
         val selectedIndex = itemIds.indexOf(selectedId)
         if (selectedIndex < 0) return@LaunchedEffect
         val explicitReturn = state.focusRequestSequence != handledFocusRequestSequence
-        if (explicitReturn) handledFocusRequestSequence = state.focusRequestSequence
+        val pageActivated = pageActivationRequest > 0 && pageActivationRequest != handledPageActivation
         val initial = !initialRestorationComplete
 
         if (initial) {
@@ -312,8 +325,7 @@ fun HomeScreen(
         withFrameNanos { }
         val selectedVisible = rowState.layoutInfo.visibleItemsInfo.any { it.index == selectedIndex }
         val ownsContentFocus = focusedTarget is HomeFocusTarget.Item
-        val shouldRequestFocus = explicitReturn || (initial && allowFocusRequest) ||
-            (ownsContentFocus && allowFocusRequest)
+        val shouldRequestFocus = explicitReturn || pageActivated || initial || ownsContentFocus
         if (!shouldRequestFocus) return@LaunchedEffect
 
         if (!selectedVisible) {
@@ -321,7 +333,12 @@ fun HomeScreen(
         }
         inputMode.requestInputMode(InputMode.Keyboard)
         withFrameNanos { }
-        requesters[selectedId]?.requestFocus()
+        if (rowState.layoutInfo.visibleItemsInfo.none { it.index == selectedIndex }) return@LaunchedEffect
+        val requester = requesters[selectedId] ?: return@LaunchedEffect
+        if (runCatching { requester.requestFocus() }.isSuccess) {
+            handledPageActivation = pageActivationRequest
+            handledFocusRequestSequence = state.focusRequestSequence
+        }
     }
     LaunchedEffect(rowState, itemIds, initialRestorationComplete) {
         if (itemIds.isEmpty() || !initialRestorationComplete) return@LaunchedEffect

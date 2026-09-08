@@ -1,6 +1,6 @@
 # Handheld Launcher — project plan
 
-Planning baseline: 7 September 2026. This document plans the application; it does not report implemented functionality.
+Planning baseline: 7 September 2026, with page/search rules revised on 8 September 2026. This document plans the application; it does not report implemented functionality or physical acceptance.
 
 ## 1. Confirmed direction
 
@@ -17,13 +17,13 @@ The current request adds an explicit reusable control library and clear separati
 | Status area | Custom status strip inside the launcher, matching Home. |
 | Other Android controls | Keep the notification shade, volume UI, brightness/system controls, power menu, and Retroid controls. |
 | In-game HUD and analytics | Excluded from this project, not deferred delivery milestones. |
-| Home ordering | Most recently opened first. Reopening an item moves that same item to the front. |
+| Home ordering | One most recently opened item first, then Android games, ROMs, and other apps; title/ID order within each group. Reopening never duplicates an item. |
 | Return behavior | Restore selection by stable item identity and restore the scroll anchor; adjust only when ordering or availability makes the old position invalid. |
 | Application lifecycle | Launch/reopen external applications through Android. Recency is not a list of guaranteed running processes. |
 | Foundation | Carry forward yesterday's small new launcher approach and permission for selective GPL-compatible Argosy reuse later. |
 | Current deliverable | Project plan and design-system specification; application implementation follows separately. |
 
-The user called the Home behavior “FIFO”; the clarified behavior is **most-recently-opened ordering**. Use that precise term in code and documentation.
+The latest 8 September Home rule supersedes the earlier all-recents-first ordering: promote just the newest available item, then use the Android games → ROMs → other apps groups. Older history does not move utilities ahead of games.
 
 ## 2. Product scope
 
@@ -31,6 +31,7 @@ The user called the Home behavior “FIFO”; the clarified behavior is **most-r
 
 - Become the user's selected Android HOME application; also remain launchable normally during setup.
 - One persistent launcher shell with six destinations: Home, Library, Apps, Favorites, Settings, Search.
+- Library contains available ROMs and effective Android games; Apps contains other available Android apps, including emulators; Favorites contains any available favorite game or app across both groups.
 - Controller-first navigation with working touch input.
 - Automatic discovery of installed launchable Android apps, including emulator and system apps that expose launchable activities.
 - Cached content available before background discovery or artwork work finishes.
@@ -148,6 +149,10 @@ This follows Android's [UI-layer separation](https://developer.android.com/topic
 
 Use a stable `LibraryItem` abstraction with `AndroidApp`, `RomGame`, and `SystemAction` variants. Presentation sees an item title, artwork/icon, type/platform label, availability, and supported actions. Launch dispatch resolves the underlying target.
 
+The 8 September page revision uses one catalog with distinct views. Library includes all available ROMs regardless of legacy category overrides and Android apps whose effective category is `GAME`. Apps includes available Android apps whose effective category is not `GAME`. Android user category overrides win over discovered defaults. Favorites shows any available favorite game or app, with unavailable references retained under the existing preservation policy. Counts and filter choices use these same boundaries. Library offers All, Android only when Android games exist, and abbreviated console pills for present games; Apps offers All and populated Emulators/Other filters. Irrelevant saved filter keys resolve to All. Console card captions use abbreviations without changing stored IDs or full names.
+
+Search requires a trimmed nonempty query for both indexed items and supported system actions. Blank Search shows a prompt, and a query with no matches stays empty. ROM matching includes the title, console ID, abbreviation, and full console name. Games and Apps filters follow the same category boundary, while All includes matching items from both groups. Catalog and system results use the same `SearchResultCard` dimensions. These rules supersede empty-query recents and the original broad Library/Apps views; they do not alter storage access or schema.
+
 | Data | Proposed identity / persistence |
 |---|---|
 | Android entry | Current-user component identity, retaining multiple launchable activities in one package |
@@ -166,16 +171,17 @@ Room is the source of observable catalog, recency, and favorite data. DataStore 
 2. Save the current navigation snapshot; reject duplicate activation while dispatch is pending.
 3. Revalidate the target and dispatch through its Android/external-emulator adapter into an external Android task. Use normal launcher task behavior for Android components and validate each emulator's flags/contract; never place a game Activity above the launcher's `singleTask` Activity, where a later HOME intent could clear it. [Android task behavior](https://developer.android.com/guide/components/activities/tasks-and-back-stack).
 4. After successful dispatch, update that item's recency once. Failed dispatch leaves ordering unchanged and shows a recoverable error.
-5. The Home query emits items ordered by most recent successful open. Reopening updates the existing entry rather than adding another card.
+5. Home promotes the most recent available successful open, then sorts Android games, ROMs, and other apps alphabetically within each group. Reopening updates the existing entry rather than adding another card.
 6. On return, restore selection by ID. Restore the old scroll anchor when still valid; otherwise keep the selected item visible at the closest feasible position.
 
 Example: `[C, B, A] → open B → [B, C, A]`. B stays selected when returning from a launch initiated on Home. Physical pixels cannot always remain identical when an item moves to index zero; valid selected-item continuity takes priority over a stale numeric index.
 
-Moving focus, opening item details, or receiving artwork does not promote an item. Recency applies to Android app and ROM entries. Internal launcher routes and `SystemAction` shortcuts remain in Search/Settings rather than entering Home recents; a real Android Settings app component still behaves as an Android app. Record opens initiated by this launcher; do not add global usage monitoring to detect opens from other apps. Never equate successful intent dispatch with proof that an external application remains running. Use a serialized increasing open-order key so clock changes or timestamp ties cannot corrupt recency. Unopened entries follow recents in a deterministic title/ID order. Home can initially show twelve entries plus a Library action; this is a content limit, not twelve fixed on-screen tiles.
+Moving focus, opening item details, or receiving artwork does not promote an item. Recency applies to Android app and ROM entries. Internal launcher routes and `SystemAction` shortcuts remain in Search/Settings; a real Android Settings app component still behaves as an Android app. Record opens initiated by this launcher; do not add global usage monitoring. Successful dispatch does not prove an external application remains running. Use a serialized increasing open-order key so clock changes cannot corrupt recency. Home's keyed lazy carousel retains all available items so later ROM/app groups remain reachable; the former twelve-item cap is superseded.
 
 ### Automatic Android discovery
 
 - Enumerate real `MAIN/LAUNCHER` components off the main thread, including launchable system apps; exclude this launcher itself.
+- Classify known emulator packages as `EMULATOR`; otherwise use Android's declared game category or legacy game flag for `GAME`, with `OTHER` for remaining apps. Preserve separately stored user category overrides and apply them before destination membership or counts.
 - Declare the package visibility needed for those queries. Do not request broad package access by default.
 - Use package callbacks while active and reconcile at startup/resume to recover missed changes. `LauncherApps.getActivityList()` may include synthesized app-details entries; filter/validate if using it as an inventory source. [Package visibility](https://developer.android.com/training/package-visibility/declaring), [LauncherApps API](https://developer.android.com/reference/android/content/pm/LauncherApps).
 - Read cached rows immediately. Serialize/coalesce discovery triggers and transactionally apply a completed inventory.
@@ -202,9 +208,9 @@ Normalize D-pad, hat axes, left stick, physical button mapping, and touch activa
 | Input | Behavior |
 |---|---|
 | D-pad / stick | Move within the active focus region; scroll offscreen content into view |
-| A / Confirm | Invoke the focused control's primary action |
-| B / Back | IME first, then dialog/details, then originating page; root Home remains open |
-| X | Open global Search; within Search focus the query |
+| A / Confirm | Apply the query during Search editing; otherwise invoke the focused control's primary action |
+| B / Back | Cancel Search editing to its entry query; otherwise dismiss IME/dialog/details before origin navigation; root Home remains open |
+| X | Open global Search; within Search reveal and focus the query |
 | Y | Open the selected item's details/actions when supported |
 | Start | Open page/item menu according to the visible footer context |
 | L1 / R1 | Previous/next destination in the fixed six-item dock order |
@@ -213,9 +219,13 @@ Normalize D-pad, hat axes, left stick, physical button mapping, and touch activa
 
 Provide a confirm/back mapping preference and matching controller glyphs. Default shoulder navigation can wrap between first and last destination; spatial grid edges do not wrap unexpectedly. Footer actions disappear or disable when they do not apply.
 
-One input path owns an action: modal/IME handling has priority, then the focused control/page, then unhandled shell shortcuts. Do not consume the same key at both the screen and the shell. Compose focus groups and explicit transitions govern movement across header controls, filters, content, and dock. [Compose focus behavior](https://developer.android.com/develop/ui/compose/touch-input/focus/change-focus-behavior).
+One input path owns an action: modal/IME handling has priority, then the focused control/page, then unhandled shell shortcuts. During Search editing, only mapped gamepad A/B buttons reach Apply/Cancel through the IME; hardware keyboard text/caret keys and ordinary IME navigation remain native. Apply commits the live query, Cancel restores its edit-entry value, and both close the IME and focus results or Edit search. Do not consume the same key at both the screen and the shell. Compose focus groups and explicit transitions govern movement across header controls, filters, content, and dock. [Compose focus behavior](https://developer.android.com/develop/ui/compose/touch-input/focus/change-focus-behavior).
 
-Maintain a separate saved state for every destination. Dock switches do not accumulate a Back history. B from Library, Apps, Favorites, Settings, or Search reached through the dock returns to Home. Search opened through X remembers its origin; Back restores that origin's filter, selected ID, and anchor. B on root Home keeps the launcher open. Repeated HOME intents must not create another Activity or reset restored launcher state. Details and menus return to their exact initiating item when it still exists.
+Downward Search result scrolling collapses the heading/query/filter panel while retaining Edit search. Upward scrolling or explicit editing reveals it; result updates do not reopen the panel or steal editor focus.
+
+Maintain a separate saved state for every destination. Dock switches do not accumulate a Back history. Once editing and modal handling are complete, B from Library, Apps, Favorites, Settings, or Search reached through the dock returns to Home. Search opened through X remembers its origin; Back restores that origin's filter, selected ID, and anchor. B on root Home keeps the launcher open. Repeated HOME intents must not create another Activity or reset restored launcher state. Details and menus return to their exact initiating item when it still exists.
+
+Selecting or reselecting a populated page focuses its selected surviving card, or the first card, after the lazy item is placed. Settings focuses a meaningful setting action; empty Search focuses the query. Query/result updates do not take focus away from typing. A completed touch selects the touched card before activation; scrolling does not launch cards. A no-op Back on Home preserves the current focus and matching footer actions.
 
 Focus restoration fallback: saved ID → nearest surviving item → first item → empty-state action → active dock item. If a target is offscreen, scroll it into composition before requesting focus. Preserve one visible amber focus target during controller use; the selected dock destination remains a separate light-gray state.
 
@@ -245,7 +255,7 @@ Each stage produces a reviewable result. These are dependency stages, not calend
 | 5. Artwork and metadata | First provider, durable cache/queue, progressive enrichment, corrections | Offline launch still works; provider errors do not block use; artwork updates do not change focus or card dimensions |
 | 6. Device hardening | Profiling, lifecycle/device tests, final visual calibration, installable APK and setup guide | Acceptance matrix passes on Flip 2; remaining limitations explicitly documented |
 
-Stage 1 creates all dock positions but does not ship inert destinations as a finished product. Stage 2 is the smallest functional slice; stage 3 completes the launcher UI before the ROM and enrichment work expands it. Library initially shows Android entries from the unified catalog and later gains ROM entries without a new screen architecture.
+Stage 1 creates all dock positions but does not ship inert destinations as a finished product. Stage 2 is the smallest functional slice; stage 3 completes the launcher UI before the ROM and enrichment work expands it. Library initially shows effective Android games from the unified catalog and later gains ROM entries without a new screen architecture; other Android entries remain available in Apps.
 
 Per-stage validation uses meaningful domain/repository and UI tests rather than tests that simply restate style constants. Run a debug build, Android lint, relevant JVM tests, and applicable Compose instrumentation tests. Add screenshot baselines for the stable shell and Home after calibration, not for unapproved raw templates.
 

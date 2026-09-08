@@ -3,7 +3,7 @@ package dev.handheld.launcher.core.data.rom.repository
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "rom_sources", indices = [Index(value = ["tree_uri"], unique = true)])
+@Entity(tableName = "rom_sources", indices = [Index(value = ["tree_uri"], unique = true), Index(value = ["physical_root_key"])])
 internal data class RomSourceEntity(
     @PrimaryKey @ColumnInfo(name="source_id") val sourceId: String,
     @ColumnInfo(name="tree_uri") val treeUri: String,
@@ -15,6 +15,9 @@ internal data class RomSourceEntity(
     @ColumnInfo(name="last_scan_at") val lastScanAt: Long?,
     val error: String?,
     val revision: Long,
+    @ColumnInfo(name="access_kind", defaultValue="'SAF'") val accessKind: String = "SAF",
+    @ColumnInfo(name="physical_root_key") val physicalRootKey: String? = null,
+    @ColumnInfo(name="automatically_discovered", defaultValue="0") val automaticallyDiscovered: Boolean = false,
 )
 
 @Entity(tableName = "rom_documents", indices = [Index(value=["source_id", "document_id"], unique=true)])

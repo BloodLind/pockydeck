@@ -13,7 +13,7 @@ import dev.handheld.launcher.core.domain.model.InventoryStatus
 import dev.handheld.launcher.core.domain.model.ItemId
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.core.domain.model.LibraryItemKind
-import dev.handheld.launcher.core.domain.policy.LibraryItemOrdering
+import dev.handheld.launcher.core.domain.policy.HomeItemOrdering
 import dev.handheld.launcher.core.domain.repository.CatalogRepository
 import dev.handheld.launcher.core.domain.repository.ItemOverrideRepository
 import dev.handheld.launcher.core.domain.repository.NavigationSnapshotRepository
@@ -106,7 +106,7 @@ class HomeViewModel(
     ) { catalog, recentRecords, overrides, refresh, currentPosition ->
         val active = catalog.activeItems.filter { it.kind != LibraryItemKind.SYSTEM_ACTION }
         val recentIds = recentRecords.mapTo(hashSetOf()) { it.itemId }
-        val ordered = LibraryItemOrdering.recentFirst(active, recentRecords).take(MAX_HOME_ITEMS)
+        val ordered = HomeItemOrdering.order(active, recentRecords, overrides)
         val orderedIds = ordered.map { it.id }
         val selected = currentPosition.selectedItemId?.takeIf { it in orderedIds }
             ?: nearestRemainingId(currentPosition.selectedItemId, priorOrderedIds, orderedIds)
@@ -255,7 +255,6 @@ class HomeViewModel(
     }
 
     companion object {
-        const val MAX_HOME_ITEMS = 12
         private const val SNAPSHOT_DEBOUNCE_MS = 250L
         private const val SELECTED_KEY = "home.selected"
         private const val ANCHOR_KEY = "home.anchor"

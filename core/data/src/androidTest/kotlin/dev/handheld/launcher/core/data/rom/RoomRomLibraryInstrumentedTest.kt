@@ -1,6 +1,7 @@
 package dev.handheld.launcher.core.data.rom
 
 import android.content.Context
+import android.provider.DocumentsContract
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.handheld.launcher.core.data.local.LauncherDatabase
@@ -14,6 +15,9 @@ import dev.handheld.launcher.core.domain.model.*
 import dev.handheld.launcher.core.domain.rom.RomEntry
 import dev.handheld.launcher.core.domain.rom.RomSource
 import dev.handheld.launcher.core.domain.rom.RomSourceStatus
+import dev.handheld.launcher.core.domain.rom.RomSourceAccessKind
+import dev.handheld.launcher.core.data.rom.source.shared.SharedDocumentId
+import dev.handheld.launcher.core.data.rom.source.shared.SharedDiscoveryPolicy
 import dev.handheld.launcher.core.domain.rom.scan.*
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.cancel
@@ -184,6 +188,137 @@ class RoomRomLibraryInstrumentedTest {
         assertTrue(repository.entries.first().none { it.documentId == "new-129" })
         assertTrue(catalog.snapshot.first().activeItems.all { SupportedItemAction.OPEN in it.supportedActions })
         assertEquals(RomSourceStatus.ERROR, repository.findSource(source.id)?.status)
+    }
+
+    @Test fun discoveryCannotResurrectRemovedSourceAndExplicitRestoreKeepsIdentityReferences() = runBlocking {
+        val source = sharedSource("primary:GBA","GBA","gba")
+        val document = doc("primary:GBA/Game.gba","Game.gba")
+        val original = scan(source,document).single()
+        RoomFavoriteRepository(database).setFavorite(original.itemId,true)
+        RoomSuccessfulOpenRepository(database).recordOnce(SuccessfulOpenCandidate(LaunchOperationId("shared-open"),original.itemId))
+        repository.removeSource(source.id)
+
+        assertNull(repository.upsertDiscoveredSource(source.treeUri,source.rootDocumentId,source.name,"gba"))
+        assertFalse(requireNotNull(repository.findSource(source.id)).enabled)
+        assertTrue(catalog.snapshot.first().activeItems.isEmpty())
+        repository.restoreSource(source.id)
+        val restored = scan(requireNotNull(repository.findSource(source.id)),document).single()
+        assertEquals(original.itemId,restored.itemId)
+        assertEquals(setOf(original.itemId),RoomFavoriteRepository(database).favoriteItemIds.first())
+        assertEquals(original.itemId,RoomSuccessfulOpenRepository(database).records.first().single().itemId)
+    }
+
+    @Test fun manualExactRootTakesAutomaticSourceWithoutChangingGameOrSourceIdentity() = runBlocking {
+        val source = sharedSource("primary:ROMs/GBA","GBA","gba")
+        val original = scan(source,doc("primary:ROMs/GBA/Game.gba","Game.gba")).single()
+        RoomFavoriteRepository(database).setFavorite(original.itemId,true)
+        val manualUri = DocumentsContract.buildTreeDocumentUri("com.android.externalstorage.documents",source.rootDocumentId).toString()
+        val manualId = repository.addSource(manualUri,source.rootDocumentId,"GBA")
+
+        assertEquals(source.id,manualId)
+        val manual = requireNotNull(repository.findSource(manualId))
+        assertEquals(RomSourceAccessKind.SAF,manual.accessKind)
+        assertFalse(manual.automaticallyDiscovered)
+        assertEquals("primary:ROMs/GBA",manual.physicalRootKey)
+        assertEquals(original.itemId,repository.entries.first().single().itemId)
+        assertTrue(repository.entries.first().single().documentUri.startsWith("content://com.android.externalstorage.documents/"))
+        assertEquals(setOf(original.itemId),RoomFavoriteRepository(database).favoriteItemIds.first())
+        assertNull(repository.upsertDiscoveredSource(source.treeUri,source.rootDocumentId,source.name,"gba"))
+    }
+
+    @Test fun manualAncestorAbsorbsAutomaticGamesAndRetainsTheirUserReferencesAcrossRescan() = runBlocking {
+        val automatic = sharedSource("primary:ROMs/GBA","GBA","gba")
+        val original = scan(automatic,doc("primary:ROMs/GBA/Game.gba","Game.gba")).single()
+        val artwork = UserItemOverrides(artworkReference=UserArtworkReference("user-art:shared"))
+        RoomItemOverrideRepository(database).setOverrides(original.itemId,artwork)
+        repository.setItemEmulator(original.itemId,"emulator:fixture")
+        val manualUri = DocumentsContract.buildTreeDocumentUri("com.android.externalstorage.documents","primary:ROMs").toString()
+        val manualId = repository.addSource(manualUri,"primary:ROMs","ROMs")
+        val moved = requireNotNull(repository.findEntry(original.itemId))
+        assertEquals(manualId,moved.sourceId)
+        assertEquals("GBA/Game.gba",moved.relativePath)
+        assertFalse(requireNotNull(repository.findSource(automatic.id)).enabled)
+        assertEquals(1,catalog.snapshot.first().activeItems.size)
+
+        scan(requireNotNull(repository.findSource(manualId)),doc("primary:ROMs/GBA/Game.gba","GBA/Game.gba"))
+        assertEquals(original.itemId,repository.entries.first().single().itemId)
+        assertEquals(artwork,RoomItemOverrideRepository(database).overridesByItemId.first()[original.itemId])
+        assertEquals("emulator:fixture",repository.itemEmulatorOverrides.first()[original.itemId])
+        repository.removeSource(manualId)
+        assertNull(repository.upsertDiscoveredSource(automatic.treeUri,automatic.rootDocumentId,automatic.name,"gba"))
+    }
+
+    @Test fun manualChildTransfersOnlyItsGamesAndAutomaticParentKeepsSiblingIdentity() = runBlocking {
+        val automatic = sharedSource("primary:GBA","GBA","gba")
+        val entries = scan(automatic,doc("primary:GBA/Sibling.gba","Sibling.gba"),doc("primary:GBA/Manual/Owned.gba","Manual/Owned.gba"))
+        val owned = entries.single { it.title == "Owned" }
+        val sibling = entries.single { it.title == "Sibling" }
+        val manualUri = DocumentsContract.buildTreeDocumentUri("com.android.externalstorage.documents","primary:GBA/Manual").toString()
+        val manualId = repository.addSource(manualUri,"primary:GBA/Manual","Manual")
+        assertEquals(manualId,repository.findEntry(owned.itemId)?.sourceId)
+        assertEquals("Owned.gba",repository.findEntry(owned.itemId)?.relativePath)
+        assertEquals(automatic.id,repository.findEntry(sibling.itemId)?.sourceId)
+        assertTrue(requireNotNull(repository.findSource(automatic.id)).enabled)
+        assertEquals(setOf("primary:GBA/Manual"),SharedDiscoveryPolicy.exclusions(
+            requireNotNull(repository.findSource(automatic.id)),repository.allSources(),
+        ))
+        scan(requireNotNull(repository.findSource(automatic.id)),doc("primary:GBA/Sibling.gba","Sibling.gba"))
+        assertEquals(setOf(owned.itemId,sibling.itemId),catalog.snapshot.first().activeItems.map { it.id }.toSet())
+    }
+
+    @Test fun discoveryPreferenceDefaultsOnAndSurvivesReopenWithoutDisablingRegisteredSources() = runBlocking {
+        val source = sharedSource("primary:GBA","GBA","gba")
+        assertTrue(repository.sharedDiscoveryEnabled.first())
+        repository.setSharedDiscoveryEnabled(false)
+        database.close()
+        database = LauncherDatabase.open(context,databaseName)
+        repository = RoomRomLibraryRepository(database)
+        catalog = RoomCatalogRepository(database)
+        assertFalse(repository.sharedDiscoveryEnabled.first())
+        assertTrue(requireNotNull(repository.findSource(source.id)).enabled)
+    }
+
+    @Test fun opaqueProviderAndAutomaticSourcesCannotCreateAnUnverifiableDuplicateCatalog() = runBlocking {
+        val manual = source("opaque")
+        val tree = DocumentsContract.buildTreeDocumentUri(SharedDocumentId.AUTHORITY,"primary:GBA").toString()
+        assertNull(repository.upsertDiscoveredSource(tree,"primary:GBA","GBA","gba"))
+        repository.removeSource(manual.id)
+        val automatic = sharedSource("primary:GBA","GBA","gba")
+        assertTrue(runCatching { repository.addSource(manual.treeUri,manual.rootDocumentId,manual.name) }.isFailure)
+        assertTrue(requireNotNull(repository.findSource(automatic.id)).enabled)
+        assertFalse(requireNotNull(repository.findSource(manual.id)).enabled)
+    }
+
+    @Test fun staleAutomaticScanCannotPublishAfterManualOwnershipTransfer() = runBlocking {
+        val automatic = sharedSource("primary:GBA","GBA","gba")
+        val docs = listOf(doc("primary:GBA/Game.gba","Game.gba"))
+        val entry = scan(automatic,*docs.toTypedArray()).single()
+        val revision = requireNotNull(repository.beginScan(automatic.id))
+        val manualTree = DocumentsContract.buildTreeDocumentUri("com.android.externalstorage.documents","primary:GBA").toString()
+        repository.addSource(manualTree,"primary:GBA","GBA")
+        val error = runCatching { repository.commitScan(automatic,revision,docs,plan(automatic,docs)) }.exceptionOrNull()
+        assertTrue(error is ScanSupersededException)
+        assertEquals(entry.itemId,repository.entries.first().single().itemId)
+        assertTrue(repository.entries.first().single().documentUri.startsWith("content://com.android.externalstorage.documents/"))
+    }
+
+    @Test fun savedDiscoveryContinuationKeepsCompletedVolumeBaselineUntilCycleCompletes() = runBlocking {
+        repository.saveDiscoveryCursor(listOf("sd-1:ROMs/GBA"),setOf("primary","sd-1"))
+        database.close()
+        database = LauncherDatabase.open(context,databaseName)
+        repository = RoomRomLibraryRepository(database)
+        catalog = RoomCatalogRepository(database)
+        assertEquals(listOf("sd-1:ROMs/GBA"),repository.discoveryCursor())
+        assertEquals(setOf("primary","sd-1"),repository.discoveryVolumeKeys())
+        repository.saveDiscoveryCursor(emptyList(),setOf("primary","sd-1"))
+        assertTrue(repository.discoveryCursor().isEmpty())
+        assertTrue(repository.discoveryVolumeKeys().isEmpty())
+    }
+
+    private suspend fun sharedSource(root: String, name: String, platform: String): RomSource {
+        val tree = DocumentsContract.buildTreeDocumentUri(SharedDocumentId.AUTHORITY,root).toString()
+        val id = requireNotNull(repository.upsertDiscoveredSource(tree,root,name,platform))
+        return requireNotNull(repository.findSource(id))
     }
 
     private suspend fun source(suffix: String): RomSource {

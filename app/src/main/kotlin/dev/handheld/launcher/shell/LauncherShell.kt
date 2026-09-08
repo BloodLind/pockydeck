@@ -192,7 +192,7 @@ private fun StatusStrip(
     Row(
         modifier = modifier
             .offset(bounds.left, bounds.top + 16.dp * scale)
-            .size(bounds.width, 20.dp * scale * LocalDensity.current.fontScale)
+            .size(bounds.width, 20.dp * scale * LauncherTheme.smallControlScale * LocalDensity.current.fontScale)
             .padding(horizontal = gutter),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -248,9 +248,9 @@ private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph) {
         ShellStatusGlyph.Battery -> LauncherTheme.colors.confirm
         ShellStatusGlyph.Wifi -> LauncherTheme.colors.textPrimary
     }
-    val glyphSize = 16.dp * LauncherTheme.referenceScale
+    val glyphSize = 16.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
     Canvas(Modifier.size(glyphSize).clearAndSetSemantics {}) {
-        val stroke = Stroke(width = size.minDimension * .11f, cap = StrokeCap.Round)
+        val stroke = Stroke(width = size.minDimension * .14f, cap = StrokeCap.Round)
         val center = Offset(size.width / 2f, size.height / 2f)
         when (glyph) {
             ShellStatusGlyph.Temperature -> {
@@ -355,15 +355,15 @@ private fun NavigationDock(
 ) {
     var locallyFocusedDestination by remember { mutableStateOf<LauncherDestination?>(null) }
     val renderedFocus = locallyFocusedDestination ?: focusedDestination
+    val slotSize = (48.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale).coerceAtLeast(48.dp)
     Box(
         modifier = modifier
             .offset(layout.dockBounds.left, layout.dockBounds.top)
             .size(layout.dockBounds.width, layout.dockBounds.height),
         contentAlignment = Alignment.TopCenter,
     ) {
-        // A 48dp slot remains independently reachable even where the Home visual circle is 32dp.
         Row(
-            modifier = Modifier.offset(y = layout.dockCenterY - layout.dockBounds.top - 24.dp),
+            modifier = Modifier.offset(y = layout.dockCenterY - layout.dockBounds.top - slotSize / 2f),
             horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -378,7 +378,7 @@ private fun NavigationDock(
                     Spacer(Modifier.width(LauncherTheme.spacing.xxs))
                     Spacer(
                         Modifier
-                            .height(28.dp * LauncherTheme.referenceScale)
+                            .height(28.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale)
                             .width(1.dp * LauncherTheme.referenceScale)
                             .background(LauncherTheme.colors.borderEmphasis),
                     )
@@ -413,10 +413,10 @@ private fun DockDestination(
     onSelected: () -> Unit,
     onFocused: (Boolean) -> Unit,
 ) {
-    val visualSize = 48.dp * LauncherTheme.referenceScale
+    val visualSize = 48.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(visualSize.coerceAtLeast(48.dp))
             .testTag(LauncherShellTags.destination(destination))
             .onFocusChanged { onFocused(it.isFocused) }
             .clickable(role = Role.Tab, onClick = onSelected)
@@ -438,7 +438,7 @@ private fun DockDestination(
         ) {
             LauncherGlyphIcon(
                 glyph = destination.glyph(),
-                modifier = Modifier.size(26.dp * LauncherTheme.referenceScale),
+                modifier = Modifier.size(26.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
                 contentDescription = destination.label(),
                 tint = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textPrimary,
             )

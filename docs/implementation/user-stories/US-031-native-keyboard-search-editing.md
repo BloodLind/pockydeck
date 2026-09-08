@@ -17,23 +17,25 @@ As a launcher user, I want a visible editable query with predictable controller 
 
 ## Scope
 
-Bind the native Android IME to Compose-owned query focus and handles, including X-to-enter/focus-query behavior. Apply shell keyboard constraints so results use two columns only when readable, otherwise one column with scrolling. Apply IME-first Back and isolate editor input from shell shortcuts and result activation.
+Bind the native Android IME to Compose-owned query focus and handles, including X-to-enter/reveal/focus-query behavior. Downward result scrolling collapses the heading/query/filter panel and retains Edit search; upward scrolling or explicit editing reveals it. Apply shell keyboard constraints so results use two columns only when readable, otherwise one column with scrolling. While editing, mapped gamepad Confirm applies the query and Back restores the edit-entry query; both close the IME and focus results or Edit search. Only mapped gamepad A/B buttons bypass IME handling for these actions; hardware keyboard text/caret keys and ordinary IME navigation remain native.
+
+The 8 September 2026 interaction revision supersedes the original generic IME-first Back rule. These criteria follow the [current Search contract](../contracts.md#september-page-membership-search-and-interaction-revision); the story status and pending physical acceptance are unchanged.
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** the user presses X outside Search or while results are focused, **when** Search is entered or already active, **then** the query receives focus and remains visibly editable through the native IME.
-- [ ] **AC-02** — **Given** the native IME is visible, **when** Back is invoked, **then** it dismisses the IME before origin navigation can occur.
+- [ ] **AC-01** — **Given** the user presses X outside Search or while results are focused, **when** Search is entered or already active, **then** the query panel is revealed and receives focus for native IME editing. Downward result scrolling collapses the panel to Edit search; upward scrolling or explicit editing reveals it again.
+- [ ] **AC-02** — **Given** the query is being edited, **when** mapped gamepad Confirm or Back is invoked, **then** Confirm applies the current query and Back restores the edit-entry query; both close the IME and focus results or Edit search without navigating away. Hardware keyboard text/caret keys and ordinary IME navigation retain native behavior.
 - [ ] **AC-03** — **Given** text is entered through the IME, **when** the editor processes it, **then** shell shortcuts do not fire and a result is not activated by typing.
 - [ ] **AC-04** — **Given** available width or IME space makes two columns unreadable, **when** results render, **then** they switch to one column and scroll within the content area without changing normal shared shell geometry.
 
 ## Verification
 
-- **AC-01:** Not run — Compose IME/focus test with X semantic action.
-- **AC-02:** Not run — Compose test for IME-first Back then origin policy.
+- **AC-01:** Not run — Compose IME/focus test with X semantic action and panel collapse/reveal.
+- **AC-02:** Not run — Compose tests for mapped gamepad Apply/Cancel, native keyboard behavior, and origin navigation outside editing.
 - **AC-03:** Not run — Compose keyboard event test proving shell/action isolation.
 - **AC-04:** Not run — constrained-width and IME screenshot tests for two-to-one-column behavior.
 
-**Physical acceptance for AC-01–AC-04:** Not run — repeat query entry, editing, IME-first Back, focus return and constrained layout on the Flip 2 with its installed system keyboard and controller. Record device, firmware and IME versions. Desktop/emulator evidence alone does not close these checks; an incompatible system keyboard is a recorded blocker, not grounds for adding a custom keyboard.
+**Physical acceptance for AC-01–AC-04:** Not run — repeat query entry, mapped gamepad Apply/Cancel, native keyboard editing, panel collapse/reveal, focus return and constrained layout on the Flip 2 with its installed system keyboard and controller. Record device, firmware and IME versions. Desktop/emulator evidence alone does not close these checks; an incompatible system keyboard is a recorded blocker, not grounds for adding a custom keyboard.
 
 ## Delivery notes
 

@@ -68,7 +68,7 @@ class RomCollectionPresentationTest {
         compose.onNodeWithText("Sample GBA game", useUnmergedTree = true).assertIsDisplayed()
         // This subtitle belongs to the ROM card; the console filter remains a separate button.
         val subtitle = compose.onNode(
-            hasText("Game Boy Advance") and hasAnyAncestor(hasContentDescription("Sample GBA game")),
+            hasText("GBA") and hasAnyAncestor(hasContentDescription("Sample GBA game")),
             useUnmergedTree = true,
         ).assertIsDisplayed().fetchSemanticsNode()
         compose.onNodeWithContentDescription("Sample GBA game").assertIsDisplayed().performClick()

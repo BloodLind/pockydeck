@@ -2,6 +2,9 @@ package dev.handheld.launcher.core.designsystem.cards
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,12 +35,15 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import dev.handheld.launcher.core.designsystem.controls.ControllerGlyph
@@ -139,6 +145,8 @@ class LauncherCardsTest {
         assertEquals(before, compose.onNodeWithTag("collection").fetchSemanticsNode().boundsInRoot)
         val artwork = compose.onNodeWithTag("collection-image", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals(artwork.width, artwork.height, 1f)
+        val caption = compose.onNodeWithText(title, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("Collection captions are below the artwork", caption.top >= artwork.bottom)
         val icon = compose.onNodeWithTag("app-image", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertEquals(icon.width, icon.height, 1f)
         val app = compose.onNodeWithTag("app").fetchSemanticsNode().boundsInRoot
@@ -154,6 +162,59 @@ class LauncherCardsTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val output = File(context.getExternalFilesDir(null), "us008-cards.png")
         output.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
+    fun appAndRomCollectionCardsShareSquareArtworkAndCaptionAllocation() {
+        compose.setContent {
+            LauncherTheme(referenceScale = 2f / 3f) {
+                Row {
+                    CoverTile("Collection game", CardVariant.CollectionCover, true, {}, {},
+                        Modifier.width(160.dp).testTag("collection-rom"), artwork = { ArtworkFallback() })
+                    AppIconTile("Collection application", true, {}, {}, Modifier.width(160.dp).testTag("collection-app"),
+                        icon = { AppIconArtwork(StripedPainter()) }, showCaption = true)
+                }
+            }
+        }
+        val rom = compose.onNodeWithTag("collection-rom").fetchSemanticsNode().boundsInRoot
+        val app = compose.onNodeWithTag("collection-app").fetchSemanticsNode().boundsInRoot
+        assertEquals("App and ROM collections reserve the same width", rom.width, app.width, 1f)
+        assertEquals("App and ROM collections reserve the same square and caption height", rom.height, app.height, 1f)
+        val romCaption = compose.onNodeWithText("Collection game", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val appCaption = compose.onNodeWithText("Collection application", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(romCaption.top >= rom.top + rom.width)
+        assertTrue(appCaption.top >= app.top + app.width)
+    }
+
+    @Test
+    fun completedTouchFocusesBeforeActivationAndScrollingDoesNotActivate() {
+        var focused = false
+        var focusedAtActivation = false
+        var activations = 0
+        lateinit var scroll: ScrollState
+        compose.setContent {
+            LauncherTheme {
+                scroll = rememberScrollState()
+                Row(Modifier.width(240.dp).horizontalScroll(scroll)) {
+                    CoverTile("Touch target", CardVariant.HomeCover, true,
+                        { focusedAtActivation = focused; activations++ }, { focused = it },
+                        Modifier.size(160.dp).testTag("touch-card"), artwork = { ArtworkFallback() })
+                    CoverTile("Another target", CardVariant.HomeCover, true, { activations++ }, {},
+                        Modifier.size(160.dp), artwork = { ArtworkFallback() })
+                }
+            }
+        }
+        compose.onNodeWithTag("touch-card").performTouchInput { click() }
+        compose.onNodeWithTag("touch-card").assertIsFocused()
+        compose.runOnIdle {
+            assertTrue("The launch callback sees the newly focused item", focusedAtActivation)
+            assertEquals(1, activations)
+        }
+        compose.onNodeWithTag("touch-card").performTouchInput { swipeLeft() }
+        compose.runOnIdle {
+            assertTrue("The gesture scrolls the row", scroll.value > 0)
+            assertEquals("A scroll gesture does not launch a card", 1, activations)
+        }
     }
 
     @Test

@@ -36,6 +36,7 @@ import dev.handheld.launcher.feature.favorites.FavoritesScreen
 import dev.handheld.launcher.feature.home.*
 import dev.handheld.launcher.feature.library.LibraryScreen
 import dev.handheld.launcher.feature.search.SearchScreen
+import dev.handheld.launcher.feature.search.SearchEditorActions
 import dev.handheld.launcher.feature.settings.*
 import dev.handheld.launcher.feature.settings.sources.RomSourcesCallbacks
 import dev.handheld.launcher.feature.settings.emulators.EmulatorSettingsCallbacks
@@ -61,6 +62,8 @@ fun LauncherApp(
     nativeConfirm: () -> Boolean,
     onImeVisibilityChanged: (Boolean) -> Unit = {},
     onPickRomFolder: () -> Unit = {},
+    onSetupStorageAccess: () -> Unit = {},
+    onSearchEditorActiveChanged: (Boolean) -> Unit = {},
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
@@ -92,6 +95,7 @@ fun LauncherApp(
     val saveablePages = rememberSaveableStateHolder()
     var focused by remember(location) { mutableStateOf<FocusedControlAction?>(null) }
     var focusedDock by remember(location) { mutableStateOf<LauncherDestination?>(null) }
+    var searchEditorActions by remember(location) { mutableStateOf<SearchEditorActions?>(null) }
     var menuVisible by remember { mutableStateOf(false) }
     var menuItemId by remember { mutableStateOf<ItemId?>(null) }
     var modalOrigin by remember { mutableStateOf<LauncherLocation?>(null) }
@@ -99,7 +103,8 @@ fun LauncherApp(
     var controlRestoreFocus by remember(location) { mutableStateOf<(() -> Unit)?>(null) }
     var modalRestoreFocus by remember { mutableStateOf<(() -> Unit)?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var queryFocusRequest by remember { mutableIntStateOf(0) }
+    var queryFocusRequest by rememberSaveable { mutableIntStateOf(0) }
+    var pageActivationRequest by remember { mutableIntStateOf(1) }
     var settingsSection by rememberSaveable { mutableStateOf("Launcher") }
     val searchableActions = remember(container) {
         container.systemActions.actions + listOf(
@@ -118,6 +123,7 @@ fun LauncherApp(
     fun selectDestination(value: LauncherDestination) {
         keyboard?.hide()
         focused = null
+        pageActivationRequest++
         app.navigation.selectDestination(value)
     }
     fun openDetails(id: ItemId) {
@@ -175,12 +181,17 @@ fun LauncherApp(
     }
     fun goBack() {
         when {
+            !modalVisible && searchEditorActions != null -> searchEditorActions?.cancel?.invoke()
             imeVisible -> keyboard?.hide()
             romChoice != null -> container.romController.dismissChoice()
             romProgress != null -> container.romController.cancelPreparation()
             errorMessage != null -> clearError()
             menuVisible -> menuVisible = false
-            else -> { focused = null; app.navigation.back() }
+            else -> {
+                val previousLocation = app.navigation.location.value
+                app.navigation.back()
+                if (app.navigation.location.value != previousLocation) focused = null
+            }
         }
     }
     fun openSearch() {
@@ -203,11 +214,13 @@ fun LauncherApp(
     val selectedItemId = focused?.itemId ?: (location as? LauncherLocation.ItemDetails)?.itemId
     val selectedItem = library.allItems.find { it.id == selectedItemId }
     val primary = if (modalVisible) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select")
+        else if (searchEditorActions != null) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Apply")
         else focused?.descriptor?.copy(input = SemanticInputAction.CONFIRM)
             ?: LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select", false)
     val footer = ControllerActionFooter(buildList {
         add(primary)
-        add(LauncherActionDescriptor(SemanticInputAction.BACK, LauncherActionMeaning.GO_BACK, "Back"))
+        add(LauncherActionDescriptor(SemanticInputAction.BACK, LauncherActionMeaning.GO_BACK,
+            if (!modalVisible && searchEditorActions != null) "Cancel" else "Back"))
         if (!modalVisible) {
             add(LauncherActionDescriptor(SemanticInputAction.SECONDARY, LauncherActionMeaning.OPEN_SEARCH, "Search"))
             if (selectedItem != null && location !is LauncherLocation.ItemDetails)
@@ -218,7 +231,9 @@ fun LauncherApp(
     val actionPort = SemanticActionPort { descriptor ->
         if (!descriptor.enabled || descriptor !in footer.actions) false else {
             when (descriptor.input) {
-                SemanticInputAction.CONFIRM -> nativeConfirm()
+                SemanticInputAction.CONFIRM -> if (!modalVisible && searchEditorActions != null) {
+                    searchEditorActions?.apply?.invoke(); true
+                } else nativeConfirm()
                 SemanticInputAction.BACK -> { goBack(); true }
                 SemanticInputAction.SECONDARY -> { openSearch(); true }
                 SemanticInputAction.TERTIARY -> { selectedItemId?.let(::openDetails); selectedItemId != null }
@@ -228,6 +243,7 @@ fun LauncherApp(
         }
     }
     SideEffect {
+        onSearchEditorActiveChanged(searchEditorActions != null && !modalVisible)
         bindInput { action ->
             inputMode.requestInputMode(InputMode.Keyboard)
             val direction = when (action) {
@@ -248,7 +264,9 @@ fun LauncherApp(
                     selectDestination(order[(order.indexOf(activeDestination) + delta + order.size) % order.size]); true
                 }
                 action == SemanticInputAction.PREVIOUS_FILTER || action == SemanticInputAction.NEXT_FILTER -> {
-                    val filters = pageModels[destination]?.let { collectionFilterKeys(destination, it.state.value.allItems) }.orEmpty()
+                    val filters = pageModels[destination]?.state?.value?.let {
+                        collectionFilterKeys(destination, it.allItems, it.overrides, it.favorites)
+                    }.orEmpty()
                     if (filters.isEmpty()) false else {
                         val vm = pageModels.getValue(destination)
                         val delta = if (action == SemanticInputAction.NEXT_FILTER) 1 else -1
@@ -322,36 +340,49 @@ fun LauncherApp(
                             LauncherDestination.HOME -> HomeRoute(home, metrics, container.iconLoader, bounds,
                                 onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
                                 onOpenDetails = ::openDetails,
-                                allowFocusRequest = focusedDock == null && !modalVisible,
+                                allowFocusRequest = !modalVisible,
+                                pageActivationRequest = pageActivationRequest,
                                 onFocusedActionChanged = { focused = it?.let { value -> FocusedControlAction(value.descriptor, value.onActivate, value.itemId) } })
                             LauncherDestination.SETTINGS -> SettingsScreen(
                                 SettingsScreenState(mapping, homeRoleSummary(homeRoleHeld, roleState),
                                     listOf(LibraryCategory.GAME, LibraryCategory.EMULATOR, LibraryCategory.OTHER).map { category ->
-                                        CategorySummary(category, library.allItems.count { it.availability == Availability.Available && (library.overrides[it.id]?.category ?: it.category) == category })
+                                        CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
                                     }, romSources, romEmulators), bounds, SettingsCallbacks(
                                     onSetConfirmBackMapping = app::setMapping,
                                     onRequestDefaultHome = { container.homeRoleRequests.requestSelection() },
                                     onOpenSystemAction = ::openSystem,
                                     onOpenCategory = { category ->
-                                        pageModels.getValue(LauncherDestination.APPS).filter(when (category) {
-                                            LibraryCategory.GAME -> "games"; LibraryCategory.EMULATOR -> "emulators"; else -> "other"
-                                        }); selectDestination(LauncherDestination.APPS)
+                                        val categoryDestination = collectionCategoryDestination(category)
+                                        pageModels.getValue(categoryDestination).filter(when (category) {
+                                            LibraryCategory.GAME -> "all"; LibraryCategory.EMULATOR -> "emulators"; else -> "other"
+                                        }); selectDestination(categoryDestination)
                                     }, onFocusedAction = { focused = it },
                                     romSources = RomSourcesCallbacks(
                                         onAddSource = { keyboard?.hide(); onPickRomFolder() },
                                         onRescanSource = { container.romController.rescan() },
                                         onRemoveSource = { rememberModalOrigin(); container.romController.removeSource(it) },
-                                        onRegrantSource = { keyboard?.hide(); onPickRomFolder() },
+                                        onRegrantSource = { id ->
+                                            keyboard?.hide()
+                                            val source = romSources.sources.firstOrNull { it.id == id }
+                                            if (source?.accessKind == dev.handheld.launcher.core.domain.rom.RomSourceAccessKind.SHARED_STORAGE) {
+                                                container.romController.restoreSource(id)
+                                                if (!romSources.storageAccessGranted) onSetupStorageAccess()
+                                            } else onPickRomFolder()
+                                        },
                                         onChooseSourcePlatform = { rememberModalOrigin(); container.romController.chooseSourcePlatform(it) },
                                         onChooseCacheLimit = { rememberModalOrigin(); container.romController.chooseCacheLimit() },
                                         onClearCache = { rememberModalOrigin(); container.romController.clearCache() },
+                                        onSetupStorageAccess = { keyboard?.hide(); onSetupStorageAccess() },
+                                        onSetAutomaticDiscovery = container.romController::setAutomaticDiscovery,
+                                        onDiscoverFolders = { container.romController.rescan() },
                                     ),
                                     emulators = EmulatorSettingsCallbacks(
                                         onChooseEmulator = { rememberModalOrigin(); container.romController.chooseConsoleEmulator(it) },
                                         onChooseCore = { rememberModalOrigin(); container.romController.chooseCore(it) },
                                         onAddSource = { keyboard?.hide(); onPickRomFolder() },
                                     ),
-                                ), container.systemActions.actions, initialSection = settingsSection)
+                                ), container.systemActions.actions, initialSection = settingsSection,
+                                    restoreFocusRequest = pageActivationRequest)
                             else -> {
                                 val vm = pageModels.getValue(route)
                                 val current = pageStates.getValue(route)
@@ -365,11 +396,13 @@ fun LauncherApp(
                                     onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
                                     onFocusedAction = { focused = it })
                                 when (route) {
-                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader)
-                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader)
-                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader)
+                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible)
+                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible)
+                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible)
                                     LauncherDestination.SEARCH -> SearchScreen(current, bounds, callbacks, vm::query,
-                                        searchableActions, container.iconLoader, queryFocusRequest)
+                                        searchableActions, container.iconLoader, queryFocusRequest,
+                                        restoreFocusRequest = pageActivationRequest, allowFocusRequest = !modalVisible,
+                                        onEditorActionsChanged = { searchEditorActions = it })
                                     else -> Unit
                                 }
                             }

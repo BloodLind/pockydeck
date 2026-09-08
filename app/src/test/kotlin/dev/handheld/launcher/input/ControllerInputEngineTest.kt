@@ -15,6 +15,37 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControllerInputEngineTest {
     @Test
+    fun `search editor owns mapped face buttons during ime while navigation stays native`() = runTest {
+        var editing = true
+        var mapping = ConfirmBackMapping.Default
+        val actions = mutableListOf<SemanticInputAction>()
+        val engine = ControllerInputEngine(this, { mapping }, { true }, imeFaceActionsEnabled = { editing }) {
+            actions += it
+            true
+        }
+        assertTrue(engine.onButtonDown(ControllerButton.A, false, 1))
+        assertTrue(engine.onButtonDown(ControllerButton.A, true, 2))
+        editing = false
+        assertTrue(engine.onButtonUp(ControllerButton.A))
+        assertFalse(engine.onButtonDown(ControllerButton.B, false, 3))
+        assertFalse(engine.onButtonUp(ControllerButton.B))
+        editing = true
+        mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        assertTrue(engine.onButtonDown(ControllerButton.A, false, 4))
+        assertTrue(engine.onButtonUp(ControllerButton.A))
+        assertTrue(engine.onButtonDown(ControllerButton.B, false, 5))
+        assertTrue(engine.onButtonUp(ControllerButton.B))
+        assertFalse(engine.onButtonDown(ControllerButton.DpadDown, false, 6))
+        assertFalse(engine.onButtonUp(ControllerButton.DpadDown))
+        assertFalse(engine.onButtonDown(ControllerButton.X, false, 7))
+        assertFalse(engine.onButtonUp(ControllerButton.X))
+        assertFalse(engine.onAxes(ControllerAxes(stickY = 1f, eventTimeMillis = 8)))
+        advanceTimeBy(500)
+        runCurrent()
+        assertEquals(listOf(SemanticInputAction.CONFIRM, SemanticInputAction.BACK, SemanticInputAction.CONFIRM), actions)
+    }
+
+    @Test
     fun `face buttons follow the complete confirm back mapping`() = runTest {
         var mapping = ConfirmBackMapping.Default
         val actions = mutableListOf<SemanticInputAction>()

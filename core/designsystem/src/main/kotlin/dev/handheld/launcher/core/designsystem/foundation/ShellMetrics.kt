@@ -76,8 +76,7 @@ data class ShellMetrics(
             val g = w * .0375
             val gutter = g.asDp()
 
-            // Preserve Home's 85.2% dock center / 92.8% footer start in the standard fixture.
-            // Compact layouts spend height on readable labels and real target areas first.
+            // Preserve reference proportions independently of invisible touch allocations.
             val desiredStatus = maxOf(h * if (compact) .16 else .13, (18.0 * fs + 16.0) * scale).coerceAtMost(h)
             val desiredDock = maxOf(h * if (compact) .18 else .152, 68.0 * scale, 48.0).coerceAtMost(h)
             val desiredFooter = maxOf(h * if (compact) .10 else .072, 48.0, (18.0 * fs + 16.0) * scale).coerceAtMost(h)
@@ -130,7 +129,6 @@ data class ShellMetrics(
                 contentBounds = ShellBounds(gutter, contentTop, width - gutter, contentBottom),
                 dockBounds = ShellBounds(0.dp, contentBottom, width, contentBottom + dockHeight),
                 footerBounds = ShellBounds(0.dp, contentBottom + dockHeight, width, height),
-                // Reference visual anchors are independent of enlarged, non-overlapping hit bands.
                 dockCenterY = (if (compact) contentEnd + dock / 2.0 else h * .852)
                     .coerceIn(dockCenterMinimum, dockCenterMaximum).asDp(),
                 footerDividerY = (if (compact) h - footer else maxOf(h - footer, h * .928)).asDp(),

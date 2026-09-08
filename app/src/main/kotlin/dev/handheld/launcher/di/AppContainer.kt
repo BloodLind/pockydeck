@@ -22,6 +22,10 @@ import dev.handheld.launcher.core.data.local.LauncherDatabase
 import dev.handheld.launcher.core.data.local.LauncherPreferencesStore
 import dev.handheld.launcher.core.data.rom.repository.RoomRomLibraryRepository
 import dev.handheld.launcher.core.data.rom.source.SafRomSourceAccess
+import dev.handheld.launcher.core.data.rom.source.shared.SharedStoragePaths
+import dev.handheld.launcher.core.data.rom.source.shared.SharedStorageRomSourceAccess
+import dev.handheld.launcher.core.data.rom.source.RoutingRomSourceAccess
+import dev.handheld.launcher.core.data.rom.source.shared.AndroidSharedRomDiscovery
 import dev.handheld.launcher.core.data.rom.scan.RomScanCoordinator
 import dev.handheld.launcher.core.data.rom.archive.PreparedRomCache
 import dev.handheld.launcher.core.data.rom.emulator.AndroidEmulatorResolver
@@ -87,11 +91,14 @@ class AppContainer(
         }
     }
     val romRepository by lazy { RoomRomLibraryRepository(database) }
-    val romSourceAccess by lazy { SafRomSourceAccess(applicationContext) }
-    val romScanner by lazy { RomScanCoordinator(romRepository,romSourceAccess,applicationScope) }
+    val sharedStoragePaths by lazy { SharedStoragePaths(applicationContext) }
+    val sharedRomDiscovery by lazy { AndroidSharedRomDiscovery(romRepository,sharedStoragePaths) }
+    val romSourceAccess by lazy { RoutingRomSourceAccess(SafRomSourceAccess(applicationContext),SharedStorageRomSourceAccess(sharedStoragePaths)) }
+    val romScanner by lazy { RomScanCoordinator(romRepository,romSourceAccess,applicationScope,sharedRomDiscovery) }
     val romCache by lazy { PreparedRomCache(applicationContext) }
     val romController by lazy { RomFeatureController(romRepository,romSourceAccess,romScanner,
-        AndroidEmulatorResolver(applicationContext),AndroidRomLauncher(applicationContext),romCache,applicationScope) }
+        AndroidEmulatorResolver(applicationContext),AndroidRomLauncher(applicationContext),romCache,applicationScope,
+        sharedStoragePaths,sharedRomDiscovery) }
     val launchCoordinator by lazy {
         LaunchCoordinator(catalogRepository, navigationSnapshotRepository, launchDispatcher,
             successfulOpenRepository, applicationScope)

@@ -82,7 +82,7 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `cached home caps items and successful open preserves selected identity at front`() =
+    fun `cached home keeps all items and successful open preserves selected identity at front`() =
         runTest(dispatcher) {
             val items = ('A'..'M').map(::homeAndroidItem)
             val catalog = HomeCatalog(items)
@@ -119,7 +119,7 @@ class HomeViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(HomeViewModel.MAX_HOME_ITEMS, viewModel.state.value.items.size)
+            assertEquals(items.size, viewModel.state.value.items.size)
             assertEquals(items[1].id, viewModel.state.value.selectedItemId)
             assertTrue(viewModel.activate(items[1].id))
             advanceUntilIdle()

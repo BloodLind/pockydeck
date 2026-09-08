@@ -22,6 +22,7 @@ import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
 import dev.handheld.launcher.ui.artwork.local.rememberAndroidIconPainter
 import dev.handheld.launcher.ui.presentation.TileArtwork
 import dev.handheld.launcher.ui.presentation.TileUiModel
+import dev.handheld.launcher.ui.presentation.platformAccent
 
 @Immutable
 enum class LibraryItemCardVariant {
@@ -63,7 +64,7 @@ fun LibraryItemCard(
         )
     }
     val badge: (@Composable () -> Unit)? = if (variant == LibraryItemCardVariant.Home) {
-        { PlatformBadge(model.platformLabel, homeAccent = true) }
+        { PlatformBadge(model.platformLabel, homeAccent = true, accentColor = model.platformAccent) }
     } else {
         null
     }
@@ -77,11 +78,12 @@ fun LibraryItemCard(
             modifier = cardModifier,
             icon = artwork,
             subtitle = if (variant == LibraryItemCardVariant.Collection) model.subtitle else null,
-            selected = false,
+            selected = selected,
             unavailable = unavailable,
             unavailableReason = unavailableReason,
             focusFrameWidth = focusFrameWidth,
             focusLift = focusLift,
+            showCaption = variant == LibraryItemCardVariant.Collection,
         )
         return
     }
@@ -96,7 +98,7 @@ fun LibraryItemCard(
             modifier = cardModifier,
             artwork = artwork,
             badge = badge,
-            selected = false,
+            selected = selected,
             unavailable = unavailable,
             unavailableReason = unavailableReason,
             focusFrameWidth = focusFrameWidth,
@@ -112,11 +114,12 @@ fun LibraryItemCard(
             modifier = cardModifier,
             artwork = artwork,
             subtitle = model.subtitle,
-            selected = false,
+            selected = selected,
             unavailable = unavailable,
             unavailableReason = unavailableReason,
             focusFrameWidth = focusFrameWidth,
             focusLift = focusLift,
+            subtitleColor = model.platformAccent.takeIf { model.typeLabel == "Game" },
         )
 
         LibraryItemCardVariant.SearchResult -> SearchResultCard(
@@ -127,11 +130,12 @@ fun LibraryItemCard(
             onFocusChanged = onFocusChanged,
             modifier = cardModifier,
             artwork = artwork,
-            selected = false,
+            selected = selected,
             unavailable = unavailable,
             unavailableReason = unavailableReason,
             focusFrameWidth = focusFrameWidth,
             focusLift = focusLift,
+            subtitleColor = model.platformAccent.takeIf { model.typeLabel == "Game" },
         )
     }
 }

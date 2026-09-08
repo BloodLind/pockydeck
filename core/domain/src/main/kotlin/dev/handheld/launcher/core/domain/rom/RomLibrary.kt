@@ -5,6 +5,7 @@ import dev.handheld.launcher.core.domain.model.ItemId
 import kotlinx.coroutines.flow.Flow
 
 enum class RomSourceStatus { NOT_SCANNED, SCANNING, READY, UNAVAILABLE, ERROR, DISABLED }
+enum class RomSourceAccessKind { SAF, SHARED_STORAGE }
 
 data class RomSource(
     val id: CatalogSourceId,
@@ -17,6 +18,12 @@ data class RomSource(
     val lastScanAtMillis: Long? = null,
     val error: String? = null,
     val gameCount: Int = 0,
+    val accessKind: RomSourceAccessKind = RomSourceAccessKind.SAF,
+    /** Proven volume-relative identity only; null for opaque third-party SAF providers. */
+    val physicalRootKey: String? = null,
+    val automaticallyDiscovered: Boolean = false,
+    /** Scan-local exclusions derived from manual roots and disabled discovery tombstones. */
+    val excludedPhysicalRootKeys: Set<String> = emptySet(),
 )
 
 /** Document identity is provider-owned; the generated item ID survives rescans and source re-adds. */

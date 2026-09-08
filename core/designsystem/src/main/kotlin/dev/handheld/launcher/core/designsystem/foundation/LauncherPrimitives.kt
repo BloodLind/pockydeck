@@ -1,17 +1,23 @@
 package dev.handheld.launcher.core.designsystem.foundation
 
 import androidx.compose.foundation.Image
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +27,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -88,7 +95,7 @@ fun LauncherIcon(
     )
 }
 
-/** State-driven surface. The consuming control owns activation and actual focus. */
+/** Flat dock-style control. Its hit allocation remains at least 48dp, even for a compact pill. */
 @Composable
 fun LauncherSurface(
     modifier: Modifier = Modifier,
@@ -99,25 +106,40 @@ fun LauncherSurface(
     unavailable: Boolean = false,
     unavailableReason: String = "Unavailable",
     contentDescription: String? = null,
-    shape: Shape = RoundedCornerShape(LauncherTheme.shapes.homeOuter),
-    focusFrameWidth: Dp = LauncherTheme.depth.focusedElevation / 2f,
-    focusLift: Dp = LauncherTheme.depth.focusLift,
+    shape: Shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
+    compact: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    FocusFrame(
-        modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).then(modifier),
-        selected = selected,
-        focused = focused,
-        pressed = pressed,
-        enabled = enabled,
-        unavailable = unavailable,
-        unavailableReason = unavailableReason,
-        contentDescription = contentDescription,
-        shape = shape,
-        focusFrameWidth = focusFrameWidth,
-        focusLift = focusLift,
-        content = content,
+    val colors = LauncherTheme.colors
+    val base = if (selected) colors.destinationSelected else colors.surfaceControl
+    val background by animateColorAsState(
+        if (pressed) colors.borderEmphasis.compositeOver(base) else base,
+        tween(LauncherTheme.motion.pressedDurationMillis), label = "control fill",
     )
+    val foreground = if (selected) colors.destinationSelectedContent
+        else if (!enabled || unavailable) colors.textSecondary else colors.textPrimary
+    Box(
+        modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).then(modifier)
+            .semantics(mergeDescendants = true) {
+                this.selected = selected
+                if (contentDescription != null) this.contentDescription = contentDescription
+                if (!enabled) disabled()
+                if (unavailable) stateDescription = unavailableReason
+            },
+        contentAlignment = Alignment.Center,
+        propagateMinConstraints = !compact,
+    ) {
+        Box(
+            Modifier.heightIn(min = if (compact) 24.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale else 48.dp)
+                .background(background, shape)
+                .border(if (focused) 2.dp else 1.dp,
+                    if (focused) colors.focus else colors.borderEmphasis, shape),
+            contentAlignment = Alignment.Center,
+            propagateMinConstraints = true,
+        ) {
+            CompositionLocalProvider(LocalLauncherContentColor provides foreground) { content() }
+        }
+    }
 }
 
 /**
@@ -151,7 +173,15 @@ fun FocusFrame(
         unavailable || !enabled -> colors.textSecondary
         else -> colors.textPrimary
     }
-    val lift = if (focused && !LauncherTheme.motion.reducedMotion) focusLift else 0.dp
+    val motion = LauncherTheme.motion
+    val lift by animateDpAsState(
+        if (focused && !motion.reducedMotion) focusLift else 0.dp,
+        tween(motion.focusDurationMillis), label = "card focus lift",
+    )
+    val pressScale by animateFloatAsState(
+        if (pressed && !motion.reducedMotion) .985f else 1f,
+        tween(motion.pressedDurationMillis), label = "card press",
+    )
     val lowerEdge = if (focused) minOf(focusFrameWidth, focusLift + lift) else focusLift
     val edgeColor = if (focused) colors.focusLowerEdge else colors.surfaceArtwork
     val highlight = Color.White.copy(alpha = if (focused) .24f else .08f)
@@ -169,6 +199,7 @@ fun FocusFrame(
             modifier = Modifier
                 .padding(focusLift)
                 .offset(y = -lift)
+                .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
                 .shadow(elevation, shape, clip = false)
                 .drawWithCache {
                     val outline = shape.createOutline(size, layoutDirection, this)
@@ -177,7 +208,8 @@ fun FocusFrame(
                     }
                 }
                 .background(background, shape)
-                .then(if (focused) Modifier.border(focusFrameWidth, colors.focus, shape) else Modifier)
+                .border(if (focused) focusFrameWidth else 1.dp,
+                    if (focused) colors.focus else colors.borderEmphasis, shape)
                 .drawWithCache {
                     val outline = shape.createOutline(size, layoutDirection, this)
                     onDrawWithContent {

@@ -3,7 +3,9 @@ package dev.handheld.launcher
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
@@ -40,11 +42,12 @@ class MainActivity : ComponentActivity() {
     private var reducedMotion by mutableStateOf(false)
     private var homeRoleHeld by mutableStateOf(false)
     private var dispatchSemantic: (SemanticInputAction) -> Boolean = { false }
+    private var searchEditorActive = false
     private lateinit var roleHandler: HomeRoleActivityRequestHandler
     private val controller by lazy {
         ControllerInputHandler(lifecycleScope, { appViewModel.mapping.value }, {
             ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
-        }, { dispatchSemantic(it) })
+        }, imeFaceActionsEnabled = { searchEditorActive }, dispatch = { dispatchSemantic(it) })
     }
     private val rolePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         roleHandler.completeCurrent(it.resultCode)
@@ -56,6 +59,10 @@ class MainActivity : ComponentActivity() {
                 returned.data?.let { uri -> container.romController.onTreeSelected(uri, returned.flags) }
             }
         }
+    }
+    private val storageAccessSettings = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        container.romController.refreshStorageAccess()
+        container.romScanner.refresh()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,7 +90,9 @@ class MainActivity : ComponentActivity() {
             LauncherApp(container, appViewModel, homeViewModel, reducedMotion, homeRoleHeld,
                 bindInput = { dispatchSemantic = it }, nativeConfirm = ::activateNativeFocusedControl,
                 onImeVisibilityChanged = controller::onImeVisibilityChanged,
-                onPickRomFolder = ::pickRomFolder)
+                onSearchEditorActiveChanged = { searchEditorActive = it },
+                onPickRomFolder = ::pickRomFolder,
+                onSetupStorageAccess = ::setupStorageAccess)
         }
     }
 
@@ -122,6 +131,7 @@ class MainActivity : ComponentActivity() {
         reducedMotion = !ValueAnimator.areAnimatorsEnabled()
         homeRoleHeld = roleHandler.isHomeRoleHeld()
         container.androidCatalog.onResume()
+        container.romController.refreshStorageAccess()
         container.romScanner.refresh()
         container.romController.refreshEmulators()
         immersiveWindow()
@@ -149,6 +159,19 @@ class MainActivity : ComponentActivity() {
             romFolderPicker.launch(intent)
         } catch (_: RuntimeException) {
             appViewModel.error.value = "Android could not open the folder picker. Try again from ROM folders."
+        }
+    }
+
+    private fun setupStorageAccess() {
+        val appSettings = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+            Uri.parse("package:$packageName"))
+        try {
+            storageAccessSettings.launch(appSettings)
+        } catch (_: RuntimeException) {
+            try { storageAccessSettings.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+            catch (_: RuntimeException) {
+                appViewModel.error.value = "Android could not open storage access settings. You can still add ROM folders manually."
+            }
         }
     }
 }

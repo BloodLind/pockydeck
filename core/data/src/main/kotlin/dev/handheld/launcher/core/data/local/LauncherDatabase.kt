@@ -23,7 +23,7 @@ import dev.handheld.launcher.core.data.rom.repository.*
         RomDocumentEntity::class,
         RomPreferenceEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class LauncherDatabase : RoomDatabase() {
@@ -100,5 +100,14 @@ internal object LauncherMigrations {
         }
     }
 
-    val all: Array<Migration> = arrayOf(migration1To2, migration2To3)
+    val migration3To4: Migration = object : Migration(3, 4) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE rom_sources ADD COLUMN access_kind TEXT NOT NULL DEFAULT 'SAF'")
+            database.execSQL("ALTER TABLE rom_sources ADD COLUMN physical_root_key TEXT")
+            database.execSQL("ALTER TABLE rom_sources ADD COLUMN automatically_discovered INTEGER NOT NULL DEFAULT 0")
+            database.execSQL("CREATE INDEX IF NOT EXISTS index_rom_sources_physical_root_key ON rom_sources(physical_root_key)")
+        }
+    }
+
+    val all: Array<Migration> = arrayOf(migration1To2, migration2To3, migration3To4)
 }

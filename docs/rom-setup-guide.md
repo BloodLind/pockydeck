@@ -1,17 +1,28 @@
 # ROM folders, consoles and emulators
 
-This guide covers the 0.2.0 development build. Native Android application launching continues to use the same Home, Library, Favorites and Search pages.
+This guide covers the 0.3.1 development build. Library contains ROMs and Android games, Apps contains other Android apps, and Favorites includes any available item you have marked. Home shows the most recently opened available item first, followed by Android games, ROMs, and other apps alphabetically within each group.
+
+## Automatic discovery
+
+1. Open **Settings → ROM folders → Set up automatic discovery**.
+2. Enable **All files access** for Handheld Launcher in Android settings, then return to the launcher.
+3. Leave **Discover new console folders** enabled. The launcher searches mounted shared internal storage, SD cards and USB storage for console folders such as `gba`, `snes`, `psx` and `psp`. It adds a folder only after finding games. Empty console folders do not create console filters.
+4. Use **Find folders now** to request another discovery and catalog refresh. Scanning runs in the background and keeps the current catalog visible.
+
+Automatic discovery reads your games without modifying them. Hidden folders, links and Android's private app directories are excluded. Large storage trees are processed in bounded slices, with queued work continuing in the background. Startup, resume and storage connection changes request refreshes; an eight-hour deferrable Android job provides recovery. Android can delay background work, so this is not an instant filesystem monitor.
+
+Turning **Discover new console folders** off stops adding new roots; folders already registered still refresh. Removing an automatically found folder keeps it removed until you choose **Add again** or explicitly select it in the folder picker. Files, game identities, favorites and history are retained.
 
 ## Add games
 
 1. Open **Settings → ROM folders → Add ROM folder**.
-2. In Android's folder picker, select a ROM directory on internal storage or the SD card and grant access. A parent such as `ROMs` can contain `psp`, `ps2`, `psx`, `snes`, `gba`, and other named console folders. Selecting one console folder also works.
+2. In Android's folder picker, select a ROM directory on internal storage, an SD card or connected USB storage and grant access. A parent such as `ROMs` can contain `psp`, `ps2`, `psx`, `snes`, `gba`, and other named console folders. Selecting one console folder also works. This option works without All files access.
 3. Return to the launcher. Enumeration runs off the UI thread and the existing catalog stays visible. Console filters appear in Library and emulator settings only after games are found. Empty folders do not add consoles.
 4. Open a game card. When a shared format cannot identify its console, choose the console and the launcher remembers that assignment. Details also provides **Choose console**.
 
 Folder names and deterministic file formats identify consoles. Shared suffixes such as ISO, CHD, BIN and ZIP need a named folder or a user choice. A source-level console choice overrides automatic detection for that source; leave a multi-console parent on automatic. BIOS/support files are excluded where identifiable, and valid disc descriptors/playlists group their tracks/discs into one game. Damaged sets remain visible with an explanation and need repair; assigning a console does not bypass missing files.
 
-The [format matrix](implementation/evidence/F15/format-support.md) lists the 56 recognized console/computer families and grouping limits. Archives remain one source item; when preparation discovers multiple game entries, opening it offers a game chooser.
+The [format matrix](implementation/evidence/F15/format-support.md) lists the 56 recognized console/computer families and grouping limits. Cards use short console names and console-specific tag colors. Archives remain one source item; when preparation discovers multiple game entries, opening it offers a game chooser.
 
 ## Choose the emulator
 
@@ -31,10 +42,10 @@ Copies reserved by game launches are excluded from automatic removal because ret
 
 ## Recovery and preservation
 
-- Missing SD card or revoked access: reconnect storage or select the same folder again. Identities, favorites and history are retained.
-- Removing a source: stops showing its games without deleting ROM files. Re-adding the exact same source restores its saved identities. Different or moved provider roots are new sources; no silent filename-based merge occurs.
-- Duplicate or overlapping roots: use the existing common root. Providers that cannot establish overlap should use one root for their ROM collection.
+- Missing SD/USB storage or revoked access: reconnect storage or use **Restore access**. Automatically discovered folders need All files access; manually selected folders retain their own Android folder grants. Identities, favorites and history are retained.
+- Removing a source: stops showing its games without deleting ROM files. **Add again** restores its saved identities. Automatic discovery does not re-add a removed source. Moved files or unrelated provider roots are not silently merged by filename.
+- Duplicate or overlapping roots: manually selected Android storage folders take priority over automatic roots. Selecting an automatic root or its parent through Android's storage picker preserves known game identities while consolidating access. If an existing third-party folder provider cannot identify its physical storage, automatic discovery pauses to avoid duplicates; manually selected sources still scan.
 - Failed or interrupted scan: retained entries are not treated as deleted. Completed batches can add/update games, but only a successful full-source reconciliation marks absent files removed.
 - Unsupported emulator or file: choose another compatible app, correct the console, repair the set, or prepare the files in an accepted format. A failed dispatch does not promote the game in Home history.
 
-Foreground startup/resume and **Scan now** reconcile sources. An eight-hour deferrable Android background job provides recovery while respecting battery/storage constraints; it is not continuous filesystem monitoring or an exact timer. No broad file-access permission, ROM upload, provider account, or global input interception is introduced.
+**Scan now** refreshes registered sources. A failed or disconnected source retains its records for recovery. ROM discovery and preparation stay local; launching an emulator grants read access to the selected registered or prepared folder. The launcher does not grant write access to ROMs.

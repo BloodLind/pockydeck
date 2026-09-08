@@ -10,6 +10,8 @@ The native application batch replaces the foundation entry point with the produc
 
 The subsequent ROM batch delivers version **0.2.0**: 56-family folder/format recognition, selectable ROMs, console-derived Library filters, emulator/core preferences and bounded automatic archive preparation. **234 tests pass** (149 JVM, 85 Android); lint has zero errors. The APK was installed on the connected Flip 2; its dozing/keyguard state prevented a fresh physical screen comparison. See [ROM batch evidence](evidence/F15/rom-feature-batch.md) for exact coverage, checksum and remaining physical/game-boot checks.
 
+The combined revision delivers **0.3.1 (code 4)** with the queued touch/focus, page membership, Home ordering, Search controller/collapse and console-color requests. The user's correction retains original design proportions and increases only small text/glyphs by 15%. Explicitly approved All files access adds read-only discovery on shared internal, SD and USB storage, with an additive Room 3→4 migration and preserved source/game identities. **301 tests passed** (188 JVM, 113 Android); one Windows symlink fixture skipped, lint zero errors, and debug/release builds passed. The corrected APK is installed on the connected Flip 2, which remains dozing. [UI and storage evidence](evidence/F14/ui-storage-revision.md) records verification, rendered screens and remaining device limits.
+
 ## Baseline and authorization
 
 - Planning baseline: `ad2b668`; accepted F01 baseline: `ce09ddc`; previous theme/catalog checkpoint: `b9e68d2`.

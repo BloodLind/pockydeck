@@ -21,9 +21,11 @@ The user authorized implementation of F15/F16 together under the integrated batc
 
 Integrate completed ROM catalog rows with Library, Search, Favorites, Home presentation, and availability contracts. Use shared stable identities and show unresolved or no-compatible-emulator state honestly. Publish schema, recovery, and migration evidence for F16 without changing shared destination packages outside a lease.
 
+The 8 September 2026 [page-rule revision](../contracts.md#september-page-membership-search-and-interaction-revision) keeps all available ROMs in Library, including those with a legacy category override; Apps contains only non-game Android apps. Favorites includes available favorite ROMs and Android apps across all consoles. Search includes ROMs only for a matching nonempty query and recognizes title, console ID, full console name, and abbreviation. Console card captions and filter pills use abbreviations; empty console folders still create no console rows. These presentation rules do not change source access, identity, schema, or the historical evidence below.
+
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** a completed indexed ROM row, **when** common destinations query the catalog, **then** it appears with its stable identity through their shared flow rather than a separate ROM store or screen.
+- [ ] **AC-01** — **Given** an available completed indexed ROM row, **when** common destinations query the catalog, **then** it uses its stable shared identity in Library, matching nonempty Search, Favorites when marked favorite, and eligible Home content; it does not appear in Apps or create a separate ROM store or screen.
 - [ ] **AC-02** — **Given** a ROM is unresolved or has no compatible emulator yet, **when** it renders, **then** it exposes its availability/recovery state and does not claim launch support.
 - [ ] **AC-03** — **Given** a source becomes unavailable or a rescan occurs, **when** ROM rows update, **then** favorite, recent, and artwork references follow the reviewed preservation policy.
 - [ ] **AC-04** — **Given** ROM schema integration occurs, **when** native Android browsing and launch are exercised, **then** they remain usable and source/grant/grouping evidence distinguishes tested cases from pending device cases.

@@ -14,7 +14,7 @@ Consumes F01/F06 catalog/favorite/navigation/launch contracts, F04 shell, F05 fo
 
 ## Ordered steps
 
-1. Implement Home metadata/title plus a horizontal keyed carousel inside the existing content rectangle. Start with up to twelve catalog entries plus a Library action. Use production generic cards, bounded titles, native icon/fallback artwork and stable dimensions.
+1. Implement Home metadata/title plus a horizontal keyed carousel inside the existing content rectangle. The 8 September revision keeps all available entries reachable: newest item first, then Android games, ROMs, and other apps, with title/ID order within each group. Use production generic cards, bounded titles, native icon/fallback artwork and stable dimensions.
 2. Connect cache-first Flow to immutable UI state through lifecycle-aware collection. Initial empty/loading, refreshing cache, unavailable item, failed launch and removed selection must each have recoverable behavior.
 3. Implement one activation path: persist origin snapshot → suppress duplicate pending activation → revalidate/dispatch → acknowledge result → record successful open exactly once. A failure preserves ordering. Opening details/focusing an item must never promote it.
 4. Use F05 identity/anchor restoration after order changes and on return. Example `[C,B,A] → open B → [B,C,A]`; preserve B, with the nearest feasible scroll placement if its old anchor is invalid.

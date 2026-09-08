@@ -20,12 +20,21 @@ class ControllerInputHandler(
     scope: CoroutineScope,
     mapping: () -> ConfirmBackMapping,
     imeVisible: () -> Boolean,
+    private val imeFaceActionsEnabled: () -> Boolean = { false },
     dispatch: (SemanticInputAction) -> Boolean,
 ) {
-    private val engine = ControllerInputEngine(scope, mapping, imeVisible, dispatch)
+    private val engine = ControllerInputEngine(scope, mapping, imeVisible, imeFaceActionsEnabled, dispatch)
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         val button = event.keyCode.toControllerButton() ?: return false
+        val keyboardArrow = button in setOf(ControllerButton.DpadUp, ControllerButton.DpadDown,
+            ControllerButton.DpadLeft, ControllerButton.DpadRight) &&
+            event.isFromSource(InputDevice.SOURCE_KEYBOARD) &&
+            !event.isFromSource(InputDevice.SOURCE_DPAD) && !event.isFromSource(InputDevice.SOURCE_GAMEPAD) &&
+            !event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+        // A hardware keyboard still owns caret navigation when the soft keyboard is hidden.
+        // UP follows any previously recorded launcher DOWN, including a focus transition.
+        if (event.action == KeyEvent.ACTION_DOWN && imeFaceActionsEnabled() && keyboardArrow) return false
         return when (event.action) {
             KeyEvent.ACTION_DOWN -> engine.onButtonDown(button, event.repeatCount > 0, event.eventTime)
             KeyEvent.ACTION_UP -> engine.onButtonUp(button)
@@ -88,6 +97,7 @@ internal class ControllerInputEngine(
     private val scope: CoroutineScope,
     private val mapping: () -> ConfirmBackMapping,
     private val imeVisible: () -> Boolean,
+    private val imeFaceActionsEnabled: () -> Boolean = { false },
     private val dispatch: (SemanticInputAction) -> Boolean,
 ) {
     private val heldButtons = linkedSetOf<ControllerButton>()
@@ -106,7 +116,9 @@ internal class ControllerInputEngine(
         eventTimeMillis: Long,
     ): Boolean {
         launcherOwnedDownButtons[button]?.let { launcherOwned -> return launcherOwned }
-        if (imeVisible()) {
+        // BUTTON_A/B are gamepad keycodes, distinct from keyboard letters, Enter and Backspace.
+        val editorFaceAction = (button == ControllerButton.A || button == ControllerButton.B) && imeFaceActionsEnabled()
+        if (imeVisible() && !editorFaceAction) {
             clearActiveState(clearDownOwnership = false)
             launcherOwnedDownButtons[button] = false
             return false

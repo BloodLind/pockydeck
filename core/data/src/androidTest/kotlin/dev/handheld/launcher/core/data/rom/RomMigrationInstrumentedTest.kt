@@ -10,6 +10,7 @@ import dev.handheld.launcher.core.data.local.LauncherMigrations
 import dev.handheld.launcher.core.data.repository.*
 import dev.handheld.launcher.core.data.rom.repository.RoomRomLibraryRepository
 import dev.handheld.launcher.core.domain.model.*
+import dev.handheld.launcher.core.domain.rom.RomSourceAccessKind
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -90,6 +91,38 @@ class RomMigrationInstrumentedTest {
             assertEquals(12L, (next as SuccessfulOpenWriteResult.Recorded).record.openOrder)
             assertEquals(11L, recent.records.first().single { it.itemId == romId }.openOrder)
             assertEquals(RoomRomLibraryRepository.DEFAULT_CACHE_LIMIT, RoomRomLibraryRepository(database).cacheLimitBytes.first())
+        } finally { database.close() }
+    }
+
+    @Test fun versionThreeToFourKeepsSafIdentityDisabledRootsAndDiscoveryDefault() = runBlocking {
+        migrationHelper.createDatabase(databaseName,3).apply {
+            execSQL("INSERT INTO rom_sources VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any?>("source:old","content://com.android.externalstorage.documents/tree/primary%3AGBA","primary:GBA","GBA",0,"DISABLED","gba",123L,null,7L))
+            execSQL("INSERT INTO rom_preferences VALUES (?, ?)",arrayOf("console:gba","emulator:old"))
+            close()
+        }
+        migrationHelper.runMigrationsAndValidate(databaseName,4,true,LauncherMigrations.migration3To4).use { migrated ->
+            migrated.query("SELECT source_id, enabled, revision, access_kind, physical_root_key, automatically_discovered FROM rom_sources").use { row ->
+                assertTrue(row.moveToFirst())
+                assertEquals("source:old",row.getString(0))
+                assertEquals(0,row.getInt(1))
+                assertEquals(7L,row.getLong(2))
+                assertEquals("SAF",row.getString(3))
+                assertTrue(row.isNull(4))
+                assertEquals(0,row.getInt(5))
+            }
+        }
+        val database = LauncherDatabase.open(ApplicationProvider.getApplicationContext(),databaseName)
+        try {
+            val repository = RoomRomLibraryRepository(database)
+            val source = repository.allSources().single()
+            assertEquals(CatalogSourceId("source:old"),source.id)
+            assertEquals(RomSourceAccessKind.SAF,source.accessKind)
+            assertEquals("primary:GBA",source.physicalRootKey)
+            assertFalse(source.enabled)
+            assertFalse(source.automaticallyDiscovered)
+            assertTrue(repository.sharedDiscoveryEnabled.first())
+            assertEquals("emulator:old",repository.consoleEmulatorDefaults.first()["gba"])
         } finally { database.close() }
     }
 }

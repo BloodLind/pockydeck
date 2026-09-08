@@ -41,6 +41,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -57,7 +59,7 @@ class CollectionViewModelTest {
     @Test
     fun `initial selection and viewport callbacks do not suppress delayed snapshot`() =
         runTest(dispatcher) {
-            val items = collectionItems()
+            val items = collectionItems().map { (it as LibraryItem.AndroidApp).copy(category = LibraryCategory.GAME) }
             val snapshots = DelayedCollectionSnapshots(
                 DestinationSnapshot(
                     LauncherDestination.LIBRARY,
@@ -81,25 +83,25 @@ class CollectionViewModelTest {
 
     @Test
     fun `explicit query and filter before delayed snapshot win`() = runTest(dispatcher) {
-        val items = collectionItems()
+        val items = collectionItems().map { (it as LibraryItem.AndroidApp).copy(category = LibraryCategory.GAME) }
         val snapshots = DelayedCollectionSnapshots(
             DestinationSnapshot(
                 LauncherDestination.LIBRARY,
                 selectedItemId = items[0].id,
                 query = "A",
-                filterKey = PageStateKey("games"),
+                filterKey = PageStateKey("all"),
             ),
         )
         val viewModel = collectionViewModel(items, snapshots)
         runCurrent()
 
         viewModel.query("B")
-        viewModel.filter("other")
+        viewModel.filter("android")
         snapshots.release()
         advanceUntilIdle()
 
         assertEquals("B", viewModel.state.value.query)
-        assertEquals("other", viewModel.state.value.filter)
+        assertEquals("android", viewModel.state.value.filter)
         assertEquals(listOf(items[1].id), viewModel.state.value.items.map { it.id })
     }
 
@@ -144,7 +146,7 @@ class CollectionViewModelTest {
         advanceUntilIdle()
 
         assertEquals("all", viewModel.state.value.filter)
-        assertEquals(collectionItems().map { it.id }, viewModel.state.value.items.map { it.id })
+        assertEquals(collectionItems().filter { it.category == LibraryCategory.GAME }.map { it.id }, viewModel.state.value.items.map { it.id })
         assertFalse(collectionFilterKeys(LauncherDestination.LIBRARY, viewModel.state.value.allItems).contains("console:gba"))
     }
 
@@ -161,21 +163,175 @@ class CollectionViewModelTest {
         assertEquals(listOf(game.id), viewModel.state.value.items.map { it.id })
         assertEquals("n64-game", viewModel.state.value.items.single().title)
     }
+
+    @Test
+    fun `Library and Apps partition Android categories while retaining every ROM in Library`() = runTest(dispatcher) {
+        val game = collectionItem("game", "Game", LibraryCategory.GAME)
+        val emulator = collectionItem("emulator", "Emulator", LibraryCategory.EMULATOR)
+        val app = collectionItem("app", "App", LibraryCategory.OTHER)
+        val rom = collectionRom("rom", "gba")
+        val items = listOf(game, emulator, app, rom)
+        val overrides = CollectionOverrides(mapOf(rom.id to UserItemOverrides(category = LibraryCategory.OTHER)))
+        val library = collectionViewModel(items, releasedSnapshots(), overrides = overrides)
+        val apps = collectionViewModel(items, releasedSnapshots(LauncherDestination.APPS),
+            destination = LauncherDestination.APPS, overrides = overrides)
+        advanceUntilIdle()
+
+        assertEquals(setOf(game.id, rom.id), library.state.value.items.map { it.id }.toSet())
+        assertEquals(setOf(emulator.id, app.id), apps.state.value.items.map { it.id }.toSet())
+        assertEquals(items, library.state.value.allItems) // Cross-page detail lookup retains the full catalog.
+        library.filter("android")
+        advanceUntilIdle()
+        assertEquals(listOf(game.id), library.state.value.items.map { it.id })
+        library.filter("console:gba")
+        advanceUntilIdle()
+        assertEquals(listOf(rom.id), library.state.value.items.map { it.id })
+    }
+
+    @Test
+    fun `Android category overrides move items between destinations immediately`() = runTest(dispatcher) {
+        val game = collectionItem("game", "Game", LibraryCategory.GAME)
+        val app = collectionItem("app", "App", LibraryCategory.OTHER)
+        val items = listOf(game, app)
+        val overrides = CollectionOverrides()
+        val library = collectionViewModel(items, releasedSnapshots(), overrides = overrides)
+        val apps = collectionViewModel(items, releasedSnapshots(LauncherDestination.APPS),
+            destination = LauncherDestination.APPS, overrides = overrides)
+        advanceUntilIdle()
+        assertEquals(listOf(game.id), library.state.value.items.map { it.id })
+        assertEquals(listOf(app.id), apps.state.value.items.map { it.id })
+
+        overrides.setOverrides(game.id, UserItemOverrides(category = LibraryCategory.EMULATOR))
+        overrides.setOverrides(app.id, UserItemOverrides(category = LibraryCategory.GAME))
+        advanceUntilIdle()
+        assertEquals(listOf(app.id), library.state.value.items.map { it.id })
+        assertEquals(listOf(game.id), apps.state.value.items.map { it.id })
+    }
+
+    @Test
+    fun `Favorites includes every favorite app and console but excludes unavailable and nonfavorite records`() = runTest(dispatcher) {
+        val game = collectionItem("game", "Game", LibraryCategory.GAME)
+        val app = collectionItem("app", "App", LibraryCategory.OTHER)
+        val emulator = collectionItem("emulator", "Emulator", LibraryCategory.EMULATOR)
+        val gba = collectionRom("gba", "gba")
+        val psx = collectionRom("psx", "psx")
+        val unavailable = collectionRom("unavailable", "nes").copy(
+            availability = Availability.Unavailable(UnavailabilityReason.SOURCE_UNAVAILABLE),
+        )
+        val nonfavorite = collectionRom("nonfavorite", "gba")
+        val favoriteItems = listOf(game, app, emulator, gba, psx, unavailable)
+        val favorites = CollectionFavorites(favoriteItems.map { it.id }.toSet())
+        val viewModel = collectionViewModel(favoriteItems + nonfavorite, releasedSnapshots(LauncherDestination.FAVORITES),
+            destination = LauncherDestination.FAVORITES, favorites = favorites)
+        advanceUntilIdle()
+
+        assertEquals(setOf(game.id, app.id, emulator.id, gba.id, psx.id), viewModel.state.value.items.map { it.id }.toSet())
+        favorites.setFavorite(gba.id, false)
+        advanceUntilIdle()
+        assertFalse(viewModel.state.value.items.any { it.id == gba.id })
+        assertTrue(viewModel.state.value.items.any { it.id == psx.id })
+    }
+
+    @Test
+    fun `Search stays empty for blank whitespace and unmatched queries without selecting a fallback`() = runTest(dispatcher) {
+        val items = collectionItems() + collectionRom("rom", "gba")
+        val viewModel = collectionViewModel(items, releasedSnapshots(LauncherDestination.SEARCH),
+            destination = LauncherDestination.SEARCH)
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.items.isEmpty())
+        assertNull(viewModel.state.value.selectedItemId)
+
+        viewModel.query("A")
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.items.isNotEmpty())
+        listOf("", " \t\n ", "no-such-title-or-platform").forEach { query ->
+            viewModel.query(query)
+            viewModel.toggleSort()
+            advanceUntilIdle()
+            assertTrue("Unexpected rows for '$query'", viewModel.state.value.items.isEmpty())
+            assertNull(viewModel.state.value.selectedItemId)
+        }
+    }
+
+    @Test
+    fun `real Search query retains apps emulators Android games and ROMs`() = runTest(dispatcher) {
+        val items = listOf(
+            collectionItem("game", "Shared Game", LibraryCategory.GAME),
+            collectionItem("emulator", "Shared Emulator", LibraryCategory.EMULATOR),
+            collectionItem("app", "Shared App", LibraryCategory.OTHER),
+            collectionRom("Shared ROM", "gba"),
+        )
+        val viewModel = collectionViewModel(items, releasedSnapshots(LauncherDestination.SEARCH),
+            destination = LauncherDestination.SEARCH)
+        viewModel.query(" Shared ")
+        advanceUntilIdle()
+        assertEquals(items.map { it.id }.toSet(), viewModel.state.value.items.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `Search matches stored platform IDs short captions and full console names`() = runTest(dispatcher) {
+        val game = collectionRom("A racing game", "gamecube")
+        val items = listOf(game, collectionRom("A different game", "psx"))
+        val viewModel = collectionViewModel(items, releasedSnapshots(LauncherDestination.SEARCH),
+            destination = LauncherDestination.SEARCH)
+        listOf("gamecube", " GCN ", "nInTeNdO gAmEcUbE").forEach { query ->
+            viewModel.query(query)
+            advanceUntilIdle()
+            assertEquals(query, listOf(game.id), viewModel.state.value.items.map { it.id })
+        }
+        assertEquals("A racing game", viewModel.state.value.items.single().title)
+    }
+
+    @Test
+    fun `stale category filters cannot put Library and Apps into irrelevant categories`() = runTest(dispatcher) {
+        val items = collectionItems() + collectionItem("emulator", "Emulator", LibraryCategory.EMULATOR)
+        listOf(LauncherDestination.LIBRARY to "emulators", LauncherDestination.LIBRARY to "games",
+            LauncherDestination.APPS to "games").forEach { (destination, filter) ->
+            val snapshots = DelayedCollectionSnapshots(DestinationSnapshot(destination, filterKey = PageStateKey(filter))).apply { release() }
+            val viewModel = collectionViewModel(items, snapshots, destination = destination)
+            advanceUntilIdle()
+            assertEquals("all", viewModel.state.value.filter)
+            val expected = items.filter {
+                (it.category == LibraryCategory.GAME) == (destination == LauncherDestination.LIBRARY)
+            }.map { it.id }.toSet()
+            assertEquals(expected, viewModel.state.value.items.map { it.id }.toSet())
+        }
+    }
 }
 
 private fun TestScope.collectionViewModel(
     items: List<LibraryItem>,
     snapshots: NavigationSnapshotRepository,
     catalog: CollectionCatalog = CollectionCatalog(items),
+    destination: LauncherDestination = LauncherDestination.LIBRARY,
+    favorites: FavoriteRepository = EmptyFavorites,
+    overrides: ItemOverrideRepository = EmptyOverrides,
 ) = CollectionViewModel(
-    LauncherDestination.LIBRARY,
+    destination,
     catalog,
-    EmptyFavorites,
-    EmptyOverrides,
+    favorites,
+    overrides,
     EmptyOpens,
     snapshots,
     SavedStateHandle(),
 )
+
+private fun releasedSnapshots(destination: LauncherDestination = LauncherDestination.LIBRARY) =
+    DelayedCollectionSnapshots(DestinationSnapshot(destination)).apply { release() }
+
+private class CollectionFavorites(initial: Set<ItemId>) : FavoriteRepository {
+    override val favoriteItemIds = MutableStateFlow(initial)
+    override suspend fun setFavorite(itemId: ItemId, favorite: Boolean) {
+        favoriteItemIds.value = if (favorite) favoriteItemIds.value + itemId else favoriteItemIds.value - itemId
+    }
+}
+
+private class CollectionOverrides(initial: Map<ItemId, UserItemOverrides> = emptyMap()) : ItemOverrideRepository {
+    override val overridesByItemId = MutableStateFlow(initial)
+    override suspend fun setOverrides(itemId: ItemId, overrides: UserItemOverrides?) {
+        overridesByItemId.value = if (overrides == null) overridesByItemId.value - itemId else overridesByItemId.value + (itemId to overrides)
+    }
+}
 
 private class DelayedCollectionSnapshots(
     private val snapshot: DestinationSnapshot,

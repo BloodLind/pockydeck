@@ -14,4 +14,6 @@ fun FavoritesScreen(
     callbacks: CollectionScreenCallbacks,
     iconLoader: AndroidIconLoader? = null,
     restoreFocusRequest: Int = 1,
-) = CollectionDestinationScreen("Favorites", state, modifier, callbacks, iconLoader = iconLoader, restoreFocusRequest = restoreFocusRequest)
+    allowFocusRequest: Boolean = true,
+) = CollectionDestinationScreen("Favorites", state, modifier, callbacks, iconLoader = iconLoader,
+    restoreFocusRequest = restoreFocusRequest, allowFocusRequest = allowFocusRequest)

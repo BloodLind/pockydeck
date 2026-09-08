@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,15 +42,11 @@ import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ItemId
 import dev.handheld.launcher.core.domain.model.LauncherDestination
-import dev.handheld.launcher.core.domain.model.Availability
-import dev.handheld.launcher.core.domain.model.LibraryItem
-import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
 import dev.handheld.launcher.platform.system.SupportedSystemAction
 import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
 import dev.handheld.launcher.ui.components.LibraryItemCard
 import dev.handheld.launcher.ui.components.LibraryItemCardVariant
 import dev.handheld.launcher.ui.presentation.toTileUiModel
-import dev.handheld.launcher.ui.presentation.TileArtwork
 
 data class CollectionScreenCallbacks(
     val onSelect: (ItemId) -> Unit,
@@ -67,33 +62,6 @@ data class CollectionScreenCallbacks(
     val onFocusedAction: OnFocusedAction = {},
 )
 
-/** Shared category vocabulary prevents controller routing and page filters diverging. */
-fun collectionFilterKeys(
-    destination: LauncherDestination,
-    items: List<LibraryItem> = emptyList(),
-): List<String> = when (destination) {
-    LauncherDestination.LIBRARY -> listOf("all", "games") + detectedConsoleFilterKeys(items) + listOf("emulators", "other", "system")
-    LauncherDestination.APPS -> listOf("all", "games", "emulators", "other")
-    LauncherDestination.FAVORITES -> listOf("all", "games", "apps")
-    LauncherDestination.SEARCH -> listOf("all", "games", "apps", "system")
-    else -> listOf("all")
-}
-
-/** Source health controls which consoles are visible; emulator installation does not hide games. */
-fun detectedConsoleFilterKeys(items: List<LibraryItem>): List<String> = items
-    .filterIsInstance<LibraryItem.RomGame>()
-    .filter { it.availability == Availability.Available }
-    .map(::romConsoleFilterKey)
-    .distinct()
-    .sortedWith(compareBy<String> { it == "console:unassigned" }.thenBy { collectionFilterLabel(it) })
-
-internal fun romConsoleFilterKey(game: LibraryItem.RomGame): String =
-    "console:${game.platformId?.takeIf { RomPlatforms.byId(it) != null } ?: "unassigned"}"
-
-fun collectionFilterLabel(key: String): String = if (key.startsWith("console:")) {
-    RomPlatforms.byId(key.removePrefix("console:"))?.displayName ?: "Unassigned"
-} else key.replaceFirstChar { it.uppercase() }
-
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun CollectionDestinationScreen(
@@ -104,13 +72,14 @@ fun CollectionDestinationScreen(
     systemActions: List<SupportedSystemAction> = emptyList(),
     iconLoader: AndroidIconLoader? = null,
     restoreFocusRequest: Int = 1,
+    allowFocusRequest: Boolean = true,
 ) = BoxWithConstraints(modifier.fillMaxSize()) {
     val columns = when {
         maxWidth >= 760.dp -> 6
         maxWidth >= 500.dp -> 4
         else -> 3
     }
-    CollectionBody(title, state, callbacks, systemActions, iconLoader, columns, restoreFocusRequest)
+    CollectionBody(title, state, callbacks, systemActions, iconLoader, columns, restoreFocusRequest, allowFocusRequest)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -123,6 +92,7 @@ private fun CollectionBody(
     iconLoader: AndroidIconLoader?,
     columns: Int,
     restoreFocusRequest: Int,
+    allowFocusRequest: Boolean,
 ) {
     val grid = rememberLazyGridState()
     val inputMode = LocalInputModeManager.current
@@ -133,33 +103,34 @@ private fun CollectionBody(
     val renderedItemIds = state.items.map { it.id }
     var focusedGridItem by remember { mutableStateOf<ItemId?>(null) }
     var gridHasLaidOutItems by remember { mutableStateOf(false) }
-    var initialFocusRestored by remember { mutableStateOf(false) }
-    suspend fun restoreSelection() {
+    var handledFocusRequest by remember { mutableStateOf(0) }
+    suspend fun restoreSelection(): Boolean {
         val anchor = state.firstVisibleItemId?.let { target -> state.items.indexOfFirst { it.id == target } } ?: -1
         if (anchor >= 0) grid.scrollToItem(anchor, state.firstVisibleOffsetPx)
-        val id = state.selectedItemId ?: return
+        val id = state.selectedItemId?.takeIf { selected -> state.items.any { it.id == selected } }
+            ?: state.items.firstOrNull()?.id ?: return false
         val selected = state.items.indexOfFirst { it.id == id }
         if (selected >= 0) {
             withFrameNanos { }
             if (grid.layoutInfo.visibleItemsInfo.none { it.index == selected }) grid.scrollToItem(selected)
             withFrameNanos { }
-            if (grid.layoutInfo.visibleItemsInfo.none { it.index == selected }) return
-            val requester = requesters[id] ?: return
+            if (grid.layoutInfo.visibleItemsInfo.none { it.index == selected }) return false
+            val requester = requesters[id] ?: return false
             inputMode.requestInputMode(InputMode.Keyboard)
             // The route may have changed after the frame. FocusRequester exposes no public
             // attachment state, so a placed-item check is paired with safe lifecycle handling.
-            runCatching { requester.requestFocus() }
+            return runCatching { requester.requestFocus() }.isSuccess
         }
+        return false
     }
-    LaunchedEffect(restoreFocusRequest, state.loading, renderedItemIds) {
-        if (restoreFocusRequest > 0 && !state.loading && state.items.isNotEmpty() &&
-            (!initialFocusRestored || focusedGridItem != null)) {
-            restoreSelection()
-            initialFocusRestored = true
+    LaunchedEffect(restoreFocusRequest, state.loading, renderedItemIds, allowFocusRequest, grid.layoutInfo.totalItemsCount) {
+        if (allowFocusRequest && restoreFocusRequest > 0 && !state.loading && state.items.isNotEmpty() &&
+            (restoreFocusRequest != handledFocusRequest || focusedGridItem != null)) {
+            if (restoreSelection()) handledFocusRequest = restoreFocusRequest
         }
     }
     LaunchedEffect(state.items) {
-        if (focusedGridItem != null && state.items.none { it.id == focusedGridItem }) restoreSelection()
+        if (allowFocusRequest && focusedGridItem != null && state.items.none { it.id == focusedGridItem }) restoreSelection()
     }
     LaunchedEffect(state.filter, state.sort) {
         if (state.firstVisibleItemId == null) grid.scrollToItem(0)
@@ -183,7 +154,7 @@ private fun CollectionBody(
                 Modifier.width(112.dp).height(48.dp),
                 onFocusChanged = { focused -> callbacks.focused("Sort", LauncherActionMeaning.CHANGE_FILTER, callbacks.onToggleSort, focused) })
         }
-        CollectionFilters(state.filter, collectionFilterKeys(state.destination, state.allItems), callbacks)
+        CollectionFilters(state.filter, collectionFilterKeys(state.destination, state.allItems, state.overrides, state.favorites), callbacks)
         if (state.inventoryIncomplete) InlineNotice("Catalog may be incomplete.", "Retry", callbacks.onRetry)
         state.error?.let { InlineNotice(it, "Retry", callbacks.onRetry) }
         when {
@@ -193,6 +164,8 @@ private fun CollectionBody(
                 if (state.destination == LauncherDestination.FAVORITES) "Open Library" else "Retry catalog",
                 if (state.destination == LauncherDestination.FAVORITES) callbacks.onOpenLibrary else callbacks.onRetry,
                 callbacks.onFocusedAction,
+                requestInitialFocus = allowFocusRequest,
+                restoreFocusRequest = restoreFocusRequest,
             )
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(columns), state = grid, modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -202,16 +175,11 @@ private fun CollectionBody(
             ) {
                 items(state.items, key = { it.id.value }) { item ->
                     val model = item.toTileUiModel(state.overrides[item.id], item.id in state.recentIds)
-                    val open = { callbacks.onOpen(item.id) }
-                    // CoverTile reserves a square image plus its title/console caption.
-                    // Only AppIconTile puts all of its content inside a square allocation.
-                    val allocation = Modifier.fillMaxWidth().let {
-                        if (model.artwork is TileArtwork.AndroidIcon) it.aspectRatio(1f) else it
-                    }
+                    val open = { callbacks.onSelect(item.id); callbacks.onOpen(item.id) }
                     LibraryItemCard(
                         model, LibraryItemCardVariant.Collection, state.selectedItemId == item.id,
                         activationEnabled = model.canOpen,
-                        modifier = allocation
+                        modifier = Modifier.fillMaxWidth()
                             .focusRequester(requesters.getOrPut(item.id) { FocusRequester() }),
                         iconLoader = iconLoader, onActivate = open,
                         onFocusChanged = { focused ->
@@ -270,11 +238,12 @@ fun CollectionEmptyState(
     onAction: () -> Unit,
     onFocusedAction: OnFocusedAction = {},
     requestInitialFocus: Boolean = true,
+    restoreFocusRequest: Int = 1,
 ) {
     val requester = remember { FocusRequester() }
     val inputMode = LocalInputModeManager.current
-    LaunchedEffect(requestInitialFocus) {
-        if (requestInitialFocus) {
+    LaunchedEffect(requestInitialFocus, restoreFocusRequest) {
+        if (requestInitialFocus && restoreFocusRequest > 0) {
             inputMode.requestInputMode(InputMode.Keyboard)
             withFrameNanos { }
             requester.requestFocus()

@@ -15,10 +15,10 @@ data class SelectedRomTree(val uri:String,val documentId:String,val name:String)
 data class RomEnumeration(val documents:List<RomDocument>,val descriptorText:Map<String,String>)
 
 /** SAF remains the authority for access, identity and enumeration; no URI-to-file guessing. */
-class SafRomSourceAccess(context:Context) {
+class SafRomSourceAccess(context:Context) : RomSourceAccess {
     private val resolver = context.applicationContext.contentResolver
 
-    suspend fun isAvailable(source:RomSource):Boolean = withContext(Dispatchers.IO) {
+    override suspend fun isAvailable(source:RomSource):Boolean = withContext(Dispatchers.IO) {
         val tree=Uri.parse(source.treeUri)
         if(resolver.persistedUriPermissions.none { it.uri==tree && it.isReadPermission }) return@withContext false
         try {
@@ -60,7 +60,7 @@ class SafRomSourceAccess(context:Context) {
         }
     }
 
-    suspend fun enumerate(source:RomSource, onProgress:(Int)->Unit = {}):RomEnumeration = withContext(Dispatchers.IO) {
+    override suspend fun enumerate(source:RomSource, onProgress:(Int)->Unit):RomEnumeration = withContext(Dispatchers.IO) {
         val tree = Uri.parse(source.treeUri)
         if(!isAvailable(source)) throw RomSourceUnavailableException("This ROM folder is unavailable. Reconnect storage or select the folder again.")
         require(resolver.persistedUriPermissions.any { it.uri==tree && it.isReadPermission }) { "Folder permission was revoked. Select the folder again." }

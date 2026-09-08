@@ -90,4 +90,22 @@ class AndroidEmulatorContractTest {
         assertEquals(cacheTree, resolver.validatedTree(prepared))
         assertNull(resolver.validatedTree(prepared.copy(treeUri = Uri.parse("file:///storage/cache").toString())))
     }
+
+    @Test fun discoveredSharedFolderKeepsVerifiedRetroArchAndCompanionReadGrants() {
+        val resolver = AndroidEmulatorResolver(ApplicationProvider.getApplicationContext())
+        val shared = DocumentsContract.buildTreeDocumentUri("dev.handheld.launcher.sharedroms", "primary:ROMs/PSX")
+        val cue = DocumentsContract.buildDocumentUriUsingTree(shared, "primary:ROMs/PSX/Game/game.cue").toString()
+        val track = DocumentsContract.buildDocumentUriUsingTree(shared, "primary:ROMs/PSX/Game/track.bin").toString()
+        val game = RomLaunchInput("psx", "cue", cue, treeUri = shared.toString(), relativePath = "Game/game.cue",
+            companionUris = listOf(track), coreId = "pcsx_rearmed")
+        assertEquals(shared, resolver.validatedTree(game))
+        val profile = EmulatorRegistry.profiles.first { it.id == "retroarch-64" }
+        val intent = RomIntentFactory.build(profile, game, resolver.validatedTree(game),
+            "/data/user/0/com.retroarch.aarch64", "/storage/emulated/0")
+        assertEquals(RomLaunchPolicy.retroArchPath(shared.toString(), game.relativePath!!), intent.getStringExtra("ROM"))
+        val granted = (0 until intent.clipData!!.itemCount).map { intent.clipData!!.getItemAt(it).uri.toString() }.toSet()
+        assertEquals(setOf(cue, track, shared.toString()), granted)
+        assertTrue(intent.flags and Intent.FLAG_GRANT_PREFIX_URI_PERMISSION != 0)
+        assertEquals(0, intent.flags and (Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION))
+    }
 }

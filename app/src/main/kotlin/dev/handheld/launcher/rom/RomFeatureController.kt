@@ -1,12 +1,13 @@
 package dev.handheld.launcher.rom
 
 import android.net.Uri
-import android.provider.DocumentsContract
 import dev.handheld.launcher.core.data.rom.archive.PreparedRomCache
 import dev.handheld.launcher.core.data.rom.emulator.*
 import dev.handheld.launcher.core.data.rom.repository.RoomRomLibraryRepository
 import dev.handheld.launcher.core.data.rom.scan.RomScanCoordinator
-import dev.handheld.launcher.core.data.rom.source.SafRomSourceAccess
+import dev.handheld.launcher.core.data.rom.source.RoutingRomSourceAccess
+import dev.handheld.launcher.core.data.rom.source.shared.SharedStoragePaths
+import dev.handheld.launcher.core.data.rom.source.shared.AndroidSharedRomDiscovery
 import dev.handheld.launcher.core.domain.model.*
 import dev.handheld.launcher.core.domain.repository.LaunchDispatcher
 import dev.handheld.launcher.core.domain.rom.*
@@ -21,12 +22,14 @@ import java.io.IOException
 /** One ephemeral interaction at a time; only acknowledged settings choices are durable. */
 class RomFeatureController(
     private val repository:RoomRomLibraryRepository,
-    private val access:SafRomSourceAccess,
+    private val access:RoutingRomSourceAccess,
     private val scanner:RomScanCoordinator,
     private val resolver:AndroidEmulatorResolver,
     private val launcher:AndroidRomLauncher,
     private val cache:PreparedRomCache,
     private val scope:CoroutineScope,
+    private val sharedStorage:SharedStoragePaths,
+    private val discovery:AndroidSharedRomDiscovery,
 ) : LaunchDispatcher {
     private val interaction=Mutex()
     private val decisionGuard=Any()
@@ -47,10 +50,17 @@ class RomFeatureController(
     private val itemDefaults=repository.itemEmulatorOverrides.stateIn(scope,SharingStarted.Eagerly,emptyMap())
     private val cores=repository.consoleCores.stateIn(scope,SharingStarted.Eagerly,emptyMap())
     private val limit=repository.cacheLimitBytes.stateIn(scope,SharingStarted.Eagerly,RoomRomLibraryRepository.DEFAULT_CACHE_LIMIT)
+    private val storageAccess=MutableStateFlow(sharedStorage.hasAccess())
+    private val discoverNewFolders=repository.sharedDiscoveryEnabled.stateIn(scope,SharingStarted.Eagerly,true)
 
-    val sourcesState:StateFlow<RomSourcesScreenState> = combine(sourceList,scanner.state,limit,cacheUsage,progress) { sources,scan,budget,usage,preparing ->
+    private val sourceStatus = combine(sourceList,scanner.state,limit,cacheUsage,progress) { sources,scan,budget,usage,preparing ->
         RomSourcesScreenState(sources,scan.busy,scan.error,"${budget/RoomRomLibraryRepository.GIB} GiB",
             "${usage/(1024*1024)} MiB used",preparing)
+    }
+    val sourcesState:StateFlow<RomSourcesScreenState> = combine(sourceStatus,storageAccess,discoverNewFolders,discovery.state) { state,granted,enabled,discovery ->
+        state.copy(storageAccessGranted=granted,automaticDiscoveryEnabled=enabled,
+            discoveryBusy=discovery.busy,discoveryFoldersVisited=discovery.foldersVisited,
+            busy=state.busy || discovery.busy,message=state.message ?: discovery.error)
     }.stateIn(scope,SharingStarted.Eagerly,RomSourcesScreenState())
 
     private data class ConsoleInputs(val entries:List<RomEntry>,val sources:List<RomSource>,val defaults:Map<String,String>,val cores:Map<String,String>)
@@ -73,7 +83,13 @@ class RomFeatureController(
 
     init { scope.launch { cacheUsage.value=cache.usageBytes() } }
     fun refreshEmulators() { refresh.update { it+1 } }
+    fun refreshStorageAccess() { storageAccess.value=sharedStorage.hasAccess() }
     fun rescan() { scanner.refresh() }
+    fun setAutomaticDiscovery(enabled:Boolean)=action {
+        repository.setSharedDiscoveryEnabled(enabled)
+        if(enabled) scanner.refresh()
+    }
+    fun restoreSource(id:CatalogSourceId)=action { repository.restoreSource(id); scanner.refresh() }
     fun clearMessage() { mutableMessage.value=null }
     fun cancelPreparation() { preparation?.cancel(); dismissChoice() }
 
@@ -93,7 +109,7 @@ class RomFeatureController(
     fun removeSource(id:CatalogSourceId)=action {
         val source=repository.findSource(id) ?: return@action
         val answer=ask(RomChoiceDialogState("Remove ${source.name}?",listOf(RomChoiceOption("remove","Remove folder")),
-            "ROM files stay on storage. Favorites and history are retained, and selecting this same folder again restores its entries."))
+            "ROM files stay on storage. Favorites and history are retained. ${if(source.automaticallyDiscovered) "Automatic discovery will skip this folder until you add it again." else "Selecting this same folder again restores its entries."}"))
         if(answer?.id=="remove") repository.removeSource(id)
     }
     fun chooseSourcePlatform(id:CatalogSourceId)=action {
@@ -144,8 +160,8 @@ class RomFeatureController(
                 repository.setItemPlatform(entry.itemId,it)
             } ?: throw UserCancelled()
             entry=entry.copy(platformId=platform)
-            var input=RomLaunchInput(platform,entry.format,entry.documentUri,treeUri=source.treeUri,relativePath=entry.relativePath,
-                companionUris=entry.companionDocumentIds.map { DocumentsContract.buildDocumentUriUsingTree(Uri.parse(source.treeUri),it).toString() },coreId=repository.consoleCores.first()[platform])
+            var input=RomLaunchInput(platform,entry.format,access.documentUri(source,entry.documentId),treeUri=source.treeUri,relativePath=entry.relativePath,
+                companionUris=entry.companionDocumentIds.map { access.documentUri(source,it) },coreId=repository.consoleCores.first()[platform])
             val archive=RomArchiveSelection.isArchive(entry.format)
             val preserveArchive=RomArchiveSelection.preserveNativeContainer(platform,entry.format)
             val installed=if(archive && !preserveArchive) resolver.installedForPlatform(platform)
@@ -172,7 +188,7 @@ class RomFeatureController(
             if(RomArchiveSelection.requiresPreparation(platform,entry.format)) {
                 input=coroutineScope {
                     val task=async {
-                        val prepared=cache.prepare(entry.documentUri,entry.format,repository.cacheLimitBytes.first(),{ mutableProgress.value=it },entry.relativePath.substringAfterLast('/'))
+                        val prepared=cache.prepare(input.documentUri,entry.format,repository.cacheLimitBytes.first(),{ mutableProgress.value=it },entry.relativePath.substringAfterLast('/'))
                         preparedKey=prepared.key
                         val plan=withContext(Dispatchers.Default) { RomScanPlanner().plan(RomScanRequest(prepared.documents,
                             rootDisplayName=consoleName(platform),assignedPlatformId=platform,descriptorText=prepared.descriptorText)) }

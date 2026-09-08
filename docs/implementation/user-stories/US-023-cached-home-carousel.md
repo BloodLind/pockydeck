@@ -17,13 +17,13 @@ As a launcher user, I want my catalog available in Home before background discov
 
 ## Scope
 
-Create Home Route, Screen, ViewModel, and immutable state using lifecycle-aware cache-first collection. Render metadata, title, a keyed horizontal carousel of up to twelve entries, and a Library action inside the shared content rectangle. Establish shared item presentation and action hooks plus bounded local native-icon/fallback loading for later destinations.
+Create Home Route, Screen, ViewModel, and immutable state using lifecycle-aware cache-first collection. Render metadata, title, and a keyed lazy horizontal carousel inside the shared content rectangle. The 8 September user revision supersedes the twelve-item cap: retain all available items, with the newest open first, Android games next, ROMs next, and other apps last, alphabetically within groups. Establish shared item presentation and action hooks plus bounded local native-icon/fallback loading for later destinations.
 
 ## Acceptance criteria
 
 - [ ] **AC-01** — **Given** cached catalog entries and an in-progress refresh, **when** Home opens, **then** the cached entries remain browsable while refresh state is visible.
 - [ ] **AC-02** — **Given** no cached entries, an unavailable entry, a removed selected entry, or a failed launch state, **when** Home renders, **then** it presents a distinct useful recovery action for that state.
-- [ ] **AC-03** — **Given** more than twelve catalog entries, **when** Home renders, **then** the carousel presents at most twelve keyed item entries plus the Library action using the shared Home-derived geometry.
+- [ ] **AC-03** — **Given** more than twelve catalog entries, **when** Home renders, **then** all groups remain reachable through keyed lazy items using the shared Home-derived geometry and current Home ordering.
 - [ ] **AC-04** — **Given** a long title, missing native icon, or unsupported artwork, **when** its card renders, **then** title and artwork stay within fixed card bounds and use a bounded local fallback without changing the item identity.
 - [ ] **AC-05** — **Given** a consumer destination needs an item card or action label, **when** it uses the published Home port, **then** it receives supported `Play`, `Open`, or `Reopen` presentation without Home claiming unfinished destination behavior.
 
@@ -31,7 +31,7 @@ Create Home Route, Screen, ViewModel, and immutable state using lifecycle-aware 
 
 - **AC-01:** Not run — Compose test with cached data and refreshing flow.
 - **AC-02:** Not run — Compose tests/screenshots for loading, empty, unavailable, removed, and failed-launch fixtures.
-- **AC-03:** Not run — ViewModel/Compose test for keyed twelve-item carousel and Library action.
+- **AC-03:** Current revision pending integrated verification — ordering and full-catalog Home regressions replace the historical twelve-item cap assertion.
 - **AC-04:** Not run — screenshot comparison with long titles and failed icon/artwork fixture.
 - **AC-05:** Not run — automated presentation-port test and coordinator API review.
 

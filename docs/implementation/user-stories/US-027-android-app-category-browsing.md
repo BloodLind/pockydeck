@@ -17,16 +17,18 @@ As a launcher user, I want an app-focused view with reliable category filters, s
 
 ## Scope
 
-Build Apps heading and count, All/Games/Emulators/Other filters, and an icon-led grid from the same catalog source as Library. Apply verified Android metadata and stored user-category override precedence; leave an unknown classification honest. Connect shared launch/details actions, cached states, focus restoration, and the route handoff.
+Build Apps heading and count, All and populated Emulators/Other filters, and an icon-led grid from the same catalog source as Library. Apps includes available Android apps whose effective category is not `GAME`, including emulators; ROMs and Android games belong in Library. Known emulator packages default to `EMULATOR`; otherwise Android's declared game category or legacy game flag yields `GAME`, with `OTHER` for remaining apps. Stored Android user-category overrides take precedence for both filters and destination membership. Connect shared launch/details actions, cached states, focus restoration, and the route handoff.
+
+This scope incorporates the 8 September 2026 [page-rule revision](../contracts.md#september-page-membership-search-and-interaction-revision), superseding the original Apps/Games filter. Existing acceptance status and verification records below remain unchanged.
 
 ## Acceptance criteria
 
-- [ ] **AC-01** — **Given** the Apps destination has catalog items, **when** it loads, **then** it filters the unified catalog and does not create a second app store.
+- [ ] **AC-01** — **Given** the Apps destination has catalog items, **when** it loads, **then** it shows only available Android apps with an effective non-game category from the unified catalog and does not create a second app store.
 - [ ] **AC-02** — **Given** Android metadata and a stored user override for an item, **when** a category is displayed or filtered, **then** the approved override precedence is used and unknown classification is not shown as certain.
-- [ ] **AC-03** — **Given** All, Games, Emulators, or Other is selected, **when** its grid renders, **then** it shows only the matching items and exposes usable recovery for no apps or an empty filter.
+- [ ] **AC-03** — **Given** All or a populated Emulators/Other filter is selected, **when** its grid renders, **then** it shows and counts only matching non-game Android apps; Games is not offered and obsolete or irrelevant saved filters resolve to All.
 - [ ] **AC-04** — **Given** cached entries, long names, failed icons, or unavailable entries, **when** Apps renders, **then** it retains cached content during refresh and presents readable labels, fallback artwork, and availability explanation.
 - [ ] **AC-05** — **Given** filtering removes the focused item, **when** focus restores, **then** it uses the F05 fallback; A/touch and supported Y match the footer action descriptors.
-- [ ] **AC-06** — **Given** navigation away and back, **when** Apps restores, **then** it keeps its own filter, selected ID, and anchor while retaining the shared shell anchors.
+- [ ] **AC-06** — **Given** navigation away and back or same-page reselection, **when** Apps restores, **then** it keeps its own valid filter, selected ID, and anchor while retaining the shared shell anchors, and focuses the selected surviving card or first card after placement.
 
 ## Verification
 

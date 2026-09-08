@@ -15,6 +15,7 @@ import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.settings.ActionRow
 import dev.handheld.launcher.core.designsystem.settings.ChoiceRow
+import dev.handheld.launcher.core.designsystem.settings.ToggleRow
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.CatalogSourceId
 import dev.handheld.launcher.core.domain.rom.RomSource
@@ -30,6 +31,10 @@ data class RomSourcesScreenState(
     val cacheLimitLabel: String = "8 GiB",
     val cacheUsageLabel: String = "",
     val preparingText: String? = null,
+    val storageAccessGranted: Boolean = false,
+    val automaticDiscoveryEnabled: Boolean = true,
+    val discoveryBusy: Boolean = false,
+    val discoveryFoldersVisited: Int = 0,
 )
 
 data class RomSourcesCallbacks(
@@ -41,6 +46,9 @@ data class RomSourcesCallbacks(
     val onChooseCacheLimit: () -> Unit = {},
     val onClearCache: () -> Unit = {},
     val onFocusedAction: OnFocusedAction = {},
+    val onSetupStorageAccess: () -> Unit = {},
+    val onSetAutomaticDiscovery: (Boolean) -> Unit = {},
+    val onDiscoverFolders: () -> Unit = {},
 )
 
 /** Stateless source controls. The Activity owns folder grants and acknowledged requests. */
@@ -54,20 +62,35 @@ fun RomSourcesScreen(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
         PageHeading("ROM folders")
         LauncherText(
-            "Choose a ROM folder or a parent containing console folders. Consoles appear after games are detected.",
+            "Find console folders on this device, SD cards and USB storage, or add a folder yourself. Consoles appear after games are detected.",
             color = LauncherTheme.colors.textSecondary,
         )
         ActionRow(
-            "Add ROM folder",
-            "Select storage on this device or an SD card",
+            if (state.storageAccessGranted) "Storage access enabled" else "Set up automatic discovery",
+            if (state.storageAccessGranted) "Read-only scans · Manage access in Android settings" else "Allow All files access in Android settings to find console folders",
             modifier = initialFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
+            onActivate = callbacks.onSetupStorageAccess,
+            onFocusChanged = settingsFocus("Storage access", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onSetupStorageAccess, callbacks.onFocusedAction),
+        )
+        if (state.storageAccessGranted) {
+            val toggle = { callbacks.onSetAutomaticDiscovery(!state.automaticDiscoveryEnabled) }
+            ToggleRow("Discover new console folders", state.automaticDiscoveryEnabled, callbacks.onSetAutomaticDiscovery,
+                supportingText = "Registered folders still update when this is off",
+                onFocusChanged = settingsFocus("Automatic folder discovery", LauncherActionMeaning.CHANGE_FILTER, toggle, callbacks.onFocusedAction))
+            if (state.automaticDiscoveryEnabled) ActionRow("Find folders now", "Refresh connected storage and registered games",
+                enabled = !state.busy, onActivate = callbacks.onDiscoverFolders,
+                onFocusChanged = settingsFocus("Find console folders", LauncherActionMeaning.ACTIVATE, callbacks.onDiscoverFolders, callbacks.onFocusedAction))
+        }
+        ActionRow(
+            "Add ROM folder",
+            "Select a folder on this device, an SD card or USB storage",
             onActivate = callbacks.onAddSource,
             onFocusChanged = settingsFocus("Add ROM folder", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onAddSource, callbacks.onFocusedAction),
         )
         state.preparingText?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
         state.message?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
         if (state.busy && state.preparingText == null) {
-            LauncherText("Updating ROM library…", color = LauncherTheme.colors.textSecondary)
+            LauncherText(if (state.discoveryBusy) "Finding console folders… ${state.discoveryFoldersVisited} folders checked" else "Updating ROM library…", color = LauncherTheme.colors.textSecondary)
         }
         state.sources.forEach { source -> key(source.id.value) {
             SourceControls(source, callbacks)
@@ -95,6 +118,8 @@ fun RomSourcesScreen(
 private fun SourceControls(source: RomSource, callbacks: RomSourcesCallbacks) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
         LauncherText(source.name, style = LauncherTheme.typography.settingLabel)
+        if (source.automaticallyDiscovered) LauncherText("Found automatically", style = LauncherTheme.typography.settingSupporting,
+            color = LauncherTheme.colors.textSecondary)
         LauncherText(sourceStatusLabel(source), color = LauncherTheme.colors.textSecondary)
         source.error?.takeIf { it.isNotBlank() }?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
         if (source.enabled) {

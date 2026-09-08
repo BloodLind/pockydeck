@@ -76,6 +76,7 @@ fun SettingsScreen(
     callbacks: SettingsCallbacks,
     systemActions: List<SupportedSystemAction>,
     initialSection: String = "Launcher",
+    restoreFocusRequest: Int = 0,
 ) = BoxWithConstraints(modifier.fillMaxSize()) {
     var section by rememberSaveable(initialSection) {
         mutableStateOf(initialSection.takeIf { it in settingsSections } ?: "Launcher")
@@ -88,7 +89,8 @@ fun SettingsScreen(
                 val selected = section == label
                 ActionRow(
                     label = label,
-                    supportingText = if (selected) "Selected" else null,
+                    supportingText = null,
+                    selected = selected,
                     modifier = Modifier
                         .focusRequester(sectionRequesters.getValue(label))
                         .semantics { this.selected = selected },
@@ -102,13 +104,13 @@ fun SettingsScreen(
                 )
             }
         }
-        SettingsBody(state, callbacks, systemActions, section, Modifier.weight(1f))
-    } else SettingsBody(state, callbacks, systemActions, "All", Modifier.fillMaxSize())
+        SettingsBody(state, callbacks, systemActions, section, Modifier.weight(1f), restoreFocusRequest)
+    } else SettingsBody(state, callbacks, systemActions, "All", Modifier.fillMaxSize(), restoreFocusRequest)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallbacks, systemActions: List<SupportedSystemAction>, section: String, modifier: Modifier) {
+private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallbacks, systemActions: List<SupportedSystemAction>, section: String, modifier: Modifier, restoreFocusRequest: Int) {
     val swapped = ConfirmBackMapping(state.confirmBackMapping.back, state.confirmBackMapping.confirm)
     val initial = remember { FocusRequester() }
     val hasInitialControl = when (section) {
@@ -119,7 +121,7 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
     val inputMode = LocalInputModeManager.current
     val fontScale = LocalDensity.current.fontScale
     val motionSummary = if (LauncherTheme.motion.reducedMotion) "On" else "Off"
-    LaunchedEffect(section, hasInitialControl) {
+    LaunchedEffect(section, hasInitialControl, restoreFocusRequest) {
         if (hasInitialControl) {
             inputMode.requestInputMode(InputMode.Keyboard)
             withFrameNanos { }

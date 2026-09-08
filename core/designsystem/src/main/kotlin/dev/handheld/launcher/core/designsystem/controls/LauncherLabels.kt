@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
@@ -30,25 +32,27 @@ fun PlatformBadge(
     modifier: Modifier = Modifier,
     contentDescription: String? = label,
     homeAccent: Boolean = false,
+    accentColor: Color? = null,
 ) {
     val colors = LauncherTheme.colors
+    val accent = accentColor ?: colors.focus
     val shape = RoundedCornerShape(LauncherTheme.shapes.smallControl)
     val scale = LauncherTheme.referenceScale
     Row(
         modifier.clearAndSetSemantics {
             if (contentDescription != null) this.contentDescription = contentDescription
-        }.background(if (homeAccent) colors.focus.copy(alpha = .14f) else colors.surfaceDock, shape)
-            .then(if (homeAccent) Modifier.border(1.dp * scale, colors.focus.copy(alpha = .45f), shape) else Modifier)
+        }.background(if (homeAccent) accent.copy(alpha = .14f) else colors.surfaceDock, shape)
+            .then(if (homeAccent) Modifier.border(1.dp * scale, accent.copy(alpha = .45f), shape) else Modifier)
             .padding(horizontal = LauncherTheme.spacing.xs + if (homeAccent) LauncherTheme.spacing.xxs / 2 else 0.dp,
                 vertical = LauncherTheme.spacing.xxs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (homeAccent) {
-            Box(Modifier.size(6.dp * scale).background(colors.focus, CircleShape))
+            Box(Modifier.size(6.dp * scale).background(accent, CircleShape))
             Spacer(Modifier.width(LauncherTheme.spacing.xxs * 1.5f))
         }
         LauncherText(label, style = if (homeAccent) LauncherTheme.typography.platformLabel else LauncherTheme.typography.badgeLabel,
-            color = if (homeAccent) colors.focus else colors.textPrimary,
+            color = if (homeAccent) accent else colors.textPrimary,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -94,8 +98,11 @@ fun ControllerGlyph(glyph: String, semanticLabel: String?, modifier: Modifier = 
         } else CircleShape
         Box(modifier.clearAndSetSemantics {
             if (semanticLabel != null) contentDescription = semanticLabel
-        }.then(if (button == LauncherFaceButton.Start) Modifier.size(48.dp * scale, 24.dp * scale)
-            else Modifier.size(28.dp * scale)).background(background, shape),
+        }.then(if (button == LauncherFaceButton.Start) Modifier.sizeIn(
+            minWidth = 48.dp * scale * LauncherTheme.smallControlScale,
+            minHeight = 24.dp * scale * LauncherTheme.smallControlScale,
+        ) else Modifier.size(28.dp * scale * LauncherTheme.smallControlScale)).background(background, shape)
+            .then(if (button == LauncherFaceButton.Start) Modifier.padding(horizontal = 3.dp * scale) else Modifier),
             contentAlignment = Alignment.Center) {
             LauncherFaceGlyph(button, semanticLabel = null,
                 color = if (button == LauncherFaceButton.B) colors.textPrimary else colors.destinationSelectedContent)

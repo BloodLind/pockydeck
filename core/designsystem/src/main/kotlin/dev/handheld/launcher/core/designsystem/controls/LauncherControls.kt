@@ -50,7 +50,7 @@ fun LauncherButton(
     unavailableReason: String = DefaultUnavailableReason,
     onFocusChanged: (Boolean) -> Unit = {},
     contentDescription: String? = label,
-    shape: Shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
+    shape: Shape = RoundedCornerShape(50),
 ) {
     val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
@@ -77,6 +77,7 @@ fun LauncherButton(
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
         shape = shape,
+        compact = true,
     ) {
         LauncherText(label, Modifier.padding(horizontal = LauncherTheme.spacing.md, vertical = LauncherTheme.spacing.xs),
             style = LauncherTheme.typography.controlLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -163,9 +164,11 @@ fun FilterChip(
         unavailable = unavailable,
         unavailableReason = unavailableReason,
         contentDescription = contentDescription,
-        shape = RoundedCornerShape(LauncherTheme.shapes.smallControl),
+        shape = RoundedCornerShape(50),
+        compact = true,
     ) {
-        LauncherText(label, Modifier.padding(horizontal = LauncherTheme.spacing.sm, vertical = LauncherTheme.spacing.xs),
+        LauncherText(label, Modifier.padding(horizontal = 10.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale,
+            vertical = 4.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
             style = LauncherTheme.typography.controlLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

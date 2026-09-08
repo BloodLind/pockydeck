@@ -268,6 +268,10 @@ class CollectionViewModelTest {
         assertEquals("all", viewModel.state.value.filter)
         assertEquals(collectionItems().filter { it.category == LibraryCategory.GAME }.map { it.id }, viewModel.state.value.items.map { it.id })
         assertFalse(collectionFilterKeys(LauncherDestination.LIBRARY, viewModel.state.value.allItems).contains("console:gba"))
+        assertFalse(viewModel.state.value.filterKeys.contains("console:gba"))
+        viewModel.cycleFilter(1)
+        advanceUntilIdle()
+        assertFalse("Controller repeats cannot reselect a removed console", viewModel.state.value.filter == "console:gba")
     }
 
     @Test
@@ -412,8 +416,10 @@ class CollectionViewModelTest {
         val viewModel = collectionViewModel(items, releasedSnapshots())
         advanceUntilIdle()
         val prepared = viewModel.state.value.items
+        val preparedFilters = viewModel.state.value.filterKeys
         repeat(20) { viewModel.select(items[it].id); viewModel.rememberAnchor(items[it].id, it * 3); runCurrent() }
         org.junit.Assert.assertSame(prepared, viewModel.state.value.items)
+        org.junit.Assert.assertSame(preparedFilters, viewModel.state.value.filterKeys)
         assertEquals(items[19].id, viewModel.state.value.selectedItemId)
     }
 

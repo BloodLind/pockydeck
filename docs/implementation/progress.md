@@ -48,6 +48,10 @@ The follow-up **0.9.1 (code 13)** gives filters more padding and less rounding, 
 
 **167 distinct checks pass** for this revision (122 JVM, 45 Android); debug/release builds pass and lint has zero errors. The initial native run caught an obsolete badge fixture, corrected and verified against the unchanged app binary. The installed APK checksum matches the delivered file. The 3,768-game Library, 110% UI scale and PSX/Recent/List preference are preserved, and the sound toggle survives a launcher restart. [0.9.1 evidence](evidence/F14/controller-feedback-091.md) records checks, screenshots, sound dispatch, the exact-ROM limitation and artifact.
 
+The **0.10.0 (code 14)** revision adds a split List view with selected-item information, independent 70–140% grid sizing, separated darker trigger hints, a larger All filters text/icon gap, smaller Sort rows with a larger Close control, and cyan/amber internal/external storage icons. Collection images now load only while visible, use size-aware streaming decode, cancel when detached and release on background. Cached filter counts and settled-only scroll persistence remove repeated main-thread work. Focused preview actions track replacement items after catalog changes.
+
+**357 distinct checks pass** (289 JVM and 68 Android), with one existing Windows fixture skipped; lint has zero errors and debug/release builds pass. Physical debug-build samples reduced touch-scroll missed frame deadlines from 41–49% to 6–7%, controller samples from 31% to 15%, and average sampled scrolling PSS from 315 MiB to 240 MiB. These are repeatable device samples rather than a zero-stutter or universal no-leak claim. See [0.10 collection/performance evidence](evidence/F14/collection-performance-0100.md) for validation details, remaining limits and the final artifact.
+
 Full rich metadata import, manual artwork/match correction and the complete emulator/game-boot matrix remain later work. The large-catalog discovery/search work requested in this batch is implemented; no universal storage-scan time is promised.
 
 ## Baseline and authorization

@@ -1,9 +1,6 @@
 package dev.handheld.launcher.ui.artwork.enriched
 
 import android.content.Context
-import android.graphics.BitmapFactory
-import android.net.Uri
-import android.util.LruCache
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -14,9 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -25,87 +21,129 @@ import dev.handheld.launcher.core.data.metadata.ArtworkRepository
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.ui.presentation.TileArtwork
 import dev.handheld.launcher.ui.presentation.TileUiModel
+import dev.handheld.launcher.ui.artwork.ArtworkBitmapDecoder
+import dev.handheld.launcher.ui.artwork.ArtworkDecodePolicy
+import dev.handheld.launcher.ui.artwork.ArtworkMemoryCache
+import dev.handheld.launcher.ui.artwork.ArtworkMemoryOwner
+import dev.handheld.launcher.ui.artwork.ReleasableArtworkPainter
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.job
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
-data class EnrichedArtwork(val painter: BitmapPainter? = null, val pending: Boolean = false)
+data class EnrichedArtwork(val painter: Painter? = null, val pending: Boolean = false)
 val LocalEnrichedArtworkLoader = staticCompositionLocalOf<EnrichedArtworkLoader?> { null }
 
 class EnrichedArtworkLoader(context: Context, val repository: ArtworkRepository) {
-    private val resolver = context.applicationContext.contentResolver
+    internal val memoryOwner = ArtworkMemoryOwner()
+    internal val foreground get() = memoryOwner.foreground
+    private val decoder = ArtworkBitmapDecoder(context.applicationContext.contentResolver)
     private val decoding = Semaphore(2)
-    private val cache = object : LruCache<String, ImageBitmap>(16 * 1024) {
-        override fun sizeOf(key: String, value: ImageBitmap) = (value.width * value.height * 4 / 1024).coerceAtLeast(1)
-    }
+    private val sameSource = Array(16) { Mutex() }
+    private val cache = ArtworkMemoryCache<String, ImageBitmap>(16 * 1024 * 1024) { it.width * it.height * 4 }
+    internal val cachedBytes get() = cache.sizeBytes
+    // One setting query for all currently displayed cards; no active Room subscription in
+    // the background after the last card observer leaves composition.
+    internal val paused = repository.paused.stateIn(CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        SharingStarted.WhileSubscribed(stopTimeoutMillis = 0), false)
 
-    suspend fun load(reference: String, key: String): ImageBitmap? = withContext(Dispatchers.IO) {
-        synchronized(cache) { cache[key] }?.let { return@withContext it }
-        decoding.withPermit {
+    suspend fun load(reference: String, key: String, targetSizePx: Int = ArtworkDecodePolicy.DEFAULT_TARGET_PX): ImageBitmap? = withContext(Dispatchers.IO) {
+        currentCoroutineContext().ensureActive()
+        val target = ArtworkDecodePolicy.target(targetSizePx)
+        val sizedKey = "$key@$target"
+        cache.get(sizedKey)?.let { return@withContext it }
+        val revision = cache.revision
+        sameSource[(sizedKey.hashCode() and Int.MAX_VALUE) % sameSource.size].withLock {
+          cache.get(sizedKey)?.let { return@withLock it }
+          decoding.withPermit {
+            currentCoroutineContext().ensureActive()
             try {
-                val uri = Uri.parse(reference)
-                val input = when (uri.scheme) {
-                    "content" -> resolver.openInputStream(uri)
-                    "file" -> java.io.File(requireNotNull(uri.path)).inputStream()
-                    null -> java.io.File(reference).inputStream()
-                    else -> null
-                } ?: return@withPermit null
-                val bytes = input.use { it.readNBytes(16 * 1024 * 1024 + 1) }
-                if (bytes.size > 16 * 1024 * 1024) return@withPermit null
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192 || bounds.outWidth.toLong() * bounds.outHeight > 24_000_000) return@withPermit null
-                val options = BitmapFactory.Options().apply {
-                    inSampleSize = 1
-                    while (maxOf(bounds.outWidth, bounds.outHeight) / inSampleSize > 768) inSampleSize *= 2
-                }
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap() ?: return@withPermit null
-                synchronized(cache) { cache.put(key, bitmap) }
+                val bitmap = decoder.decode(reference, target) ?: return@withPermit null
+                currentCoroutineContext().ensureActive()
+                cache.put(sizedKey, bitmap, revision)
                 bitmap
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null }
+          }
         }
     }
+
+    fun setForeground(value: Boolean) { memoryOwner.updateForeground(value); if (!value) trimMemory(clear = true) }
+    fun trimMemory(clear: Boolean) = cache.trimTo(if (clear) 0 else cache.maximumBytes / 2)
 }
 
 @Composable
-fun rememberEnrichedArtwork(model: TileUiModel): EnrichedArtwork {
+fun rememberEnrichedArtwork(model: TileUiModel, active: Boolean = true,
+    targetSizePx: Int = ArtworkDecodePolicy.DEFAULT_TARGET_PX): EnrichedArtwork {
     val loader = LocalEnrichedArtworkLoader.current ?: return EnrichedArtwork()
+    val artworkActive = active && loader.foreground
+    val target = ArtworkDecodePolicy.target(targetSizePx)
     val eligible = model.artwork is TileArtwork.Rom || model.artwork is TileArtwork.LocalReference
-    var state by remember(model.itemId, model.artwork) { mutableStateOf(EnrichedArtwork(pending = eligible)) }
-    LaunchedEffect(loader, model.itemId, model.artwork) {
+    if (!eligible || !artworkActive) return EnrichedArtwork()
+    val generation = loader.memoryOwner.generation
+    val state = remember(loader, model.itemId, model.artwork, artworkActive, target, generation) {
+        mutableStateOf(EnrichedArtwork(pending = eligible && artworkActive))
+    }
+    DisposableEffect(state) {
+        val unregister = loader.memoryOwner.onBackground { state.value = EnrichedArtwork() }
+        onDispose {
+            unregister()
+            (state.value.painter as? ReleasableArtworkPainter)?.release()
+            state.value = EnrichedArtwork()
+        }
+    }
+    LaunchedEffect(state) {
+        if (!artworkActive) return@LaunchedEffect
+        val requestJob = currentCoroutineContext().job
+        val unregister = loader.memoryOwner.onBackground { state.value = EnrichedArtwork(); requestJob.cancel() }
         try {
         when (val art = model.artwork) {
             is TileArtwork.LocalReference -> {
-                state = EnrichedArtwork(loader.load(art.reference.value, art.reference.value)?.let(::BitmapPainter))
+                state.value = EnrichedArtwork(loader.load(art.reference.value, art.reference.value, target)?.let(loader.memoryOwner::painter))
             }
             is TileArtwork.Rom -> {
                 loader.repository.request(model.itemId)
-                combine(loader.repository.observe(model.itemId), loader.repository.paused) { record, paused -> record to paused }
+                // Priority/access-time writes do not change what the card displays.
+                val visualRecord = loader.repository.observe(model.itemId).map { record ->
+                    record?.copy(priority = 0, lastAccessAt = 0, attempts = 0, nextAttemptAt = 0, message = null)
+                }.distinctUntilChanged()
+                combine(visualRecord, loader.paused) { record, paused -> record to paused }
                     .collectLatest { (record, paused) ->
                         val pending = !paused && (record == null || record.state in setOf(ArtworkRecord.QUEUED, ArtworkRecord.RETRY))
                         val file = record?.takeIf { it.state == ArtworkRecord.READY }?.let { withContext(Dispatchers.IO) { loader.repository.file(it) } }
-                        val bitmap = file?.let { withContext(Dispatchers.IO) { loader.load(it.path, "${record.fileReference}:${it.lastModified()}") } }
-                        state = EnrichedArtwork(bitmap?.let(::BitmapPainter), pending)
+                        val bitmap = file?.let { withContext(Dispatchers.IO) { loader.load(it.path, "${record.fileReference}:${it.lastModified()}", target) } }
+                        currentCoroutineContext().ensureActive()
+                        state.value = EnrichedArtwork(bitmap?.let(loader.memoryOwner::painter), pending)
                         if (record?.state == ArtworkRecord.READY && bitmap == null) loader.repository.invalidFile(model.itemId, record.fileReference)
                     }
             }
-            else -> state = EnrichedArtwork()
+            else -> state.value = EnrichedArtwork()
         }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { state = EnrichedArtwork() }
+        catch (_: Exception) { state.value = EnrichedArtwork() }
+        finally { unregister() }
     }
-    return state
+    return state.value
 }
 
 /** Decorative loading stays within the existing artwork slot and never becomes a focus target. */
 @Composable
-fun ArtworkPendingHint(modifier: Modifier = Modifier) {
-    val rotation = if (LauncherTheme.motion.reducedMotion) 0f else {
+fun ArtworkPendingHint(modifier: Modifier = Modifier, animate: Boolean = true) {
+    val rotation = if (!animate || LauncherTheme.motion.reducedMotion) 0f else {
         val transition = rememberInfiniteTransition(label = "artwork")
         val angle by transition.animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "artwork rotation")
         angle

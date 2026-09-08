@@ -59,6 +59,7 @@ fun LauncherDialog(
     visible: Boolean = true,
     lifecycle: ModalFocusLifecycle = ModalFocusLifecycle.None,
     compactDismiss: Boolean = false,
+    compactDismissScale: Float = 1f,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!visible) return
@@ -99,7 +100,7 @@ fun LauncherDialog(
                     content = content,
                 )
                 if (compactDismiss) Box(Modifier.fillMaxWidth()) {
-                    FilterChip("Close", false, { onDismissRequest() }, Modifier.align(Alignment.CenterEnd))
+                    FilterChip("Close", false, { onDismissRequest() }, Modifier.align(Alignment.CenterEnd), visualScale = compactDismissScale)
                 } else LauncherButton("Close", onDismissRequest, Modifier.fillMaxWidth())
             }
         }

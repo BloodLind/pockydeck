@@ -352,9 +352,7 @@ fun LauncherApp(
                     selectDestination(order[(order.indexOf(activeDestination) + delta + order.size) % order.size]); true
                 }
                 action == SemanticInputAction.PREVIOUS_FILTER || action == SemanticInputAction.NEXT_FILTER -> {
-                    val filters = pageModels[destination]?.state?.value?.let {
-                        collectionFilterKeys(destination, it.allItems, it.overrides, it.favorites)
-                    }.orEmpty()
+                    val filters = pageModels[destination]?.state?.value?.filterKeys.orEmpty()
                     if (filters.isEmpty()) {
                         if (destination == LauncherDestination.HOME) {
                             if (enteringControllerMode) { pageActivationRequest++; true }
@@ -456,6 +454,7 @@ fun LauncherApp(
                                         CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
                                     }, romSources, romEmulators, artworkSummary,
                                     uiScalePercent = display.uiScalePercent, reduceMotion = display.reduceMotion,
+                                    gridSizePercent = display.gridSizePercent,
                                     notificationAccessGranted = notificationAccessGranted,
                                     controllerSoundsEnabled = controllerSoundsEnabled,
                                     runningIndicatorsEnabled = runningApps.enabled,
@@ -465,6 +464,7 @@ fun LauncherApp(
                                     onSetupRunningStatus = { if (!container.runningApps.requestSetup()) showError("Shizuku setup is unavailable.") },
                                     onSetupNotificationAccess = onSetupNotificationAccess,
                                     onSetUiScalePercent = app::setUiScalePercent,
+                                    onSetGridSizePercent = app::setGridSizePercent,
                                     onSetReduceMotion = app::setReduceMotion,
                                     onSetConfirmBackMapping = app::setMapping,
                                     artwork = ArtworkSettingsCallbacks(
@@ -523,11 +523,11 @@ fun LauncherApp(
                                     onOpenSort = { rememberModalOrigin(); sortMenuDestination = route })
                                 when (route) {
                                     LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
-                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) })
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent)
                                     LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
-                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) })
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent)
                                     LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
-                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) })
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent)
                                     LauncherDestination.SEARCH -> SearchScreen(current, bounds, callbacks, vm::query,
                                         searchableActions, container.iconLoader, queryFocusRequest,
                                         restoreFocusRequest = pageActivationRequest, allowFocusRequest = !modalVisible,
@@ -624,7 +624,7 @@ fun LauncherApp(
                     }
                     sortMenuDestination != null -> sortMenuDestination?.let { sortDestination ->
                         val sortState = pageStates.getValue(sortDestination)
-                        LauncherDialog("Sort by", { sortMenuDestination = null }, compactDismiss = true) {
+                        LauncherDialog("Sort by", { sortMenuDestination = null }, compactDismiss = true, compactDismissScale = 1.1f) {
                             listOf("recent" to "Recent", "title" to "Title").forEach { (key, label) ->
                                 FilterChip(label, sortState.sort == key, {
                                     pageModels.getValue(sortDestination).sort(key)
@@ -632,7 +632,7 @@ fun LauncherApp(
                                     modalRestoreFocus = null
                                     pageActivationRequest++
                                     sortMenuDestination = null
-                                }, Modifier.fillMaxWidth().height(56.dp), compact = false)
+                                }, Modifier.fillMaxWidth().height(48.dp), compact = false, visualScale = .9f)
                             }
                         }
                     }

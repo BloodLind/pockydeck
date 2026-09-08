@@ -34,6 +34,8 @@ data class CollectionUiState(
     val inventoryIncomplete: Boolean = false,
     val error: String? = null,
     val searching: Boolean = false,
+    /** Computed with the catalog index, never rebuilt on the controller input path. */
+    val filterKeys: List<String> = listOf("all"),
 ) {
     val selectedItem: LibraryItem? get() = items.find { it.id == selectedItemId }
     fun snapshot() = DestinationSnapshot(destination, selectedItemId, firstVisibleItemId,
@@ -164,7 +166,7 @@ class CollectionViewModel(
             data.recentIds, selected, current.query, if (matchesCriteria) result.filter else current.filter,
             current.sort, current.firstVisibleId, current.offset, loading = false,
             inventoryIncomplete = data.incomplete, error = message,
-            searching = !matchesCriteria || result.searching)
+            searching = !matchesCriteria || result.searching, filterKeys = data.filters)
     }
         .stateIn(viewModelScope, SharingStarted.Eagerly, CollectionUiState(destination))
 
@@ -204,7 +206,7 @@ class CollectionViewModel(
     fun sort(value: String) = update { copy(sort = if (value == "title") "title" else "recent", firstVisibleId = null, offset = 0) }
     fun cycleFilter(delta: Int): Boolean {
         val current = state.value
-        val keys = collectionFilterKeys(destination, current.allItems, current.overrides, current.favorites)
+        val keys = current.filterKeys
         // All is a fixed shortcut before the finite category sequence. Reaching an end
         // consumes the input without wrapping or resetting the current grid position.
         if (keys.isNotEmpty()) {

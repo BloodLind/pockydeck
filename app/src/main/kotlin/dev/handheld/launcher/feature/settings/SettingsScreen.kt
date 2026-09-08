@@ -37,9 +37,11 @@ import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.settings.ActionRow
 import dev.handheld.launcher.core.designsystem.settings.ChoiceRow
 import dev.handheld.launcher.core.designsystem.settings.ToggleRow
+import dev.handheld.launcher.core.designsystem.controls.FilterChip
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.DisplayPreferences
 import dev.handheld.launcher.core.domain.model.LibraryCategory
 import dev.handheld.launcher.feature.collection.FocusedControlAction
 import dev.handheld.launcher.feature.collection.OnFocusedAction
@@ -68,6 +70,7 @@ data class SettingsScreenState(
     val runningIndicatorsEnabled: Boolean = false,
     val runningStatusSummary: String = "Show verified app and emulator status on Home",
     val controllerSoundsEnabled: Boolean = true,
+    val gridSizePercent: Int = 100,
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -84,9 +87,37 @@ data class SettingsCallbacks(
     val onSetRunningIndicators: (Boolean) -> Unit = {},
     val onSetupRunningStatus: () -> Unit = {},
     val onSetControllerSoundsEnabled: (Boolean) -> Unit = {},
+    val onSetGridSizePercent: (Int) -> Unit = {},
 )
 
 private val settingsSections = listOf("Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
+
+/** Compact native controls; choosing card density never modifies the text scale. */
+@Composable
+internal fun GridSizeChoices(percent: Int, onSelect: (Int) -> Unit, onFocusedAction: OnFocusedAction = {}) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = LauncherTheme.spacing.md),
+        verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
+        LauncherText("Grid card size: $percent%", style = LauncherTheme.typography.settingLabel)
+        LauncherText("Library, Apps and Favorites. Smaller cards show more columns; text size stays the same.",
+            style = LauncherTheme.typography.settingSupporting, color = LauncherTheme.colors.textSecondary)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val columns = if (maxWidth < 400.dp || LocalDensity.current.fontScale > 1.2f) 2 else 4
+            Column(verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
+                DisplayPreferences.supportedGridSizes.chunked(columns).forEach { choices ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
+                        choices.forEach { choice ->
+                            val choose = { onSelect(choice) }
+                            FilterChip("$choice%", percent == choice, { choose() }, Modifier.weight(1f),
+                                contentDescription = "Grid card size $choice%",
+                                onFocusChanged = settingsFocus("Set grid card size to $choice%",
+                                    LauncherActionMeaning.CHANGE_FILTER, choose, onFocusedAction))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -185,6 +216,9 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
                     modifier = if (section == "Display" && index == 0) Modifier.focusRequester(initial) else Modifier,
                     onFocusChanged = settingsFocus("Set UI scale to $percent%", LauncherActionMeaning.CHANGE_FILTER, chooseScale, callbacks.onFocusedAction))
             }
+            GridSizeChoices(state.gridSizePercent,
+                onSelect = { latestCallbacks.onSetGridSizePercent(it) },
+                onFocusedAction = { latestCallbacks.onFocusedAction(it) })
             ToggleRow("Reduce motion", state.reduceMotion, onCheckedChange = callbacks.onSetReduceMotion,
                 supportingText = "Remove decorative movement and animated transitions",
                 onFocusChanged = settingsFocus("Toggle reduced motion", LauncherActionMeaning.CHANGE_FILTER, toggleReduceMotion, callbacks.onFocusedAction))

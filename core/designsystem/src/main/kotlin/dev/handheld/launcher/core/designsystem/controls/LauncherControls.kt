@@ -139,15 +139,15 @@ data class FilterChipGeometry(
     val cornerRadius: Dp,
     val iconGap: Dp,
 ) {
-    fun widthFor(labelWidth: Dp, trailingIconWidth: Dp = 0.dp): Dp =
+    fun widthFor(labelWidth: Dp, trailingIconWidth: Dp = 0.dp, trailingGap: Dp = iconGap): Dp =
         (labelWidth + horizontalPadding * 2f +
-            (if (trailingIconWidth > 0.dp) trailingIconWidth + iconGap else 0.dp) + 1.dp)
+            (if (trailingIconWidth > 0.dp) trailingIconWidth + trailingGap else 0.dp) + 1.dp)
             .coerceAtLeast(48.dp) // Allow native text/padding rounding without clipping a whole strip target.
 }
 
 @Composable
-fun filterChipGeometry(): FilterChipGeometry {
-    val scale = LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+fun filterChipGeometry(visualScale: Float = 1f): FilterChipGeometry {
+    val scale = LauncherTheme.referenceScale * LauncherTheme.smallControlScale * visualScale.coerceIn(.75f, 1.25f)
     return FilterChipGeometry(12.dp * scale, 6.dp * scale, 8.dp * scale, LauncherTheme.spacing.xxs / 2f)
 }
 
@@ -165,8 +165,11 @@ fun FilterChip(
     contentDescription: String? = label,
     compact: Boolean = true,
     trailingIcon: (@Composable () -> Unit)? = null,
+    trailingIconGap: Dp = LauncherTheme.spacing.xxs / 2f,
+    visualScale: Float = 1f,
 ) {
-    val geometry = filterChipGeometry()
+    val scale = visualScale.coerceIn(.75f, 1.25f)
+    val geometry = filterChipGeometry(scale)
     val restoration = rememberControlFocusRestoration()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -198,12 +201,14 @@ fun FilterChip(
     ) {
         Row(Modifier.padding(horizontal = geometry.horizontalPadding, vertical = geometry.verticalPadding),
             verticalAlignment = Alignment.CenterVertically) {
-            LauncherText(label, style = LauncherTheme.typography.controlLabel,
+            LauncherText(label, style = LauncherTheme.typography.controlLabel.let {
+                it.copy(fontSize = it.fontSize * scale, lineHeight = it.lineHeight * scale)
+            },
                 color = if (selected) LauncherTheme.colors.destinationSelectedContent
                     else if (focused && LocalControllerInput.current) LauncherTheme.colors.textPrimary else LauncherTheme.colors.textSecondary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             trailingIcon?.let {
-                Spacer(Modifier.width(geometry.iconGap))
+                Spacer(Modifier.width(trailingIconGap))
                 it()
             }
         }

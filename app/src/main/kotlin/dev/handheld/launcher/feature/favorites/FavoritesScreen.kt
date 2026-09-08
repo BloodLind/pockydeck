@@ -17,6 +17,7 @@ fun FavoritesScreen(
     allowFocusRequest: Boolean = true,
     isList: Boolean = false,
     onLayoutChange: (Boolean) -> Unit = {},
+    gridSizePercent: Int = 100,
 ) = CollectionDestinationScreen("Favorites", state, modifier, callbacks, iconLoader = iconLoader,
     restoreFocusRequest = restoreFocusRequest, allowFocusRequest = allowFocusRequest,
-    isList = isList, onLayoutChange = onLayoutChange)
+    isList = isList, onLayoutChange = onLayoutChange, gridSizePercent = gridSizePercent)

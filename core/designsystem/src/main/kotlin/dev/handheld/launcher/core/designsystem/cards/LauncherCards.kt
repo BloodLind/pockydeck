@@ -109,6 +109,7 @@ private fun CardActivation(
     focusFrameWidth: Dp,
     focusLift: Dp,
     maxArtworkSize: Dp = Dp.Infinity,
+    collectionArtworkScale: Float = 1f,
     caption: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -146,7 +147,8 @@ private fun CardActivation(
         }
         if (caption != null) {
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                frame(Modifier.size(minOf(maxWidth, 176.dp * LauncherTheme.referenceScale,
+                val artworkScale = collectionArtworkScale.takeIf { it.isFinite() }?.coerceIn(.7f, 1.4f) ?: 1f
+                frame(Modifier.size(minOf(maxWidth, 176.dp * LauncherTheme.referenceScale * artworkScale,
                     maxArtworkSize.coerceAtLeast(0.dp))))
             }
         } else frame(Modifier)
@@ -174,6 +176,7 @@ fun CoverTile(
     subtitleColor: Color? = null,
     status: (@Composable () -> Unit)? = null,
     maxArtworkSize: Dp = Dp.Infinity,
+    collectionArtworkScale: Float = 1f,
 ) {
     require(variant != CardVariant.AppIcon) { "Use AppIconTile for the app variant" }
     val isCollection = variant == CardVariant.CollectionCover
@@ -182,6 +185,7 @@ fun CoverTile(
         RoundedCornerShape(if (isCollection) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
         maxArtworkSize = maxArtworkSize,
+        collectionArtworkScale = collectionArtworkScale,
         caption = if (isCollection) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), subtitleColor,
             reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {
@@ -227,6 +231,7 @@ fun AppIconTile(
     badge: (@Composable () -> Unit)? = null,
     status: (@Composable () -> Unit)? = null,
     maxArtworkSize: Dp = Dp.Infinity,
+    collectionArtworkScale: Float = 1f,
 ) {
     val scale = LauncherTheme.referenceScale
     val type = LauncherTheme.typography
@@ -238,6 +243,7 @@ fun AppIconTile(
         RoundedCornerShape(if (showCaption) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
         maxArtworkSize = maxArtworkSize,
+        collectionArtworkScale = collectionArtworkScale,
         caption = if (showCaption) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
             reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {

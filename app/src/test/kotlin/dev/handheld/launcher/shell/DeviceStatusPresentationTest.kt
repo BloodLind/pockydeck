@@ -74,6 +74,20 @@ class DeviceStatusPresentationTest {
         assertEquals(listOf("INT 100G"), empty.readings.filter { it.glyph == ShellStatusGlyph.Storage }.map { it.displayText })
     }
 
+    @Test fun internalAndExternalStorageUseDifferentTintsFromRamWhileUnknownAndLowRemainHonest() {
+        val normal = snapshot(listOf(volume("external", 10 * GIB))).toShellStatus()
+        val storage = normal.readings.filter { it.glyph == ShellStatusGlyph.Storage }
+        assertEquals(ShellStatusTint.InternalStorage, storage[0].tint)
+        assertEquals(ShellStatusTint.ExternalStorage, storage[1].tint)
+        assertEquals(ShellStatusTint.Memory, normal.readings.single { it.glyph == ShellStatusGlyph.Memory }.tint)
+        assertEquals("INT 100G", storage[0].displayText)
+        assertEquals("EXT 10G", storage[1].displayText)
+        assertTrue(storage[0].accessibilityDescription!!.startsWith("Internal storage available:"))
+        assertTrue(storage[1].accessibilityDescription!!.startsWith("External storage available:"))
+        assertEquals(ShellStatusTint.Muted, snapshot(listOf(volume("missing", null))).toShellStatus().readings.last().tint)
+        assertEquals(ShellStatusTint.Hot, snapshot(listOf(volume("low", GIB / 2))).toShellStatus().readings.last().tint)
+    }
+
     @Test fun overflowAndInvalidSensorValuesDoNotBecomeValidReadings() {
         val status = snapshot(listOf(volume("one", Long.MAX_VALUE), volume("two", Long.MAX_VALUE)))
             .copy(batteryTemperatureCelsius = StatusValue.Available(Float.NaN), batteryPercent = StatusValue.Available(101),

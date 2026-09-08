@@ -60,6 +60,7 @@ class LauncherPreferencesStore private constructor(
 
 internal object LauncherPreferenceKeys {
     val uiScalePercent = intPreferencesKey("display.ui_scale_percent")
+    val gridSizePercent = intPreferencesKey("display.grid_size_percent")
     val reduceMotion = booleanPreferencesKey("display.reduce_motion")
     val listDestinations = stringSetPreferencesKey("display.list_destinations")
     val confirmButton = stringPreferencesKey("controller.confirm_button")

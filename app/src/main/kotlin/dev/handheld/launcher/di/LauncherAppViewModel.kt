@@ -69,6 +69,7 @@ class LauncherAppViewModel(
     }
 
     fun setUiScalePercent(value: Int) = saveDisplay { displayPreferences?.setUiScalePercent(value) }
+    fun setGridSizePercent(value: Int) = saveDisplay { displayPreferences?.setGridSizePercent(value) }
     fun setReduceMotion(value: Boolean) = saveDisplay { displayPreferences?.setReduceMotion(value) }
     fun setCollectionListMode(destination: LauncherDestination, isList: Boolean) =
         saveDisplay { displayPreferences?.setCollectionListMode(destination, isList) }

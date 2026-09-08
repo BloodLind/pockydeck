@@ -108,7 +108,12 @@ private fun storageReading(label: String, volumes: List<StorageVolumeStatus>): S
         StatusPresentation(if (volumes.first().kind == StorageVolumeKind.INTERNAL) "Internal storage available" else "External storage available",
             if (known.isEmpty() || total == null) StatusValue.Unavailable else StatusValue.Available(compact), description),
         ShellStatusGlyph.Storage, if (low) LauncherStatusGlyph.StorageLow else LauncherStatusGlyph.Storage,
-        tint = if (low) ShellStatusTint.Hot else ShellStatusTint.Muted,
+        tint = when {
+            known.isEmpty() || total == null -> ShellStatusTint.Muted
+            low -> ShellStatusTint.Hot
+            volumes.first().kind == StorageVolumeKind.INTERNAL -> ShellStatusTint.InternalStorage
+            else -> ShellStatusTint.ExternalStorage
+        },
         displayText = compact, accessibilityDescription = description,
     )
 }

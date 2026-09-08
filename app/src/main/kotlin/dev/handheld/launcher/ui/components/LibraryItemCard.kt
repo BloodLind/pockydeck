@@ -23,6 +23,8 @@ import dev.handheld.launcher.core.designsystem.cards.CoverTile
 import dev.handheld.launcher.core.designsystem.cards.CoverArtwork
 import dev.handheld.launcher.ui.artwork.enriched.rememberEnrichedArtwork
 import dev.handheld.launcher.ui.artwork.enriched.ArtworkPendingHint
+import dev.handheld.launcher.ui.artwork.enriched.LocalEnrichedArtworkLoader
+import dev.handheld.launcher.ui.artwork.ArtworkDecodePolicy
 import dev.handheld.launcher.core.designsystem.cards.SearchResultCard
 import dev.handheld.launcher.core.designsystem.controls.PlatformBadge
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
@@ -57,6 +59,10 @@ fun LibraryItemCard(
     onActivate: () -> Unit,
     onFocusChanged: (Boolean) -> Unit = {},
     maxCollectionCardHeight: Dp = Dp.Infinity,
+    artworkActive: Boolean = true,
+    artworkTargetSizePx: Int = ArtworkDecodePolicy.DEFAULT_TARGET_PX,
+    animateArtwork: Boolean = true,
+    collectionArtworkScale: Float = 1f,
 ) {
     val cardModifier = modifier.semantics { this.selected = selected }
     val unavailable = model.availability !is Availability.Available
@@ -64,9 +70,11 @@ fun LibraryItemCard(
         ?.reason
         ?.presentationLabel
         ?: "Unavailable"
+    val visibleArtwork = artworkActive && (LocalEnrichedArtworkLoader.current?.foreground ?: true) &&
+        (iconLoader?.foreground ?: true)
     val iconPainter = when (val artwork = model.artwork) {
         is TileArtwork.AndroidIcon -> iconLoader?.let {
-            rememberAndroidIconPainter(it, artwork.componentId)
+            rememberAndroidIconPainter(it, artwork.componentId, visibleArtwork, artworkTargetSizePx)
         }
         else -> null
     }
@@ -74,6 +82,9 @@ fun LibraryItemCard(
         TileArtwork(
             model = model,
             iconPainter = iconPainter,
+            active = visibleArtwork,
+            targetSizePx = artworkTargetSizePx,
+            animate = animateArtwork,
         )
     }
     val tagLabel = when {
@@ -115,6 +126,7 @@ fun LibraryItemCard(
             badge = badge,
             status = status,
             maxArtworkSize = maxArtworkSize,
+            collectionArtworkScale = collectionArtworkScale,
         )
         return
     }
@@ -155,6 +167,7 @@ fun LibraryItemCard(
             focusLift = focusLift,
             subtitleColor = model.platformAccent.takeIf { model.typeLabel == "Game" },
             maxArtworkSize = maxArtworkSize,
+            collectionArtworkScale = collectionArtworkScale,
         )
 
         LibraryItemCardVariant.SearchResult -> SearchResultCard(
@@ -181,19 +194,26 @@ fun LibraryItemCard(
 private fun TileArtwork(
     model: TileUiModel,
     iconPainter: Painter?,
+    active: Boolean,
+    targetSizePx: Int,
+    animate: Boolean,
 ) {
-    val enriched = rememberEnrichedArtwork(model)
+    if (!active) {
+        ArtworkFallback(label = model.typeLabel)
+        return
+    }
+    val enriched = rememberEnrichedArtwork(model, active, targetSizePx)
     val visual = ArtworkVisual(
         painter = enriched.painter ?: iconPainter,
         cover = enriched.painter != null,
         fallback = if (model.artwork is TileArtwork.LocalReference) "Custom artwork unavailable" else model.typeLabel,
     )
     Box(Modifier.fillMaxSize()) {
-        if (LauncherTheme.motion.reducedMotion) ArtworkVisualContent(visual)
+        if (!animate || LauncherTheme.motion.reducedMotion) ArtworkVisualContent(visual)
         else Crossfade(visual, Modifier.fillMaxSize(), animationSpec = tween(140), label = "Loaded artwork") { frame ->
             ArtworkVisualContent(frame)
         }
-        if (enriched.pending) ArtworkPendingHint(Modifier.align(Alignment.TopStart).padding(6.dp))
+        if (enriched.pending) ArtworkPendingHint(Modifier.align(Alignment.TopStart).padding(6.dp), animate = animate)
     }
 }
 

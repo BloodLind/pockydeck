@@ -6,9 +6,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
@@ -17,9 +22,11 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -27,12 +34,14 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.core.domain.model.Availability
 import dev.handheld.launcher.core.domain.model.CatalogSourceId
 import dev.handheld.launcher.core.domain.model.ItemId
@@ -42,6 +51,7 @@ import dev.handheld.launcher.core.domain.model.SupportedItemAction
 import dev.handheld.launcher.feature.collection.CollectionDestinationScreen
 import dev.handheld.launcher.feature.collection.CollectionScreenCallbacks
 import dev.handheld.launcher.feature.collection.CollectionUiState
+import dev.handheld.launcher.feature.collection.FocusedControlAction
 import dev.handheld.launcher.feature.collection.collectionFilterOptions
 import dev.handheld.launcher.input.LocalPageNavigation
 import dev.handheld.launcher.input.PageNavigation
@@ -107,11 +117,13 @@ class CollectionLayoutPresentationTest {
         var isList by mutableStateOf(false)
         var navigation: PageNavigation? = null
         var opened = 0
+        var focusedAction: FocusedControlAction? = null
         compose.setContent {
             CompositionLocalProvider(LocalPageNavigation provides { navigation = it }) {
                 LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
                     CollectionDestinationScreen("Library", state, Modifier.size(820.dp, 350.dp),
-                        callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened++ }),
+                        callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened++ })
+                            .copy(onFocusedAction = { focusedAction = it }),
                         isList = isList, onLayoutChange = { isList = it })
                 }
             }
@@ -129,10 +141,186 @@ class CollectionLayoutPresentationTest {
         compose.runOnIdle {
             assertEquals(games[2].id, state.selectedItemId)
             assertEquals("Layout and navigation never activate a game", 0, opened)
+            val action = requireNotNull(focusedAction)
+            assertEquals("Controller Confirm keeps the row's launch target", games[2].id, action.itemId)
+            requireNotNull(action.onActivate).invoke()
+            assertEquals(1, opened)
         }
+        compose.runOnIdle { assertTrue(requireNotNull(navigation).move(FocusDirection.Right)) }
+        compose.onNodeWithTag("collection-preview-open").assertIsFocused()
+        compose.runOnIdle { assertTrue(requireNotNull(navigation).move(FocusDirection.Left)) }
+        compose.onNodeWithContentDescription(games[2].title).assertIsFocused()
         compose.onNodeWithTag("collection-layout").performClick()
         compose.onNodeWithContentDescription(games[2].title).assertIsFocused()
         compose.runOnIdle { assertTrue(!isList) }
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Test fun focusedPreviewActionsFollowCatalogReplacementWithoutNeedingANewFocusEvent() {
+        val games = (0..2).map { game(it, "gba") }
+        var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY,
+            items = listOf(games[0]), allItems = listOf(games[0]), selectedItemId = games[0].id, loading = false))
+        val opened = mutableListOf<ItemId>()
+        val details = mutableListOf<ItemId>()
+        var focusedAction: FocusedControlAction? = null
+        lateinit var inputMode: InputModeManager
+        compose.setContent {
+            inputMode = LocalInputModeManager.current
+            LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
+                CollectionDestinationScreen("Library", state, Modifier.size(820.dp, 350.dp),
+                    callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened += it })
+                        .copy(onOpenDetails = { details += it }, onFocusedAction = { focusedAction = it }),
+                    isList = true, restoreFocusRequest = 0)
+            }
+        }
+        compose.runOnIdle { inputMode.requestInputMode(InputMode.Keyboard) }
+        compose.onNodeWithTag("collection-preview-open").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithTag("collection-preview-open").assertIsFocused()
+        lateinit var capturedOpen: () -> Unit
+        compose.runOnIdle {
+            capturedOpen = requireNotNull(requireNotNull(focusedAction).onActivate)
+            state = state.copy(items = listOf(games[1]), allItems = listOf(games[1]), selectedItemId = games[1].id)
+        }
+        compose.onNodeWithTag("collection-preview-open").assertIsFocused()
+        compose.runOnIdle {
+            assertEquals("Root Details/menu also follow the visible item", games[1].id, requireNotNull(focusedAction).itemId)
+            capturedOpen()
+            assertEquals(listOf(games[1].id), opened)
+        }
+        compose.onNodeWithTag("collection-preview-details").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+        compose.onNodeWithTag("collection-preview-details").assertIsFocused()
+        lateinit var capturedDetails: () -> Unit
+        compose.runOnIdle {
+            capturedDetails = requireNotNull(requireNotNull(focusedAction).onActivate)
+            state = state.copy(items = listOf(games[2]), allItems = listOf(games[2]), selectedItemId = games[2].id)
+        }
+        compose.onNodeWithTag("collection-preview-details").assertIsFocused()
+        compose.runOnIdle {
+            assertEquals(games[2].id, requireNotNull(focusedAction).itemId)
+            assertEquals("Details", requireNotNull(focusedAction).descriptor.label)
+            capturedDetails()
+            assertEquals(listOf(games[2].id), details)
+        }
+    }
+
+    @Test fun listTouchOnlySelectsPreviewAndExplicitOpenUsesTheSelectedItemAtLargeUiScales() {
+        val games = (0..3).map { game(it, "gba") }
+        var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY, items = games, allItems = games,
+            selectedItemId = games.first().id, favorites = setOf(games[1].id), loading = false))
+        var scale by mutableFloatStateOf(1.1f)
+        val opened = mutableListOf<ItemId>()
+        val details = mutableListOf<ItemId>()
+        compose.setContent {
+            Box(Modifier.size(820.dp, 350.dp).testTag("collection-fixture")) {
+                val native = LocalDensity.current
+                CompositionLocalProvider(LocalControllerInput provides false,
+                    LocalDensity provides Density(native.density * scale, native.fontScale)) {
+                    LauncherTheme(reducedMotion = true, referenceScale = (2f / 3f) / scale, uiScaleFactor = scale) {
+                        CollectionDestinationScreen("Library", state, Modifier.fillMaxSize(),
+                            callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened += it })
+                                .copy(onOpenDetails = { details += it }), isList = true)
+                    }
+                }
+            }
+        }
+        for (percent in listOf(110, 120)) {
+            compose.runOnIdle { scale = percent / 100f }
+            // Even tapping the already-selected row is only a preview operation.
+            compose.onNodeWithContentDescription(games.first().title).performTouchInput { click() }
+            compose.onNodeWithContentDescription(games[1].title).performTouchInput { click() }
+            compose.onNodeWithContentDescription(games[1].title).assertIsNotFocused()
+            compose.onNode(hasText(games[1].title) and hasAnyAncestor(hasTestTag("collection-preview")),
+                useUnmergedTree = true).assertIsDisplayed()
+            compose.onNode(hasText("Favorite") and hasAnyAncestor(hasTestTag("collection-preview"))).assertIsDisplayed()
+            compose.runOnIdle {
+                assertEquals(games[1].id, state.selectedItemId)
+                assertEquals("$percent% row touch never launches", (percent - 110) / 10, opened.size)
+            }
+            val page = actualBounds("collection-fixture")
+            val list = actualBounds("collection-grid")
+            val preview = actualBounds("collection-preview")
+            assertTrue("$percent% selectable list and preview are separate panes", list.right < preview.left)
+            assertTrue("$percent% preview stays inside content", fits(preview, page))
+            assertTrue("$percent% launch action stays visible", fits(actualBounds("collection-preview-open"), preview))
+            compose.onNodeWithTag("collection-preview-open").performTouchInput { click() }
+            compose.runOnIdle { assertEquals(games[1].id, opened.last()) }
+            compose.onNode(hasText("Details") and hasAnyAncestor(hasTestTag("collection-preview"))).performClick()
+            compose.runOnIdle { assertEquals(games[1].id, details.last()) }
+        }
+    }
+
+    @Test fun narrowListKeepsAnExplicitOpenActionAndVeryShortListOpensDetailsOnTouch() {
+        val games = (0..3).map { game(it, "gba") }
+        var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY, items = games, allItems = games,
+            selectedItemId = games.first().id, loading = false))
+        var height by mutableStateOf(400.dp)
+        val opened = mutableListOf<ItemId>()
+        val details = mutableListOf<ItemId>()
+        compose.setContent {
+            CompositionLocalProvider(LocalControllerInput provides false) {
+                LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
+                    CollectionDestinationScreen("Library", state, Modifier.size(460.dp, height).testTag("collection-fixture"),
+                        callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened += it })
+                            .copy(onOpenDetails = { details += it }), isList = true)
+                }
+            }
+        }
+        compose.onNodeWithContentDescription(games[1].title).performTouchInput { click() }
+        compose.onNodeWithTag("collection-preview-compact").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(opened.isEmpty()); assertTrue(details.isEmpty()) }
+        assertTrue(fits(actualBounds("collection-preview-open"), actualBounds("collection-fixture")))
+        compose.onNodeWithTag("collection-preview-open").performClick()
+        compose.runOnIdle { assertEquals(listOf(games[1].id), opened); height = 240.dp }
+        compose.onNodeWithTag("collection-preview-compact").assertDoesNotExist()
+        compose.onNodeWithContentDescription(games.first().title).performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals("Tiny content keeps launch available through Details", listOf(games.first().id), details)
+            assertEquals("The row never launches unexpectedly", listOf(games[1].id), opened)
+        }
+    }
+
+    @Test fun gridSizeChangesArtworkAndColumnDensityWithoutChangingSelectionOrTypography() {
+        val games = (0..23).map { game(it, "gba") }
+        val selected = games[1].id
+        var percent by mutableIntStateOf(100)
+        var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY, items = games, allItems = games,
+            selectedItemId = selected, loading = false))
+        compose.setContent {
+            CompositionLocalProvider(LocalControllerInput provides false) {
+                LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
+                    CollectionDestinationScreen("Library", state, Modifier.size(820.dp, 350.dp).testTag("collection-fixture"),
+                        callbacks(onSelect = { state = state.copy(selectedItemId = it) }), gridSizePercent = percent)
+                }
+            }
+        }
+        data class Geometry(val columns: Int, val width: Float, val height: Float, val titleHeight: Int)
+        fun geometry(): Geometry {
+            compose.waitForIdle()
+            val cards = compose.onAllNodes(hasAnyAncestor(hasTestTag("collection-grid")) and hasClickAction())
+                .fetchSemanticsNodes()
+            val first = cards.minBy { it.positionInRoot.y }
+            val columns = cards.count { kotlin.math.abs(it.positionInRoot.y - first.positionInRoot.y) < 1f }
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(games.first().title, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertTrue("Caption uses at most two text lines", layouts.single().lineCount in 1..2)
+            compose.runOnIdle { assertEquals(selected, state.selectedItemId) }
+            for (tag in listOf("collection-filter-all", "collection-all-filters", "collection-layout", "collection-sort")) {
+                compose.onNodeWithTag(tag).assertIsDisplayed()
+                assertTrue("Grid size does not clip header controls", fits(actualBounds(tag), actualBounds("collection-fixture")))
+            }
+            return Geometry(columns, first.size.width.toFloat(), first.size.height.toFloat(), layouts.single().size.height)
+        }
+        val normal = geometry()
+        compose.runOnIdle { percent = 70 }
+        val small = geometry()
+        compose.runOnIdle { percent = 140 }
+        val large = geometry()
+        assertTrue("Smaller grid artwork fits more columns", small.columns > normal.columns && normal.columns > large.columns)
+        assertTrue("Cell widths track grid density", small.width < normal.width && normal.width < large.width)
+        assertTrue("Artwork grows while caption allocation stays fixed", small.height < normal.height && normal.height < large.height)
+        assertEquals(normal.titleHeight, small.titleHeight)
+        assertEquals(normal.titleHeight, large.titleHeight)
     }
 
     @Test fun laterUnequalFiltersAndTouchScrollingSettleOnWholeCellsAtLargeUiScales() {

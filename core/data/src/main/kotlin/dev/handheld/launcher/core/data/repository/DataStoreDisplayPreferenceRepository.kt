@@ -18,6 +18,8 @@ class DataStoreDisplayPreferenceRepository(store: LauncherPreferencesStore) : Di
                 ?.takeIf { it in DisplayPreferences.supportedScales } ?: 100,
             reduceMotion = values[LauncherPreferenceKeys.reduceMotion] as? Boolean ?: false,
             listDestinations = decodeListDestinations(values[LauncherPreferenceKeys.listDestinations]),
+            gridSizePercent = (values[LauncherPreferenceKeys.gridSizePercent] as? Int)
+                ?.takeIf { it in DisplayPreferences.supportedGridSizes } ?: 100,
         )
     }.distinctUntilChanged()
 
@@ -28,6 +30,11 @@ class DataStoreDisplayPreferenceRepository(store: LauncherPreferencesStore) : Di
 
     override suspend fun setReduceMotion(enabled: Boolean) {
         dataStore.edit { it[LauncherPreferenceKeys.reduceMotion] = enabled }
+    }
+
+    override suspend fun setGridSizePercent(percent: Int) {
+        require(percent in DisplayPreferences.supportedGridSizes)
+        dataStore.edit { it[LauncherPreferenceKeys.gridSizePercent] = percent }
     }
 
     override suspend fun setCollectionListMode(destination: LauncherDestination, isList: Boolean) {

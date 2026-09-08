@@ -179,6 +179,17 @@ class MainActivityInputDeviceTest {
                     compose.waitUntil(TIMEOUT_MS) { (LauncherDestination.LIBRARY in app.display.value.listDestinations) == wasList }
                 }
             }
+            // Position saving is debounced. Wait for restoration to reach storage before
+            // the Activity rule closes the ViewModel and cancels its pending save job.
+            originalFilter?.takeIf { it in filterKeys() }?.let { restoredFilter ->
+                waitWithDiagnostics("Restored Library filter $restoredFilter must reach storage before teardown") {
+                    // Continue pumping Compose so pending focus/anchor callbacks can settle.
+                    runBlocking {
+                        container.navigationSnapshotRepository.observe(LauncherDestination.LIBRARY).first()
+                            ?.filterKey?.value == restoredFilter
+                    }
+                }
+            }
         }
       } finally {
           originalWindowCallback?.let { original ->

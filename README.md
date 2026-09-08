@@ -44,7 +44,9 @@ Use the D-pad or left stick to move, A to activate, B to go back, X to search, Y
 
 Controller navigation has subtle original tick, confirm, back and page-change sounds. They are enabled by default and can be turned off in Settings → Controls → **Controller sounds**. They use media volume, including its mute and Android's media interruption policy; Android touch-sound settings are independent. Touch and ordinary text entry remain silent.
 
-Home shows up to 20 cards: available recently opened games and apps first, then one stable game from each console not already represented, one Android-game representative where needed, and remaining apps. Returning Home, selecting Home again or returning from another Activity while Home is open resets selection and scrolling to the first card. Library, Apps and Favorites each remember their own Grid/List choice. Settings → Display offers 90%, 100%, 110% and 120% UI scale and Reduce motion.
+Home shows up to 20 cards: available recently opened games and apps first, then one stable game from each console not already represented, one Android-game representative where needed, and remaining apps. Returning Home, selecting Home again or returning from another Activity while Home is open resets selection and scrolling to the first card. Library, Apps and Favorites each remember their own Grid/List choice. List mode places the list on the left and the selected item's artwork and information on the right. Touch a row to preview it, then Play/Open to launch; controller A launches the selected row. Narrow windows use a compact selected-item action.
+
+Settings → Display offers 90%, 100%, 110% and 120% UI scale, Reduce motion, and a separate grid card size from 70% to 140% in ten-point steps. Grid size changes collection artwork and column density without reducing text size. Internal storage icons are cyan; external storage icons are amber.
 
 To make this the Home screen, use Settings → Launcher → Set as Home launcher and choose it in Android. Declining leaves normal browsing available. To switch away later, use Android Settings → Apps → Default apps → Home app.
 

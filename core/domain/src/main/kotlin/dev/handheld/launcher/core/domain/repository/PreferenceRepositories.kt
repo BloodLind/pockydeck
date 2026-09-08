@@ -16,6 +16,7 @@ interface ControllerPreferenceRepository {
 interface DisplayPreferenceRepository {
     val preferences: Flow<DisplayPreferences>
     suspend fun setUiScalePercent(percent: Int)
+    suspend fun setGridSizePercent(percent: Int)
     suspend fun setReduceMotion(enabled: Boolean)
     suspend fun setCollectionListMode(destination: LauncherDestination, isList: Boolean)
 }

@@ -86,7 +86,7 @@ enum class ShellStatusGlyph {
     Battery,
 }
 
-enum class ShellStatusTint { Neutral, Muted, Cold, Hot, Charging, Warning, Memory }
+enum class ShellStatusTint { Neutral, Muted, Cold, Hot, Charging, Warning, Memory, InternalStorage, ExternalStorage }
 
 /** A status source and, when available, its stable visual role. */
 @Immutable
@@ -294,6 +294,8 @@ private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph, symbolOverride: Launch
         ShellStatusTint.Charging -> LauncherTheme.colors.confirm
         ShellStatusTint.Warning -> Color(0xFFFACC15)
         ShellStatusTint.Memory -> Color(0xFFA5A5F3)
+        ShellStatusTint.InternalStorage -> Color(0xFF80BDCD)
+        ShellStatusTint.ExternalStorage -> Color(0xFFD0B07A)
     }
     val symbol = symbolOverride ?: when (glyph) {
         ShellStatusGlyph.Temperature -> LauncherStatusGlyph.Temperature

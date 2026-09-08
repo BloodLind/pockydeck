@@ -199,6 +199,64 @@ class DataStorePreferencesInstrumentedTest {
     }
 
     @Test
+    fun gridSizeDefaultsAndEachSupportedChoiceSurviveReopenWithoutChangingOtherPreferences() = runBlocking {
+        assertEquals(100, displayPreferences.preferences.first().gridSizePercent)
+        val mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        val snapshot = DestinationSnapshot(LauncherDestination.FAVORITES, firstVisibleItemId = ItemId("retained:grid-anchor"))
+        controllerPreferences.setConfirmBackMapping(mapping)
+        navigationSnapshots.save(snapshot)
+        displayPreferences.setUiScalePercent(120)
+        displayPreferences.setReduceMotion(true)
+        displayPreferences.setCollectionListMode(LauncherDestination.APPS, true)
+        for (percent in DisplayPreferences.supportedGridSizes) {
+            displayPreferences.setGridSizePercent(percent)
+            reopenStore()
+            assertEquals(DisplayPreferences(120, true, setOf(LauncherDestination.APPS), gridSizePercent = percent),
+                displayPreferences.preferences.first())
+            assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+            assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.FAVORITES).first())
+        }
+    }
+
+    @Test
+    fun invalidGridSizeStorageFallsBackIndependentlyAndInvalidWritesChangeNothing() = runBlocking {
+        displayPreferences.setUiScalePercent(110)
+        displayPreferences.setReduceMotion(true)
+        displayPreferences.setCollectionListMode(LauncherDestination.FAVORITES, true)
+        val fallback = DisplayPreferences(110, true, setOf(LauncherDestination.FAVORITES))
+        for (invalid in listOf(Int.MIN_VALUE, 0, 69, 75, 105, 141, Int.MAX_VALUE)) {
+            store.dataStore.edit { it[LauncherPreferenceKeys.gridSizePercent] = invalid }
+            assertEquals(fallback, displayPreferences.preferences.first())
+        }
+        store.dataStore.edit { it[stringPreferencesKey("display.grid_size_percent")] = "140" }
+        reopenStore()
+        assertEquals(fallback, displayPreferences.preferences.first())
+        displayPreferences.setGridSizePercent(130)
+        val before = store.dataStore.data.first().asMap()
+        for (invalid in listOf(0, 69, 75, 105, 141, Int.MAX_VALUE)) {
+            assertTrue(runCatching { displayPreferences.setGridSizePercent(invalid) }.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(before, store.dataStore.data.first().asMap())
+        }
+        reopenStore()
+        assertEquals(fallback.copy(gridSizePercent = 130), displayPreferences.preferences.first())
+    }
+
+    @Test
+    fun concurrentGridSizeAndDisplayWritesPreserveIndependentFields() = runBlocking {
+        coroutineScope {
+            listOf(
+                async { displayPreferences.setGridSizePercent(70) },
+                async { displayPreferences.setUiScalePercent(90) },
+                async { displayPreferences.setReduceMotion(true) },
+                async { displayPreferences.setCollectionListMode(LauncherDestination.LIBRARY, true) },
+            ).awaitAll()
+        }
+        reopenStore()
+        assertEquals(DisplayPreferences(90, true, setOf(LauncherDestination.LIBRARY), gridSizePercent = 70),
+            displayPreferences.preferences.first())
+    }
+
+    @Test
     fun allSnapshotFieldsRemainIndependentForEveryDestinationAfterReopen() {
         runBlocking {
             val expected = LauncherDestination.entries.associateWith { destination ->

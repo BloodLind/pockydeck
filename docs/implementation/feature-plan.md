@@ -6,7 +6,7 @@ Read [the project plan](../project-plan.md), [the design contract](../design-sys
 
 The [user-story backlog](user-stories/README.md) divides F01–F18 into traceable acceptance criteria. On 8 September the user authorized building the complete native application base first, followed by a combined verification and documentation reconciliation. Per-story dispatch and intermediate wave gates are superseded for this delivery; packet scope, shared-file ownership and truthful device evidence still apply.
 
-## Current v0.9.1 integration scope
+## Current v0.10 integration scope
 
 The current batch implements all available recent Home games/apps before a stable showcase containing one game per otherwise unrepresented console and one Android-game group, followed by deterministic app fillers, with a 20-card limit. Every Home entry/reselection and actual Activity return to Home resets selection and scrolling to first, including delayed recency publication; modal dismissal alone preserves its opener.
 
@@ -16,7 +16,9 @@ The user explicitly approved optional Shizuku process indicators and the normal 
 
 The v0.9.1 correction gives filters slightly more horizontal/vertical padding and less rounding, shrinks only START inside its existing hint, and adds original controller sound cues with an independent Controls toggle. Sound follows media volume and existing normalized input/repeat ownership. Exact-ROM open-file inspection is denied on the Flip 2; no root or remote-control interface is enabled for this optional request.
 
-The status revision labels battery temperature accurately (blue below 15°C, red from 45°C), colors the battery green only when Android reports CHARGING, otherwise red at 10% or below, yellow below 15%, and neutral above that. RAM has a distinct cool tint; storage covers internal and all mounted external free space. [Current contracts](contracts.md) define behavior and lifecycle limits; [progress](progress.md) records the separate validation outcomes. Code inclusion is not a claim that every physical check has passed.
+The v0.10 batch adds wider separation around decorative filter hints and All filters, a larger Sort Close control with smaller choices, a selected-item preview beside List mode, and independent 70–140% grid sizing. Visible-card image requests, size-bucketed decoding, cancellation, bounded caches and background release address scrolling and RAM usage; scroll positions save after settling and filter data is reused during selection changes. Physical frame-timing and memory samples compare the previous and updated builds.
+
+The status revision labels battery temperature accurately (blue below 15°C, red from 45°C), colors the battery green only when Android reports CHARGING, otherwise red at 10% or below, yellow below 15%, and neutral above that. RAM has a distinct cool tint; storage covers internal and all mounted external free space, with cyan internal and amber external glyphs. [Current contracts](contracts.md) define behavior and lifecycle limits; [progress](progress.md) records the separate validation outcomes. Code inclusion is not a claim that every physical check has passed.
 
 ## How to use the packets
 

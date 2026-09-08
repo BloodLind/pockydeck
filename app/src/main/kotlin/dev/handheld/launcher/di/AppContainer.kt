@@ -119,14 +119,28 @@ class AppContainer(
             successfulOpenRepository, applicationScope)
     }
     val homeRoleRequests by lazy { HomeRoleRequestCoordinator(activityRequestPort) }
-    val iconLoader by lazy { AndroidIconLoader(applicationContext) }
+    @Volatile private var artworkForeground = true
+    private val iconLoaderDelegate = lazy { AndroidIconLoader(applicationContext).also { it.setForeground(artworkForeground) } }
+    val iconLoader get() = iconLoaderDelegate.value
     private val artworkDatabase by lazy { ArtworkDatabase.open(applicationContext) }
     val artworkRepository by lazy {
         val root = File(applicationContext.cacheDir, "artwork")
         ArtworkRepository(artworkDatabase, romRepository, EsDeArtworkResolver(sharedStoragePaths), File(root, "images"),
             LibretroArtworkProvider(File(root, "indexes"))) { ArtworkWorker.enqueue(applicationContext) }
     }
-    val enrichedArtworkLoader by lazy { EnrichedArtworkLoader(applicationContext, artworkRepository) }
+    private val enrichedArtworkLoaderDelegate = lazy {
+        EnrichedArtworkLoader(applicationContext, artworkRepository).also { it.setForeground(artworkForeground) }
+    }
+    val enrichedArtworkLoader get() = enrichedArtworkLoaderDelegate.value
+    fun setArtworkForeground(foreground: Boolean) {
+        artworkForeground = foreground
+        if (iconLoaderDelegate.isInitialized()) iconLoader.setForeground(foreground)
+        if (enrichedArtworkLoaderDelegate.isInitialized()) enrichedArtworkLoader.setForeground(foreground)
+    }
+    fun trimArtworkMemory(clear: Boolean) {
+        if (iconLoaderDelegate.isInitialized()) iconLoader.trimMemory(clear)
+        if (enrichedArtworkLoaderDelegate.isInitialized()) enrichedArtworkLoader.trimMemory(clear)
+    }
     fun startArtwork() { artworkRepository.start(applicationScope, itemOverrideRepository) }
     val systemActions by lazy { SystemActionRegistry(applicationContext) }
     val deviceStatus by lazy { AndroidDeviceStatusSource(applicationContext) }

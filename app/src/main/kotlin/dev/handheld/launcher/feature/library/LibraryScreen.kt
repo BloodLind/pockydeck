@@ -19,5 +19,6 @@ fun LibraryScreen(
     allowFocusRequest: Boolean = true,
     isList: Boolean = false,
     onLayoutChange: (Boolean) -> Unit = {},
+    gridSizePercent: Int = 100,
 ) = CollectionDestinationScreen("Library", state, modifier, callbacks, systemActions, iconLoader, restoreFocusRequest, allowFocusRequest,
-    isList = isList, onLayoutChange = onLayoutChange)
+    isList = isList, onLayoutChange = onLayoutChange, gridSizePercent = gridSizePercent)

@@ -85,6 +85,31 @@ fun StatusIndicator(value: StatusValue, modifier: Modifier = Modifier, label: St
 
 /** Raw physical legends. The shell supplies their current meaning and activation target. */
 @Composable
+fun filterNavigationHintStyle() = LauncherTheme.typography.controlLabel.let {
+    it.copy(fontSize = it.fontSize * .85f, lineHeight = it.lineHeight * .85f)
+}
+
+@Composable
+fun filterNavigationHintGeometry(): FilterChipGeometry {
+    val scale = LauncherTheme.referenceScale
+    return FilterChipGeometry(6.dp * scale, 3.dp * scale, 10.dp * scale, 0.dp)
+}
+
+/** Quiet, non-interactive trigger hint; touch targets belong to the adjacent filters. */
+@Composable
+fun FilterNavigationHint(label: String, description: String, modifier: Modifier = Modifier) {
+    val geometry = filterNavigationHintGeometry()
+    Box(modifier.clearAndSetSemantics { contentDescription = description }
+        .background(LauncherTheme.colors.surfaceControl, RoundedCornerShape(geometry.cornerRadius))
+        .padding(horizontal = geometry.horizontalPadding, vertical = geometry.verticalPadding),
+        contentAlignment = Alignment.Center) {
+        LauncherText(label, style = filterNavigationHintStyle(), color = LauncherTheme.colors.textSecondary,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Raw physical legends. The shell supplies their current meaning and activation target. */
+@Composable
 fun ControllerGlyph(glyph: String, semanticLabel: String?, modifier: Modifier = Modifier) {
     val button = LauncherFaceButton.entries.firstOrNull { it.legend.equals(glyph, ignoreCase = true) }
     if (button != null) {

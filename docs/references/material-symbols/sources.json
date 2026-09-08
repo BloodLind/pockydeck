@@ -1,0 +1,68 @@
+[
+  {
+    "name": "cottage",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cottage/wght200/24px.svg",
+    "sha256": "7decab9465e3b2d16d5c6749a4e2666ff2a122b6001633559e278b635bf849bd"
+  },
+  {
+    "name": "grid_view",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/grid_view/wght200/24px.svg",
+    "sha256": "dd6ef33fd2c58c5bfc32d901fdddab55fa4507a2615e799e17f94c0afd556d55"
+  },
+  {
+    "name": "apps",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/apps/wght200/24px.svg",
+    "sha256": "84f0b3fd836054a573ea3c1b87fc1937eaca4a6497dfbf300f4f1a935e6f8297"
+  },
+  {
+    "name": "grade",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/grade/wght200/24px.svg",
+    "sha256": "b33f09adf2c3e80f06b495010991623d0ed8bf3e9a4c467a714b0c35f2fa26d7"
+  },
+  {
+    "name": "tune",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/tune/wght200/24px.svg",
+    "sha256": "fb5023329920f4c1e285405182156f680c99b2be0ee783e0ff8c262674af3e4d"
+  },
+  {
+    "name": "search",
+    "variant": "wght200",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/search/wght200/24px.svg",
+    "sha256": "bd1ae63256c909280e9ef4e5112e07d8abd2ca054fe7c42d9ff353e6a4f15765"
+  },
+  {
+    "name": "device_thermostat",
+    "variant": "fill1",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/device_thermostat/fill1/24px.svg",
+    "sha256": "546d9a60a65cbdbb3f4541fd5b8998f334d3a1ed31f82acdc534b73d6593b8db"
+  },
+  {
+    "name": "memory",
+    "variant": "fill1",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/memory/fill1/24px.svg",
+    "sha256": "7c76251206360d7dc927b6aca71194373aeb0f56c009484b2a26221805a4a17b"
+  },
+  {
+    "name": "sd_card",
+    "variant": "fill1",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/sd_card/fill1/24px.svg",
+    "sha256": "513303f0923ea3ab7bf74ef6ea198e6a3897a7b2d14c84bc859255ebe3ec2df6"
+  },
+  {
+    "name": "wifi",
+    "variant": "default",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/wifi/default/24px.svg",
+    "sha256": "7b42bc5f1b5f598721bce29ec93fea9b0082cc8b970c4eb64d8ac886d8a441f3"
+  },
+  {
+    "name": "battery_5_bar",
+    "variant": "fill1",
+    "url": "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/battery_5_bar/fill1/24px.svg",
+    "sha256": "88abbcf0877ede8024d6c166fdd7d7a524353670476e56cf76626358cecc0eb5"
+  }
+]

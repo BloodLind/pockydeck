@@ -2,7 +2,6 @@ package dev.handheld.launcher.shell
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,18 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
@@ -61,6 +54,8 @@ import dev.handheld.launcher.core.designsystem.foundation.ShellBounds
 import dev.handheld.launcher.core.designsystem.foundation.ShellMetrics
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyph
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyphIcon
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
@@ -238,7 +233,7 @@ private fun StatusReading(reading: ShellStatusReading) {
     }
 }
 
-/** Small monochrome source-role drawings; semantic text stays with [StatusIndicator]. */
+/** Symbols from the HTML design preview; semantic text stays with StatusIndicator. */
 @Composable
 private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph) {
     val color = when (glyph) {
@@ -248,76 +243,15 @@ private fun ShellStatusGlyphIcon(glyph: ShellStatusGlyph) {
         ShellStatusGlyph.Battery -> LauncherTheme.colors.confirm
         ShellStatusGlyph.Wifi -> LauncherTheme.colors.textPrimary
     }
-    val glyphSize = 16.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
-    Canvas(Modifier.size(glyphSize).clearAndSetSemantics {}) {
-        val stroke = Stroke(width = size.minDimension * .14f, cap = StrokeCap.Round)
-        val center = Offset(size.width / 2f, size.height / 2f)
-        when (glyph) {
-            ShellStatusGlyph.Temperature -> {
-                drawLine(color, Offset(center.x, size.height * .25f), Offset(center.x, size.height * .66f), stroke.width, StrokeCap.Round)
-                drawCircle(color, size.minDimension * .2f, Offset(center.x, size.height * .74f))
-            }
-            ShellStatusGlyph.Memory -> {
-                drawRect(
-                    color = color,
-                    topLeft = Offset(size.width * .25f, size.height * .25f),
-                    size = Size(size.width * .5f, size.height * .5f),
-                    style = stroke,
-                )
-                repeat(4) { index ->
-                    val point = size.width * (.2f + index * .2f)
-                    drawLine(color, Offset(point, size.height * .14f), Offset(point, size.height * .25f), stroke.width, StrokeCap.Round)
-                    drawLine(color, Offset(point, size.height * .75f), Offset(point, size.height * .86f), stroke.width, StrokeCap.Round)
-                }
-            }
-            ShellStatusGlyph.Storage -> {
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(size.width * .18f, size.height * .18f),
-                    size = Size(size.width * .64f, size.height * .64f),
-                    cornerRadius = CornerRadius(size.minDimension * .1f),
-                    style = stroke,
-                )
-                drawLine(color, Offset(size.width * .34f, size.height * .47f), Offset(size.width * .66f, size.height * .47f), stroke.width, StrokeCap.Round)
-            }
-            ShellStatusGlyph.Wifi -> {
-                drawArc(
-                    color = color,
-                    startAngle = 210f,
-                    sweepAngle = 120f,
-                    useCenter = false,
-                    topLeft = Offset(size.width * .1f, size.height * .1f),
-                    size = Size(size.width * .8f, size.height * .8f),
-                    style = stroke,
-                )
-                drawArc(
-                    color = color,
-                    startAngle = 215f,
-                    sweepAngle = 110f,
-                    useCenter = false,
-                    topLeft = Offset(size.width * .26f, size.height * .26f),
-                    size = Size(size.width * .48f, size.height * .48f),
-                    style = stroke,
-                )
-                drawCircle(color, size.minDimension * .08f, Offset(center.x, size.height * .76f))
-            }
-            ShellStatusGlyph.Battery -> {
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(size.width * .12f, size.height * .28f),
-                    size = Size(size.width * .68f, size.height * .46f),
-                    cornerRadius = CornerRadius(size.minDimension * .08f),
-                    style = stroke,
-                )
-                drawLine(color, Offset(size.width * .8f, size.height * .43f), Offset(size.width * .9f, size.height * .43f), stroke.width, StrokeCap.Round)
-                drawRect(
-                    color = color,
-                    topLeft = Offset(size.width * .22f, size.height * .38f),
-                    size = Size(size.width * .36f, size.height * .26f),
-                )
-            }
-        }
+    val symbol = when (glyph) {
+        ShellStatusGlyph.Temperature -> LauncherStatusGlyph.Temperature
+        ShellStatusGlyph.Memory -> LauncherStatusGlyph.Memory
+        ShellStatusGlyph.Storage -> LauncherStatusGlyph.Storage
+        ShellStatusGlyph.Wifi -> LauncherStatusGlyph.Wifi
+        ShellStatusGlyph.Battery -> LauncherStatusGlyph.Battery
     }
+    val glyphSize = 16.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    LauncherStatusGlyphIcon(symbol, Modifier.size(glyphSize), tint = color)
 }
 
 @Composable

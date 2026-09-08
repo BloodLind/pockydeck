@@ -1,8 +1,8 @@
-ROM dependency license and notice sources
-=========================================
+Dependency and icon license and notice sources
+=============================================
 
 This directory contains unmodified upstream license and notice texts for the
-ROM feature's dependency additions. The source mapping below is maintained by
+dependency additions and icon assets. The source mapping below is maintained by
 the launcher; it does not change any upstream license or notice.
 
 org.apache.commons:commons-compress:1.28.0
@@ -43,6 +43,14 @@ com.google.guava:listenablefuture:1.0
   Apache-2.0.txt also supplies their Apache License, Version 2.0 text.
   ListenableFuture's binary JAR contains no separate notice resource.
   https://github.com/google/guava
+
+Google Material Symbols
+  material-symbols-LICENSE.txt <- upstream repository LICENSE
+  https://raw.githubusercontent.com/google/material-design-icons/master/LICENSE
+  https://developers.google.com/fonts/docs/material_symbols
+  Static SVG exports are recorded in docs/references/material-symbols/sources.json.
+  Converted to Android VectorDrawable with original path data and a Y offset
+  matching the SVG viewBox. No upstream path shapes were modified.
 
 No dependency source files were modified. Emulator binaries, cores, ROMs and
 BIOS files are not included in these assets.

@@ -12,6 +12,8 @@ The subsequent ROM batch delivers version **0.2.0**: 56-family folder/format rec
 
 The combined revision delivers **0.3.1 (code 4)** with the queued touch/focus, page membership, Home ordering, Search controller/collapse and console-color requests. The user's correction retains original design proportions and increases only small text/glyphs by 15%. Explicitly approved All files access adds read-only discovery on shared internal, SD and USB storage, with an additive Room 3→4 migration and preserved source/game identities. **301 tests passed** (188 JVM, 113 Android); one Windows symlink fixture skipped, lint zero errors, and debug/release builds passed. The corrected APK is installed on the connected Flip 2, which remains dozing. [UI and storage evidence](evidence/F14/ui-storage-revision.md) records verification, rendered screens and remaining device limits.
 
+The subsequent **0.3.2 (code 5)** icon correction imports the HTML preview's exact Material Symbols, including the lighter weight-200 dock outlines. It preserves the corrected layout and small-control scaling. **20 native design-system tests**, lint (zero errors), and both APK builds passed. The update is installed on the Flip 2, and the awake physical screen was inspected. See [icon revision evidence](evidence/F14/icons-032.md).
+
 ## Baseline and authorization
 
 - Planning baseline: `ad2b668`; accepted F01 baseline: `ce09ddc`; previous theme/catalog checkpoint: `b9e68d2`.

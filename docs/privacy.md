@@ -18,12 +18,11 @@ Local ES-DE artwork can be reused without an online artwork request. Online look
 
 ## Optional system access
 
-- **Shizuku:** after explicit setup and authorization, checks requested current-user app/emulator process names while the launcher is foreground. It does not claim to identify an active ROM. Disabling Running indicators stops sampling.
 - **Notification access:** used for a presence dot. The launcher retains notification presence in memory, not notification titles, text, keys, or payloads.
 - **Installed applications:** Android's package queries discover launchable current-user apps and compatible emulator components.
 - **Device status:** public Android readings supply time, battery, battery temperature, RAM, storage, and supported radio state.
 
-Shizuku and emulator/frontend apps are separate software with their own permissions and policies. Launching a game does not grant the launcher access to a frontend's private account or game database.
+Emulator/frontend apps are separate software with their own permissions and policies. Launching a game does not grant the launcher access to a frontend's private account or game database.
 
 ## Reports
 

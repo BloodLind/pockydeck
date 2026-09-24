@@ -41,7 +41,7 @@ Use `adb devices` and set `ANDROID_SERIAL` to the intended physical device befor
 
 App instrumentation can interact with the installed launcher and its state. Prefer a dedicated test device/profile or a known backup; do not run broad destructive storage fixtures against a personal library. Ordinary `adb install -r` updates a matching-signature build while retaining app data.
 
-For UI/input changes, verify controller and touch, 100/110/120% launcher scale, larger Android font scale, and reduced motion. Hold a direction for several seconds to reach accelerated movement; test release, reversal, row boundaries, analog triggers, modal return, and focus restoration. Include a large library when changing scanning or artwork behavior.
+For UI/input changes, verify controller and touch, 90/100/110/120% launcher scale, larger Android font scale, and reduced motion. Hold a direction for several seconds to reach accelerated movement; test release, reversal, row boundaries, analog triggers, modal return, and focus restoration. Include a large library when changing scanning or artwork behavior.
 
 Debug-only preview Activities under `app/src/debug/` provide synthetic shell/control examples. Their cover art is original geometric vector artwork. They are excluded from release builds.
 
@@ -49,7 +49,7 @@ Debug-only preview Activities under `app/src/debug/` provide synthetic shell/con
 
 | Directory | Responsibility |
 | --- | --- |
-| `app/` | Activities, ViewModels, screens, input orchestration, discovery scheduling, launch coordination, optional Shizuku bridge |
+| `app/` | Activities, ViewModels, screens, input orchestration, discovery scheduling, launch coordination |
 | `core/domain/` | Models, repository interfaces, catalog/recency/navigation rules, ROM planning, emulator contracts |
 | `core/data/` | Room, DataStore, Android adapters, ROM access, extraction, artwork, status |
 | `core/designsystem/` | Theme, shell metrics, controls, cards, focus semantics, fonts, vectors |

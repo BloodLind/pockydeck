@@ -113,8 +113,8 @@ Emulator resolution validates package/activity eligibility, console, format, and
 
 ## Artwork and process lifetime
 
-Visible cards request artwork sized for their actual rendered bounds. Detached cards release image references; foreground lifecycle owns decoding and cache retention. Scanning, decoding, and remote lookup must not run on the UI thread. Stable item identity does not depend on image paths or cache keys.
+Visible cards request artwork sized for their actual rendered bounds; Home strips of up to 12 items also warm offscreen cards. Detached cards release painter references. Foreground lifecycle owns decoding, while bounded caches survive normal backgrounding and respond to Android memory pressure. Cached images are available synchronously even during navigation, and PackageManager icons bypass cover loading delays. Scanning, decoding, and remote lookup must not run on the UI thread. Stable item identity does not depend on image paths or cache keys.
 
-Running indicators are optional and off by default. After explicit Shizuku setup and permission, the foreground launcher samples requested current-user package processes. Badges appear only on Home. Observing an emulator process does not establish its active ROM, and launch history must not substitute for a live process reading.
+ROM last-played markers are derived from the greatest successful-open order per known console across the catalog. The existing history stores one persistent record per item without a Home-sized retention limit, so no new schema or migration is needed. The Home route alone provides this state to its cards. Selected or hovered Home metadata explains the badge; collections, Search and details omit it. Failed and cancelled dispatches never update history. The marker records an accepted launch, not emulator process liveness or proof of gameplay. Shizuku and process sampling have been removed.
 
-Notification presence is kept in memory without notification content. Optional network/helper access is described in [privacy](privacy.md).
+Notification presence is kept in memory without notification content. Optional network access is described in [privacy](privacy.md).

@@ -16,6 +16,6 @@ There is no guaranteed response time. Please allow time to investigate and coord
 
 The launcher can read selected folders, or shared storage after explicit All files access approval. It exposes registered/prepared ROM content through read-only document grants for emulator launches. Archive preparation has path, entry, byte, free-space, and decoder-memory limits.
 
-Online artwork is optional. Shizuku process readings and the notification indicator require separate opt-in setup. No emulator, ROM, BIOS, or core is bundled.
+Online artwork is optional. The notification indicator requires separate opt-in setup. ROM last-played markers use local successful-launch history; no privileged process helper is used. No emulator, ROM, BIOS, or core is bundled.
 
 Release downloads include SHA-256 checksums and signing-certificate details. Preview signing and update compatibility are documented in [getting started](docs/getting-started.md#install-the-preview). Signing keys and local configuration must never be committed.

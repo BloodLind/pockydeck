@@ -64,3 +64,9 @@ The 15 JVM tests cover platform/format boundaries, archive decisions, required c
 Native archive eligibility follows the selected core's official extension metadata. There is no universal ZIP override. For example, a PSX CUE/BIN ZIP or GBA ZIP is prepared before the resulting game is re-resolved; FBNeo and MAME ZIP sets stay intact. The preparable archive set comes directly from `ArchiveExtractor.supportedFormats`, including compound TAR formats. Recognized RAR remains explicit unsupported extraction.
 
 `RomDispatchResult.Started` means Android accepted the activity start. It does not certify BIOS availability, key setup, an installed RetroArch core, a valid dump, or successful emulation. Those conditions must be demonstrated with legitimate representative games on the intended emulator versions.
+
+## Switching games in an open PS2 emulator
+
+The boot-path adapter for AetherSX2/NetherSX2 and DuckStation now combines `NEW_TASK` with `CLEAR_TASK` and passes the new ROM in `bootPath`, data, and its temporary read grant. These integrations read the path during activity creation; the inspected NetherSX2 activity stops native emulation during destruction. Recreating the task allows that lifecycle to run before a fresh launch. It is not process force-stop and does not require root or Shizuku.
+
+Save progress before launching another game: replacing the emulation activity can discard unsaved gameplay. A successful dispatch still only means Android accepted the intent. Verify game A → launcher → game B on the installed emulator version. If a fork retains the previous game, exit emulation through its own menu and retry; report the exact emulator version and game formats. Other emulator contracts retain their existing task behavior until verified.

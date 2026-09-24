@@ -79,7 +79,26 @@ class AndroidEmulatorContractTest {
             val intent = build(id, input)
             assertEquals(Intent.ACTION_MAIN, intent.action)
             assertEquals(input.documentUri, intent.getStringExtra("bootPath"))
+            assertTrue(intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+            assertTrue(intent.flags and Intent.FLAG_ACTIVITY_CLEAR_TASK != 0)
             assertFalse(intent.hasExtra("ROM_PATH"))
+        }
+    }
+
+    @Test fun switchingPs2GameBuildsFreshTaskWithOnlyTheNewRomAndItsReadGrant() {
+        val first = input("ps2", "chd")
+        val next = first.copy(documentUri = first.documentUri.replace("Test.chd", "Next.chd"),
+            relativePath = "Games/Next.chd")
+        for (id in listOf("aethersx2", "nethersx2-turnip")) {
+            val firstIntent = build(id, first)
+            val nextIntent = build(id, next)
+            assertEquals(first.documentUri, firstIntent.getStringExtra("bootPath"))
+            assertEquals(next.documentUri, nextIntent.getStringExtra("bootPath"))
+            assertEquals(next.documentUri, nextIntent.dataString)
+            assertEquals(1, nextIntent.clipData!!.itemCount)
+            assertEquals(next.documentUri, nextIntent.clipData!!.getItemAt(0).uri.toString())
+            assertTrue(nextIntent.flags and Intent.FLAG_ACTIVITY_CLEAR_TASK != 0)
+            assertEquals(0, nextIntent.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
     }
 

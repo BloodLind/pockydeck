@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
+import android.provider.Settings
 import androidx.compose.runtime.Immutable
 import dev.handheld.launcher.contract.ActivityRequest
 import dev.handheld.launcher.contract.ActivityRequestAcknowledgement
@@ -97,14 +98,10 @@ class HomeRoleActivityRequestHandler(
             coordinator.recordResult(pending.id, HomeRoleRequestState.Unsupported)
             return null
         }
-        if (manager.isRoleHeld(RoleManager.ROLE_HOME)) {
-            activityRequestPort.complete(claim, ActivityRequestAcknowledgement.Handled)
-            coordinator.recordResult(pending.id, HomeRoleRequestState.Accepted)
-            return null
-        }
         return ClaimedHomeRoleRequest(
             claim = claim,
-            intent = manager.createRequestRoleIntent(RoleManager.ROLE_HOME),
+            intent = if (manager.isRoleHeld(RoleManager.ROLE_HOME)) Intent(Settings.ACTION_HOME_SETTINGS)
+                else manager.createRequestRoleIntent(RoleManager.ROLE_HOME),
         ).also(coordinator::holdClaim)
     }
 
@@ -113,8 +110,10 @@ class HomeRoleActivityRequestHandler(
         activityRequestPort.complete(request.claim, ActivityRequestAcknowledgement.Handled)
         coordinator.recordResult(
             request.claim.id,
-            if (held || resultCode == Activity.RESULT_OK) {
+            if (held) {
                 HomeRoleRequestState.Accepted
+            } else if (request.intent.action == Settings.ACTION_HOME_SETTINGS) {
+                HomeRoleRequestState.Idle
             } else {
                 HomeRoleRequestState.Declined
             },

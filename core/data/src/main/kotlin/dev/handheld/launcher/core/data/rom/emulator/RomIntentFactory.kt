@@ -41,6 +41,10 @@ internal object RomIntentFactory {
             EmulatorContract.BOOT_PATH -> {
                 intent.action = Intent.ACTION_MAIN
                 intent.putExtra("bootPath", uri.toString())
+                // These entry points read bootPath in onCreate, not onNewIntent. Finish the
+                // existing activity (which stops emulation) before opening the chosen game.
+                // This recreates the task; it neither kills the process nor requires privileges.
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
             }
             EmulatorContract.RETROARCH -> {
                 val core = EmulatorRegistry.coresForPlatform(input.platformId).first { it.id == input.coreId }

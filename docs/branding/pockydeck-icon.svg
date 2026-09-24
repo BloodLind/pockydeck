@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 1254 1254">
+  <title>PockyDeck app icon</title>
+  <defs>
+    <radialGradient id="background" cx="50%" cy="50%" r="74%">
+      <stop stop-color="#181B28"/>
+      <stop offset="1" stop-color="#131621"/>
+    </radialGradient>
+  </defs>
+  <rect width="1254" height="1254" rx="320" fill="url(#background)"/>
+  <g fill="#F3F5F9" fill-rule="evenodd">
+    <path d="M349,423C380,362 437,322 511,322C609,322 688,402 688,500C688,599 609,679 511,679C452,679 399,652 366,609L288,784C278,806 252,816 229,806C206,796 197,771 207,748ZM620,501A112,112 0,1 0,396,501A112,112 0,1 0,620,501Z"/>
+    <path d="M899,603L969,447C979,424 1004,413 1027,423C1050,433 1060,459 1050,482L935,764C921,844 853,904 775,904C678,904 599,827 599,733C599,638 677,561 775,561C823,561 866,577 899,603ZM884,733A108,108 0,1 0,668,733A108,108 0,1 0,884,733Z"/>
+  </g>
+  <circle cx="508" cy="502" r="78" fill="#2866A9"/>
+  <circle cx="508" cy="502" r="54" fill="#3D9BFF"/>
+  <circle cx="776" cy="733" r="75" fill="#A74036"/>
+  <circle cx="776" cy="733" r="52" fill="#FF574A"/>
+</svg>

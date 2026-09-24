@@ -44,17 +44,19 @@ class ArtworkMemoryPolicyTest {
         assertEquals(0, cache.sizeBytes)
     }
 
-    @Test fun `decode samples fit the requested physical bucket including odd sized images`() {
+    @Test fun `decode retains display resolution within a bounded power of two sample`() {
         for (target in listOf(1, 64, 130, 192, 256, 384, 768, 4096)) {
             for ((width, height) in listOf(1025 to 513, 768 to 768, 4096 to 2048, 8192 to 1)) {
                 val sample = requireNotNull(ArtworkDecodePolicy.sampleSize(width, height, target))
                 val decodedEdge = (maxOf(width, height) + sample - 1) / sample
-                assertTrue(decodedEdge <= ArtworkDecodePolicy.target(target))
-                assertTrue(decodedEdge <= 768)
+                val bucket = ArtworkDecodePolicy.target(target)
+                assertTrue(decodedEdge >= minOf(bucket, maxOf(width, height)))
+                assertTrue(decodedEdge <= bucket * 2)
             }
         }
         assertEquals(192, ArtworkDecodePolicy.target(190))
         assertEquals(192, ArtworkDecodePolicy.target(191))
+        assertEquals(2, ArtworkDecodePolicy.sampleSize(1024, 1024, 384))
         assertTrue(requireNotNull(ArtworkDecodePolicy.sampleSize(1024, 1024, 128)) >
             requireNotNull(ArtworkDecodePolicy.sampleSize(1024, 1024, 768)))
         assertNull(ArtworkDecodePolicy.sampleSize(0, 256, 128))

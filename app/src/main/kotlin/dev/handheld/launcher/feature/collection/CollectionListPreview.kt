@@ -1,189 +1,145 @@
 package dev.handheld.launcher.feature.collection
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.handheld.launcher.contract.LauncherActionDescriptor
-import dev.handheld.launcher.contract.LauncherActionMeaning
-import dev.handheld.launcher.contract.SemanticInputAction
-import dev.handheld.launcher.core.designsystem.controls.LauncherIconButton
+import dev.handheld.launcher.core.designsystem.controls.PlatformBadge
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.Availability
 import dev.handheld.launcher.core.domain.model.LibraryItem
-import dev.handheld.launcher.runtime.LocalRunningLabels
+import dev.handheld.launcher.core.domain.model.UnavailabilityReason
+import dev.handheld.launcher.core.domain.rom.scan.RomPlatforms
 import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
-import dev.handheld.launcher.ui.components.LibraryItemCard
-import dev.handheld.launcher.ui.components.LibraryItemCardVariant
+import dev.handheld.launcher.ui.components.LibraryItemArtwork
 import dev.handheld.launcher.ui.presentation.TileUiModel
+import dev.handheld.launcher.ui.presentation.platformAccent
+import java.util.Locale
 
-private enum class PreviewAction { Open, Details, Favorite }
-
-/** Existing catalog metadata only. The selected preview never discovers or guesses game state. */
+/** Read-only catalog information. Controller focus and actions belong to the selected list row. */
 @Composable
 internal fun CollectionListPreview(
     item: LibraryItem,
     model: TileUiModel,
     favorite: Boolean,
-    callbacks: CollectionScreenCallbacks,
     iconLoader: AndroidIconLoader?,
     modifier: Modifier,
-    openFocus: FocusRequester,
     compact: Boolean = false,
-    onOpenFocusChanged: (Boolean) -> Unit = {},
 ) {
-    val currentItemId by rememberUpdatedState(item.id)
-    val currentModel by rememberUpdatedState(model)
-    val currentFavorite by rememberUpdatedState(favorite)
-    val currentCallbacks by rememberUpdatedState(callbacks)
-    val open: () -> Unit = remember {
-        {
-            if (currentModel.canOpen) {
-                val id = currentItemId
-                currentCallbacks.onSelect(id)
-                currentCallbacks.onOpen(id)
-            }
-        }
-    }
-    val details: () -> Unit = remember { { currentCallbacks.onOpenDetails(currentItemId) } }
-    val toggleFavorite: () -> Unit = remember { { currentCallbacks.onFavorite(currentItemId, !currentFavorite) } }
-    var focusedAction by remember { mutableStateOf<PreviewAction?>(null) }
-    fun publish(action: PreviewAction) {
-        val enabled = action != PreviewAction.Open || currentModel.canOpen
-        currentCallbacks.onFocusedAction(FocusedControlAction(
-            LauncherActionDescriptor(SemanticInputAction.CONFIRM, when (action) {
-                PreviewAction.Open -> LauncherActionMeaning.ACTIVATE
-                PreviewAction.Details -> LauncherActionMeaning.OPEN_DETAILS
-                PreviewAction.Favorite -> LauncherActionMeaning.TOGGLE_FAVORITE
-            }, when (action) {
-                PreviewAction.Open -> currentModel.primaryActionLabel
-                PreviewAction.Details -> "Details"
-                PreviewAction.Favorite -> favoriteActionLabel(currentFavorite)
-            }, enabled),
-            if (!enabled) null else when (action) {
-                PreviewAction.Open -> open
-                PreviewAction.Details -> details
-                PreviewAction.Favorite -> toggleFavorite
-            }, currentItemId,
-        ))
-    }
-    fun focused(action: PreviewAction, hasFocus: Boolean) {
-        if (hasFocus) {
-            focusedAction = action
-            publish(action)
-        } else if (focusedAction == action) {
-            focusedAction = null
-            currentCallbacks.onFocusedAction(null)
-        }
-    }
-    // Catalog replacement can keep the same native button focused. Refresh its
-    // descriptor and Details/menu item ID even when no new focus event occurs.
-    LaunchedEffect(item.id, model.canOpen, model.primaryActionLabel, favorite, focusedAction) {
-        focusedAction?.let(::publish)
-    }
     if (compact) {
         Row(modifier.heightIn(min = 48.dp).testTag("collection-preview-compact"),
-            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically) {
             LauncherText(model.title, Modifier.weight(1f), style = LauncherTheme.typography.tileTitle,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
-            PreviewActionButtons(model, favorite, open, details, toggleFavorite, openFocus,
-                onOpenFocusChanged, ::focused, includeDetails = false)
+            PlatformBadge(model.platformLabel, accentColor = model.platformAccent, compact = true)
+            if (favorite) LauncherGlyphIcon(LauncherGlyph.Favorites, Modifier.size(20.dp), contentDescription = "Favorite")
         }
         return
     }
-    BoxWithConstraints(modifier.testTag("collection-preview")) {
-        val artworkSize = minOf(144.dp * LauncherTheme.referenceScale, maxWidth * .34f)
-        val targetPx = with(LocalDensity.current) { artworkSize.roundToPx().coerceAtLeast(1) }
-        val metadataScroll = remember(item.id) { ScrollState(0) }
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
-            Row(Modifier.weight(1f).fillMaxWidth().verticalScroll(metadataScroll),
-                horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
-                CompositionLocalProvider(LocalRunningLabels provides emptyMap()) {
-                    Box(Modifier.size(artworkSize).clearAndSetSemantics { }) {
-                        LibraryItemCard(model, LibraryItemCardVariant.Home, selected = false, activationEnabled = false,
-                            modifier = Modifier.fillMaxSize(), iconLoader = iconLoader, onActivate = {},
-                            artworkActive = true, artworkTargetSizePx = targetPx)
+    val colors = LauncherTheme.colors
+    val spacing = LauncherTheme.spacing
+    val accent = model.platformAccent
+    val shape = RoundedCornerShape(LauncherTheme.shapes.smallControl * 2)
+    val panelBrush = remember(accent, colors) { Brush.linearGradient(listOf(
+        accent.copy(alpha = .13f), colors.surfaceDock.copy(alpha = .65f), colors.surfaceDock.copy(alpha = .35f))) }
+    Column(modifier.testTag("collection-preview").clip(shape).background(panelBrush)
+        .border(1.dp, colors.borderEmphasis, shape).padding(spacing.md),
+        verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            PlatformBadge(model.platformLabel, accentColor = accent, compact = true)
+            if (favorite) Row(horizontalArrangement = Arrangement.spacedBy(spacing.xxs),
+                verticalAlignment = Alignment.CenterVertically) {
+                LauncherGlyphIcon(LauncherGlyph.Favorites, Modifier.size(16.dp * LauncherTheme.referenceScale),
+                    contentDescription = null, tint = accent)
+                LauncherText("Favorite", style = LauncherTheme.typography.tileSubtitle)
+            }
+        }
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val contentHeight = maxHeight
+            val artworkSize = minOf(maxWidth * .46f, maxHeight * .9f, 280.dp * LauncherTheme.referenceScale)
+            val targetPx = with(LocalDensity.current) { artworkSize.roundToPx().coerceAtLeast(1) }
+            val metadataScroll = remember(item.id) { ScrollState(0) }
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(spacing.md),
+                verticalAlignment = Alignment.CenterVertically) {
+                val coverShape = RoundedCornerShape(LauncherTheme.shapes.smallControl)
+                Box(Modifier.size(artworkSize).drawWithCache {
+                    val glow = Brush.radialGradient(listOf(accent.copy(alpha = .18f), Color.Transparent),
+                        center = Offset(size.width / 2f, size.height / 2f), radius = size.maxDimension * .75f)
+                    onDrawBehind { drawCircle(glow, radius = size.maxDimension * .75f) }
+                }.shadow(10.dp, coverShape).clip(coverShape).background(colors.surfaceArtwork)
+                    .border(1.dp, colors.textPrimary.copy(alpha = .18f), coverShape)
+                    .testTag("collection-preview-artwork")) {
+                    LibraryItemArtwork(model, iconLoader, targetSizePx = targetPx, fitCover = true)
+                    // A thin case spine gives the cover depth without another image decode.
+                    Box(Modifier.width(3.dp).fillMaxHeight().background(colors.textPrimary.copy(alpha = .12f)))
+                }
+                Column(Modifier.weight(1f).heightIn(max = contentHeight)
+                    .focusProperties { canFocus = false }.verticalScroll(metadataScroll),
+                    verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                    LauncherText(model.title, style = LauncherTheme.typography.homeTitle,
+                        maxLines = 5, overflow = TextOverflow.Ellipsis)
+                    Box(Modifier.width(28.dp * LauncherTheme.referenceScale).height(2.dp)
+                        .background(accent, RoundedCornerShape(1.dp)))
+                    LauncherText(model.typeLabel,
+                        style = LauncherTheme.typography.tileSubtitle, color = colors.textSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(5.dp).background(
+                            if (item.availability == Availability.Available) colors.confirm else colors.focus,
+                            androidx.compose.foundation.shape.CircleShape))
+                        LauncherText(availabilityLabel(item.availability), style = LauncherTheme.typography.tileSubtitle,
+                            color = colors.textSecondary)
                     }
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
-                    LauncherText(model.title, style = LauncherTheme.typography.pageTitle, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    LauncherText(model.subtitle ?: model.typeLabel, style = LauncherTheme.typography.tileSubtitle,
-                        color = LauncherTheme.colors.textSecondary)
-                    LauncherText(if (favorite) "Favorite" else "Not favorited", style = LauncherTheme.typography.tileSubtitle,
-                        color = LauncherTheme.colors.textSecondary)
-                    LauncherText(if (item.availability is Availability.Available) "Available" else "Unavailable",
-                        style = LauncherTheme.typography.tileSubtitle, color = LauncherTheme.colors.textSecondary)
-                }
             }
-            PreviewActionButtons(model, favorite, open, details, toggleFavorite, openFocus,
-                onOpenFocusChanged, ::focused)
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderEmphasis))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
+            PreviewFact("Platform", if (item is LibraryItem.RomGame)
+                item.platformId?.let { RomPlatforms.byId(it)?.displayName } ?: "Unassigned console"
+                else if (item is LibraryItem.AndroidApp) "Android" else "System", Modifier.weight(1f))
+            PreviewFact(if (item is LibraryItem.RomGame) "Format" else "Category",
+                if (item is LibraryItem.RomGame) item.format?.takeIf(String::isNotBlank)?.uppercase(Locale.ROOT) ?: "Unknown" else model.subtitle ?: model.typeLabel,
+                Modifier.weight(.65f))
         }
     }
 }
 
-private fun favoriteActionLabel(favorite: Boolean) = if (favorite) "Remove from favorites" else "Add to favorites"
-
-/** Compact controls retain full native targets; their glyphs are decorative. */
 @Composable
-private fun PreviewActionButtons(
-    model: TileUiModel,
-    favorite: Boolean,
-    open: () -> Unit,
-    details: () -> Unit,
-    toggleFavorite: () -> Unit,
-    openFocus: FocusRequester,
-    onOpenFocusChanged: (Boolean) -> Unit,
-    onFocused: (PreviewAction, Boolean) -> Unit,
-    includeDetails: Boolean = true,
-) {
-    Row(Modifier.testTag("collection-preview-actions"), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
-        LauncherIconButton(model.primaryActionLabel, open,
-            Modifier.size(48.dp).focusRequester(openFocus).testTag("collection-preview-open"),
-            enabled = model.canOpen, shape = CircleShape,
-            onFocusChanged = { onOpenFocusChanged(it); onFocused(PreviewAction.Open, it) }) {
-            LauncherGlyphIcon(LauncherGlyph.Play, Modifier.size(24.dp), contentDescription = null)
-        }
-        if (includeDetails) LauncherIconButton("Details", details,
-            Modifier.size(48.dp).testTag("collection-preview-details"), shape = CircleShape,
-            onFocusChanged = { onFocused(PreviewAction.Details, it) }) {
-            LauncherGlyphIcon(LauncherGlyph.Info, Modifier.size(24.dp), contentDescription = null)
-        }
-        LauncherIconButton(favoriteActionLabel(favorite), toggleFavorite,
-            Modifier.size(48.dp).testTag("collection-preview-favorite")
-                .semantics { stateDescription = if (favorite) "Favorite" else "Not favorited" },
-            shape = CircleShape, selected = favorite, checked = favorite,
-            onFocusChanged = { onFocused(PreviewAction.Favorite, it) }) {
-            LauncherGlyphIcon(LauncherGlyph.Favorites, Modifier.size(24.dp), contentDescription = null)
-        }
+private fun PreviewFact(label: String, value: String, modifier: Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xxs)) {
+        LauncherText(label, style = LauncherTheme.typography.tileSubtitle, color = LauncherTheme.colors.textSecondary)
+        LauncherText(value, style = LauncherTheme.typography.tileTitle, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+private fun availabilityLabel(availability: Availability): String = when (availability) {
+    Availability.Available -> "Available"
+    is Availability.Unavailable -> when (availability.reason) {
+        UnavailabilityReason.REMOVED -> "No longer installed"
+        UnavailabilityReason.SOURCE_UNAVAILABLE -> "Game folder unavailable"
+        UnavailabilityReason.UNSUPPORTED -> "Unsupported"
+        UnavailabilityReason.UNKNOWN -> "Unavailable"
     }
 }

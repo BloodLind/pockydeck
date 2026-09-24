@@ -41,6 +41,7 @@ data class TileUiModel(
     val supportedActions: Set<SupportedItemAction>,
     val artwork: TileArtwork,
     val platformId: String? = null,
+    val isRom: Boolean = artwork is TileArtwork.Rom,
 ) {
     val canOpen: Boolean
         get() = availability == Availability.Available &&
@@ -103,6 +104,7 @@ fun LibraryItem.toTileUiModel(
             else -> TileArtwork.Fallback
         },
         platformId = (this as? LibraryItem.RomGame)?.platformId,
+        isRom = this is LibraryItem.RomGame,
     )
 }
 

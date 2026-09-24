@@ -18,6 +18,8 @@ fun AppsScreen(
     isList: Boolean = false,
     onLayoutChange: (Boolean) -> Unit = {},
     gridSizePercent: Int = 100,
+    onArtworkLoadingAllowed: (Boolean) -> Unit = {},
 ) = CollectionDestinationScreen("Apps", state, modifier, callbacks, iconLoader = iconLoader,
     restoreFocusRequest = restoreFocusRequest, allowFocusRequest = allowFocusRequest,
-    isList = isList, onLayoutChange = onLayoutChange, gridSizePercent = gridSizePercent)
+    isList = isList, onLayoutChange = onLayoutChange, gridSizePercent = gridSizePercent,
+    onArtworkLoadingAllowed = onArtworkLoadingAllowed)

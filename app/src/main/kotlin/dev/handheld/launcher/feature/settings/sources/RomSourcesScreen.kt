@@ -1,12 +1,14 @@
 package dev.handheld.launcher.feature.settings.sources
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import dev.handheld.launcher.contract.LauncherActionMeaning
@@ -60,12 +62,26 @@ fun RomSourcesScreen(
     modifier: Modifier = Modifier,
     initialFocusRequester: FocusRequester? = null,
 ) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
-        PageHeading("ROM folders")
+    LazyColumn(modifier.fillMaxWidth().testTag("rom-folders-list"),
+        verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
+        romSourcesItems(state, callbacks, initialFocusRequester)
+    }
+}
+
+/** Each changing notice/control has its own stable anchor, including in compact All settings. */
+internal fun LazyListScope.romSourcesItems(
+    state: RomSourcesScreenState,
+    callbacks: RomSourcesCallbacks,
+    initialFocusRequester: FocusRequester? = null,
+) {
+    item("rom-heading") { PageHeading("ROM folders") }
+    item("rom-description") {
         LauncherText(
             "Find console folders on this device, SD cards and USB storage, or add a folder yourself. Consoles appear after games are detected.",
             color = LauncherTheme.colors.textSecondary,
         )
+    }
+    item("rom-storage-access") {
         ActionRow(
             if (state.storageAccessGranted) "Storage access enabled" else "Set up automatic discovery",
             if (state.storageAccessGranted) "Read-only scans · Manage access in Android settings" else "Allow All files access in Android settings to find console folders",
@@ -73,44 +89,56 @@ fun RomSourcesScreen(
             onActivate = callbacks.onSetupStorageAccess,
             onFocusChanged = settingsFocus("Storage access", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onSetupStorageAccess, callbacks.onFocusedAction),
         )
-        if (state.storageAccessGranted) {
+    }
+    if (state.storageAccessGranted) {
+        item("rom-automatic-discovery") {
             val toggle = { callbacks.onSetAutomaticDiscovery(!state.automaticDiscoveryEnabled) }
             ToggleRow("Discover new console folders", state.automaticDiscoveryEnabled, callbacks.onSetAutomaticDiscovery,
                 supportingText = "Registered folders still update when this is off",
                 onFocusChanged = settingsFocus("Automatic folder discovery", LauncherActionMeaning.CHANGE_FILTER, toggle, callbacks.onFocusedAction))
-            if (state.automaticDiscoveryEnabled) ActionRow("Find folders now", "Refresh connected storage and registered games",
-                enabled = !state.busy, onActivate = callbacks.onDiscoverFolders,
-                onFocusChanged = settingsFocus("Find console folders", LauncherActionMeaning.ACTIVATE, callbacks.onDiscoverFolders, callbacks.onFocusedAction))
         }
+        if (state.automaticDiscoveryEnabled) item("rom-discover-now") { ActionRow("Find folders now", "Refresh connected storage and registered games",
+                enabled = !state.busy, onActivate = callbacks.onDiscoverFolders,
+                onFocusChanged = settingsFocus("Find console folders", LauncherActionMeaning.ACTIVATE, callbacks.onDiscoverFolders, callbacks.onFocusedAction)) }
+    }
+    item("rom-add-folder") {
         ActionRow(
             "Add ROM folder",
             "Select a folder on this device, an SD card or USB storage",
             onActivate = callbacks.onAddSource,
             onFocusChanged = settingsFocus("Add ROM folder", LauncherActionMeaning.OPEN_SETTINGS, callbacks.onAddSource, callbacks.onFocusedAction),
         )
+    }
+    item("rom-pc-help") {
         LauncherText(
             "PC games: in GameNative, choose Export for frontend and save the shortcut in ROMs/windows or ROMs/steam. Choose the PC app under Emulators.",
             style = LauncherTheme.typography.settingSupporting, color = LauncherTheme.colors.textSecondary,
         )
-        state.preparingText?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
-        state.message?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
-        if (state.busy && state.preparingText == null) {
+    }
+    state.preparingText?.let { item("rom-preparing") { LauncherText(it, color = LauncherTheme.colors.textSecondary) } }
+    state.message?.let { item("rom-message") { LauncherText(it, color = LauncherTheme.colors.textSecondary) } }
+    if (state.busy && state.preparingText == null) {
+        item("rom-progress") {
             LauncherText(if (state.discoveryBusy) "Finding console folders… ${state.discoveryFoldersVisited} folders checked" else "Updating ROM library…", color = LauncherTheme.colors.textSecondary)
         }
-        state.sources.forEach { source -> key(source.id.value) {
-            SourceControls(source, callbacks)
-        } }
-        PageHeading("Game cache")
+    }
+    state.sources.forEach { source -> sourceControls(source, callbacks) }
+    item("rom-cache-heading") { PageHeading("Game cache") }
+    item("rom-cache-description") {
         LauncherText(
             "Compressed games are extracted when the selected emulator needs it. Cached copies can be removed; your ROMs are kept.",
             color = LauncherTheme.colors.textSecondary,
         )
+    }
+    item("rom-cache-limit") {
         ChoiceRow(
             "Cache limit", state.cacheLimitLabel,
             onSelect = callbacks.onChooseCacheLimit,
             supportingText = state.cacheUsageLabel.takeIf { it.isNotBlank() },
             onFocusChanged = settingsFocus("Change game cache limit", LauncherActionMeaning.CHANGE_FILTER, callbacks.onChooseCacheLimit, callbacks.onFocusedAction),
         )
+    }
+    item("rom-cache-clear") {
         ActionRow(
             "Clear game cache", "Choose unused copies or clear all after closing emulators",
             onActivate = callbacks.onClearCache,
@@ -119,19 +147,21 @@ fun RomSourcesScreen(
     }
 }
 
-@Composable
-private fun SourceControls(source: RomSource, callbacks: RomSourcesCallbacks) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
+private fun LazyListScope.sourceControls(source: RomSource, callbacks: RomSourcesCallbacks) {
+    val prefix = "rom-source:${source.id.value}:"
+    sourceRow(prefix + "name") {
         LauncherText(source.name, style = LauncherTheme.typography.settingLabel)
-        if (source.automaticallyDiscovered) LauncherText("Found automatically", style = LauncherTheme.typography.settingSupporting,
-            color = LauncherTheme.colors.textSecondary)
-        LauncherText(sourceStatusLabel(source), color = LauncherTheme.colors.textSecondary)
-        if (source.unidentifiedCount > 0) LauncherText(
+    }
+    if (source.automaticallyDiscovered) sourceRow(prefix + "discovered") { LauncherText("Found automatically", style = LauncherTheme.typography.settingSupporting,
+            color = LauncherTheme.colors.textSecondary) }
+    sourceRow(prefix + "status") { LauncherText(sourceStatusLabel(source), color = LauncherTheme.colors.textSecondary) }
+    if (source.unidentifiedCount > 0) sourceRow(prefix + "unidentified") { LauncherText(
             "${source.unidentifiedCount} unidentified · Choose a console to show these games in the library",
             color = LauncherTheme.colors.textSecondary,
-        )
-        source.error?.takeIf { it.isNotBlank() }?.let { LauncherText(it, color = LauncherTheme.colors.textSecondary) }
-        if (source.enabled) {
+        ) }
+    source.error?.takeIf { it.isNotBlank() }?.let { sourceRow(prefix + "error") { LauncherText(it, color = LauncherTheme.colors.textSecondary) } }
+    if (source.enabled) {
+        sourceRow(prefix + "console") {
             val choose = { callbacks.onChooseSourcePlatform(source.id) }
             ChoiceRow(
                 "Console for this folder",
@@ -140,13 +170,17 @@ private fun SourceControls(source: RomSource, callbacks: RomSourcesCallbacks) {
                 supportingText = "Overrides console detection for this folder",
                 onFocusChanged = settingsFocus("Choose console for ${source.name}", LauncherActionMeaning.CHANGE_FILTER, choose, callbacks.onFocusedAction),
             )
-            if (source.unidentifiedCount > 0) {
+        }
+        if (source.unidentifiedCount > 0) {
+            sourceRow(prefix + "identify") {
                 val identify = { callbacks.onIdentifySourceItems(source.id) }
                 ActionRow("Identify games", "Choose consoles individually for mixed folders",
                     onActivate = identify,
                     onFocusChanged = settingsFocus("Identify games in ${source.name}", LauncherActionMeaning.CHANGE_FILTER, identify, callbacks.onFocusedAction))
             }
         }
+    }
+    sourceRow(prefix + "actions") {
         val needsAccess = !source.enabled || source.status == RomSourceStatus.UNAVAILABLE
         val rescan = { callbacks.onRescanSource(source.id) }
         val regrant = { callbacks.onRegrantSource(source.id) }
@@ -166,6 +200,10 @@ private fun SourceControls(source: RomSource, callbacks: RomSourcesCallbacks) {
             )
         }
     }
+}
+
+private fun LazyListScope.sourceRow(key: String, content: @Composable () -> Unit) {
+    item(key) { Box(Modifier.fillMaxWidth().testTag(key)) { content() } }
 }
 
 internal fun sourceStatusLabel(source: RomSource): String {

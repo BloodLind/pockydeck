@@ -36,9 +36,11 @@ class LauncherApplication : Application() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (!containerDelegate.isInitialized()) return
+        // Hiding the launcher is normal when opening a game, not memory pressure.
+        // Keep the bounded image buffer for the return Home; requests/painters still stop.
+        if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) return
         when {
-            level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN ||
-                level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> appContainer.trimArtworkMemory(clear = true)
+            level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> appContainer.trimArtworkMemory(clear = true)
             level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> appContainer.trimArtworkMemory(clear = false)
         }
     }

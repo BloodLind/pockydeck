@@ -22,10 +22,11 @@ class ControllerInputHandler(
     imeVisible: () -> Boolean,
     private val imeFaceActionsEnabled: () -> Boolean = { false },
     onSearchClearEnabled: () -> Boolean = { false },
+    onRepeatHoldChanged: (Boolean) -> Unit = {},
     dispatch: (SemanticInputAction) -> Boolean,
 ) {
     private val engine = ControllerInputEngine(scope, mapping, imeVisible, imeFaceActionsEnabled,
-        onSearchClearEnabled = onSearchClearEnabled, dispatch = dispatch)
+        onSearchClearEnabled = onSearchClearEnabled, onRepeatHoldChanged = onRepeatHoldChanged, dispatch = dispatch)
 
     fun onKeyEvent(event: KeyEvent): Boolean {
         val button = event.keyCode.toControllerButton() ?: return false
@@ -93,7 +94,7 @@ internal data class ControllerAxes(
 
 internal enum class ControllerButton {
     DpadUp, DpadDown, DpadLeft, DpadRight,
-    A, B, X, Y, Start, LeftShoulder, RightShoulder, LeftTrigger, RightTrigger,
+    A, B, X, Y, Start, Select, LeftShoulder, RightShoulder, LeftTrigger, RightTrigger,
 }
 
 /** Android-free state machine used by both key and axis input, and directly by JVM tests. */
@@ -104,6 +105,7 @@ internal class ControllerInputEngine(
     private val imeFaceActionsEnabled: () -> Boolean = { false },
     private val onSearchClearEnabled: () -> Boolean = { false },
     private val monotonicTimeMillis: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val onRepeatHoldChanged: (Boolean) -> Unit = {},
     private val dispatch: (SemanticInputAction) -> Boolean,
 ) {
     private class DeviceState {
@@ -138,6 +140,15 @@ internal class ControllerInputEngine(
     private var rightRepeat: RepeatSession? = null
     private var leftTriggerHeld = false
     private var rightTriggerHeld = false
+    private var reportedHold = false
+
+    private fun publishHold() {
+        val held = direction != Direction.None || leftTriggerHeld || rightTriggerHeld
+        if (held != reportedHold) {
+            reportedHold = held
+            onRepeatHoldChanged(held)
+        }
+    }
 
     private fun device(id: Int): DeviceState? {
         devices[id]?.let { return it }
@@ -251,6 +262,7 @@ internal class ControllerInputEngine(
         directionRepeat = null
         leftRepeat = null
         rightRepeat = null
+        publishHold()
     }
 
     private fun updateDirection() {
@@ -263,6 +275,7 @@ internal class ControllerInputEngine(
         val next = keyDirection ?: hatDirection ?: stickDirection ?: Direction.None
         if (next == direction) return
         direction = next
+        publishHold()
         directionRepeat?.job?.cancel()
         directionRepeat = null
         val action = next.action ?: return
@@ -279,6 +292,7 @@ internal class ControllerInputEngine(
         val startedGeneration = generation
         if (left != leftTriggerHeld) {
             leftTriggerHeld = left
+            publishHold()
             leftRepeat?.job?.cancel()
             leftRepeat = null
             if (left) {
@@ -290,6 +304,7 @@ internal class ControllerInputEngine(
         if (generation != startedGeneration) return
         if (right != rightTriggerHeld) {
             rightTriggerHeld = right
+            publishHold()
             rightRepeat?.job?.cancel()
             rightRepeat = null
             if (right) {
@@ -309,13 +324,16 @@ internal class ControllerInputEngine(
             delay((session.holdDelayMillis - (monotonicTimeMillis() - session.startedAt)).coerceAtLeast(0))
             while (isActive && stillOwner()) {
                 if (imeVisible()) { clearActiveState(clearDownOwnership = false); break }
+                val dispatchedAt = monotonicTimeMillis()
                 dispatch(session.action)
                 if (!stillOwner()) break
                 val heldMillis = (monotonicTimeMillis() - session.startedAt).coerceAtLeast(0)
                 val accelerated = (heldMillis - session.holdDelayMillis).coerceIn(0, ACCELERATION_MILLIS)
                 val interval = REPEAT_INTERVAL_MILLIS -
                     (REPEAT_INTERVAL_MILLIS - MIN_REPEAT_INTERVAL_MILLIS) * accelerated / ACCELERATION_MILLIS
-                delay(interval)
+                // Count dispatch work toward this step's interval. A slow frame may drop
+                // cadence, but must never create a burst of overdue repeats afterward.
+                delay((interval - (monotonicTimeMillis() - dispatchedAt)).coerceAtLeast(16L))
             }
         }
     }
@@ -355,6 +373,7 @@ internal class ControllerInputEngine(
         ControllerButton.B -> mapping.faceButtonAction(ControllerFaceButton.B)
         ControllerButton.X -> SemanticInputAction.SECONDARY
         ControllerButton.Y -> SemanticInputAction.TERTIARY
+        ControllerButton.Select -> SemanticInputAction.ITEM_DETAILS
         ControllerButton.Start -> SemanticInputAction.MENU
         ControllerButton.LeftShoulder -> SemanticInputAction.PREVIOUS_DESTINATION
         ControllerButton.RightShoulder -> SemanticInputAction.NEXT_DESTINATION
@@ -400,6 +419,7 @@ private fun Int.toControllerButton(): ControllerButton? = when (this) {
     KeyEvent.KEYCODE_BUTTON_B -> ControllerButton.B
     KeyEvent.KEYCODE_BUTTON_X -> ControllerButton.X
     KeyEvent.KEYCODE_BUTTON_Y -> ControllerButton.Y
+    KeyEvent.KEYCODE_BUTTON_SELECT -> ControllerButton.Select
     KeyEvent.KEYCODE_BUTTON_START -> ControllerButton.Start
     KeyEvent.KEYCODE_BUTTON_L1 -> ControllerButton.LeftShoulder
     KeyEvent.KEYCODE_BUTTON_R1 -> ControllerButton.RightShoulder

@@ -38,6 +38,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.swipeLeft
@@ -69,6 +70,40 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class CollectionLayoutPresentationTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun catalogPositionRailTracksListAndGridAndHidesForShortFilteredCatalogs() {
+        val games = (0..1002).map { game(it, "gba") }
+        var isList by mutableStateOf(false)
+        var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY, items = games, allItems = games,
+            selectedItemId = games.first().id, loading = false))
+        compose.setContent {
+            CompositionLocalProvider(LocalControllerInput provides false) {
+                LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
+                    CollectionDestinationScreen("Library", state, Modifier.size(820.dp, 350.dp), callbacks(),
+                        restoreFocusRequest = 0, isList = isList)
+                }
+            }
+        }
+        for (list in listOf(false, true)) {
+            compose.runOnIdle { isList = list }
+            compose.onNodeWithTag("collection-grid").performScrollToIndex(0)
+            fun position() = compose.onNodeWithTag("catalog-scroll-indicator").fetchSemanticsNode()
+                .config[SemanticsProperties.ProgressBarRangeInfo].current
+            compose.onNodeWithTag("catalog-scroll-indicator").assertIsDisplayed()
+            assertEquals(0f, position(), .001f)
+            compose.onNodeWithTag("collection-grid").performScrollToIndex(500)
+            assertTrue("The rail locates the middle in either layout", position() in .45f.. .6f)
+            compose.onNodeWithTag("collection-grid").performScrollToIndex(games.lastIndex)
+            assertEquals("The partial last row still reaches the rail end", 1f, position(), .001f)
+            val rail = compose.onNodeWithTag("catalog-scroll-indicator").fetchSemanticsNode()
+            assertTrue("Position is informational, not a controller/touch action", !rail.config.contains(SemanticsActions.OnClick))
+            assertEquals(games.first().id, state.selectedItemId)
+        }
+        compose.runOnIdle { state = state.copy(items = games.take(1)) }
+        compose.onNodeWithTag("catalog-scroll-indicator").assertDoesNotExist()
+        compose.runOnIdle { state = state.copy(items = emptyList()) }
+        compose.onNodeWithTag("catalog-scroll-indicator").assertDoesNotExist()
+    }
 
     @Test fun scaledHeadersKeepWholeTargetsAndAlignFilterCenters() {
         val games = listOf("gba", "gb", "gbc", "nes", "snes", "n64", "psx", "psp").mapIndexed { index, platform ->
@@ -171,115 +206,50 @@ class CollectionLayoutPresentationTest {
             assertEquals(1, opened)
         }
         compose.runOnIdle { assertTrue(requireNotNull(navigation).move(FocusDirection.Right)) }
-        compose.onNodeWithTag("collection-preview-open").assertIsFocused()
-        fun moveWithinPreview(direction: FocusDirection) {
-            compose.runOnIdle {
-                if (!requireNotNull(navigation).move(direction)) assertTrue(focusManager.moveFocus(direction))
-            }
-        }
-        moveWithinPreview(FocusDirection.Right)
-        compose.onNodeWithTag("collection-preview-details").assertIsFocused()
-        moveWithinPreview(FocusDirection.Right)
-        compose.onNodeWithTag("collection-preview-favorite").assertIsFocused()
-        compose.runOnIdle {
-            assertEquals(games[2].id, requireNotNull(focusedAction).itemId)
-            assertEquals("Add to favorites", requireNotNull(focusedAction).descriptor.label)
-        }
-        moveWithinPreview(FocusDirection.Left)
-        compose.onNodeWithTag("collection-preview-details").assertIsFocused()
-        moveWithinPreview(FocusDirection.Left)
-        compose.onNodeWithTag("collection-preview-open").assertIsFocused()
+        compose.onNodeWithContentDescription(games[2].title).assertIsFocused()
         compose.runOnIdle { assertTrue(requireNotNull(navigation).move(FocusDirection.Left)) }
         compose.onNodeWithContentDescription(games[2].title).assertIsFocused()
+        compose.onNodeWithTag("collection-preview-actions").assertDoesNotExist()
+        assertEquals(0, compose.onAllNodes(hasAnyAncestor(hasTestTag("collection-preview")) and hasClickAction()).fetchSemanticsNodes().size)
+        // A fast touch can reach the click callback before controller-mode recomposition.
+        compose.onNodeWithContentDescription(games[2].title).performTouchInput { click() }
+        compose.runOnIdle { assertEquals("Native row clicks only select even with stale controller mode", 1, opened) }
         compose.onNodeWithTag("collection-layout").performClick()
         compose.onNodeWithContentDescription(games[2].title).assertIsFocused()
         compose.runOnIdle { assertTrue(!isList) }
     }
 
-    @OptIn(ExperimentalComposeUiApi::class)
-    @Test fun focusedPreviewActionsFollowCatalogReplacementWithoutNeedingANewFocusEvent() {
-        val games = (0..3).map { game(it, "gba") }
+    @Test fun listPreviewAndRowActionFollowCatalogReplacement() {
+        val games = (0..1).map { game(it, "gba") }
         var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY,
-            items = listOf(games[0]), allItems = listOf(games[0]), selectedItemId = games[0].id,
-            favorites = setOf(games[3].id), loading = false))
-        val opened = mutableListOf<ItemId>()
-        val details = mutableListOf<ItemId>()
-        val favoriteChanges = mutableListOf<Pair<ItemId, Boolean>>()
+            items = listOf(games[0]), allItems = games, selectedItemId = games[0].id, loading = false))
         var focusedAction: FocusedControlAction? = null
-        lateinit var inputMode: InputModeManager
+        val opened = mutableListOf<ItemId>()
         compose.setContent {
-            inputMode = LocalInputModeManager.current
             LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
                 CollectionDestinationScreen("Library", state, Modifier.size(820.dp, 350.dp),
                     callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened += it })
-                        .copy(onOpenDetails = { details += it }, onFocusedAction = { focusedAction = it },
-                            onFavorite = { id, value ->
-                                favoriteChanges += id to value
-                                state = state.copy(favorites = if (value) state.favorites + id else state.favorites - id)
-                            }),
-                    isList = true, restoreFocusRequest = 0)
+                        .copy(onFocusedAction = { focusedAction = it }), isList = true)
             }
         }
-        compose.runOnIdle { inputMode.requestInputMode(InputMode.Keyboard) }
-        compose.onNodeWithTag("collection-preview-open").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        compose.onNodeWithTag("collection-preview-open").assertIsFocused()
-        lateinit var capturedOpen: () -> Unit
+        compose.onNodeWithContentDescription(games[0].title).assertIsFocused()
+        compose.runOnIdle { state = state.copy(items = listOf(games[1]), selectedItemId = games[1].id) }
+        compose.onNodeWithContentDescription(games[1].title).assertIsFocused()
+        compose.onNode(hasText(games[1].title) and hasAnyAncestor(hasTestTag("collection-preview")), useUnmergedTree = true).assertIsDisplayed()
         compose.runOnIdle {
-            capturedOpen = requireNotNull(requireNotNull(focusedAction).onActivate)
-            state = state.copy(items = listOf(games[1]), allItems = listOf(games[1]), selectedItemId = games[1].id)
-        }
-        compose.onNodeWithTag("collection-preview-open").assertIsFocused()
-        compose.runOnIdle {
-            assertEquals("Root Details/menu also follow the visible item", games[1].id, requireNotNull(focusedAction).itemId)
-            capturedOpen()
+            assertEquals(games[1].id, requireNotNull(focusedAction).itemId)
+            requireNotNull(focusedAction?.onActivate).invoke()
             assertEquals(listOf(games[1].id), opened)
-        }
-        compose.onNodeWithTag("collection-preview-details").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        compose.onNodeWithTag("collection-preview-details").assertIsFocused()
-        lateinit var capturedDetails: () -> Unit
-        compose.runOnIdle {
-            capturedDetails = requireNotNull(requireNotNull(focusedAction).onActivate)
-            state = state.copy(items = listOf(games[2]), allItems = listOf(games[2]), selectedItemId = games[2].id)
-        }
-        compose.onNodeWithTag("collection-preview-details").assertIsFocused()
-        compose.runOnIdle {
-            assertEquals(games[2].id, requireNotNull(focusedAction).itemId)
-            assertEquals("Details", requireNotNull(focusedAction).descriptor.label)
-            capturedDetails()
-            assertEquals(listOf(games[2].id), details)
-        }
-        compose.onNodeWithTag("collection-preview-favorite").performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-        compose.onNodeWithTag("collection-preview-favorite").assertIsFocused().assertIsOff()
-        lateinit var capturedFavorite: () -> Unit
-        compose.runOnIdle {
-            capturedFavorite = requireNotNull(requireNotNull(focusedAction).onActivate)
-            state = state.copy(items = listOf(games[3]), allItems = listOf(games[3]), selectedItemId = games[3].id)
-        }
-        compose.onNodeWithTag("collection-preview-favorite").assertIsFocused().assertIsOn().assertIsSelected()
-        compose.runOnIdle {
-            assertEquals(games[3].id, requireNotNull(focusedAction).itemId)
-            assertEquals("Remove from favorites", requireNotNull(focusedAction).descriptor.label)
-            capturedFavorite()
-        }
-        compose.onNodeWithTag("collection-preview-favorite").assertIsFocused().assertIsOff()
-        compose.runOnIdle {
-            assertEquals("Add to favorites", requireNotNull(focusedAction).descriptor.label)
-            requireNotNull(requireNotNull(focusedAction).onActivate).invoke()
-        }
-        compose.onNodeWithTag("collection-preview-favorite").assertIsOn()
-        compose.runOnIdle {
-            assertEquals("The focused star uses the replacement item and latest favorite state",
-                listOf(games[3].id to false, games[3].id to true), favoriteChanges)
         }
     }
 
-    @Test fun listTouchOnlySelectsPreviewAndExplicitOpenUsesTheSelectedItemAtLargeUiScales() {
+    @Test fun listTouchSelectsReadOnlyPreviewAndPublishesFooterActionsAtLargeUiScales() {
         val games = (0..3).map { game(it, "gba") }
         var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY, items = games, allItems = games,
             selectedItemId = games.first().id, favorites = setOf(games[1].id), loading = false))
         var scale by mutableFloatStateOf(1.1f)
+        var selectedAction: FocusedControlAction? = null
         val opened = mutableListOf<ItemId>()
-        val details = mutableListOf<ItemId>()
         compose.setContent {
             Box(Modifier.size(820.dp, 350.dp).testTag("collection-fixture")) {
                 val native = LocalDensity.current
@@ -288,80 +258,62 @@ class CollectionLayoutPresentationTest {
                     LauncherTheme(reducedMotion = true, referenceScale = (2f / 3f) / scale, uiScaleFactor = scale) {
                         CollectionDestinationScreen("Library", state, Modifier.fillMaxSize(),
                             callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened += it })
-                                .copy(onOpenDetails = { details += it }, onFavorite = { id, value ->
-                                    state = state.copy(favorites = if (value) state.favorites + id else state.favorites - id)
-                                }), isList = true)
+                                .copy(onFocusedAction = { selectedAction = it }), isList = true)
                     }
                 }
             }
         }
         for (percent in listOf(110, 120)) {
             compose.runOnIdle { scale = percent / 100f }
-            // Even tapping the already-selected row is only a preview operation.
-            compose.onNodeWithContentDescription(games.first().title).performTouchInput { click() }
             compose.onNodeWithContentDescription(games[1].title).performTouchInput { click() }
-            compose.onNodeWithContentDescription(games[1].title).assertIsNotFocused()
-            compose.onNode(hasText(games[1].title) and hasAnyAncestor(hasTestTag("collection-preview")),
-                useUnmergedTree = true).assertIsDisplayed()
+            compose.onNodeWithContentDescription(games[1].title).assertIsNotFocused().assertIsSelected()
+            compose.onNode(hasText(games[1].title) and hasAnyAncestor(hasTestTag("collection-preview")), useUnmergedTree = true).assertIsDisplayed()
             compose.onNode(hasText("Favorite") and hasAnyAncestor(hasTestTag("collection-preview"))).assertIsDisplayed()
-            compose.runOnIdle {
-                assertEquals(games[1].id, state.selectedItemId)
-                assertEquals("$percent% row touch never launches", (percent - 110) / 10, opened.size)
-            }
-            val page = actualBounds("collection-fixture")
-            val list = actualBounds("collection-grid")
             val preview = actualBounds("collection-preview")
-            assertTrue("$percent% selectable list and preview are separate panes", list.right < preview.left)
-            assertTrue("$percent% preview stays inside content", fits(preview, page))
-            assertTrue("$percent% launch action stays visible", fits(actualBounds("collection-preview-open"), preview))
-            val buttons = listOf("collection-preview-open", "collection-preview-details", "collection-preview-favorite")
-            buttons.forEach { tag ->
-                val bounds = actualBounds(tag)
-                assertEquals("$percent% icon targets stay square", bounds.width, bounds.height, 1f)
-                assertTrue("$percent% icon target stays inside preview", fits(bounds, preview))
+            assertTrue("$percent% list and preview are separate panes", actualBounds("collection-grid").right < preview.left)
+            assertTrue("$percent% preview fits", fits(preview, actualBounds("collection-fixture")))
+            assertTrue("$percent% cover fits", fits(actualBounds("collection-preview-artwork"), preview))
+            assertEquals("Preview has no actions", 0,
+                compose.onAllNodes(hasAnyAncestor(hasTestTag("collection-preview")) and hasClickAction()).fetchSemanticsNodes().size)
+            compose.runOnIdle {
+                assertEquals("Touch only selects", (percent - 110) / 10, opened.size)
+                assertEquals(games[1].id, requireNotNull(selectedAction).itemId)
+                requireNotNull(selectedAction?.onActivate).invoke()
+                assertEquals(games[1].id, opened.last())
             }
-            assertTrue("$percent% actions form a compact group instead of stretching across the pane",
-                actualBounds("collection-preview-actions").width < preview.width * .75f)
-            assertEquals("Only the three round controls are actionable",
-                3, compose.onAllNodes(hasAnyAncestor(hasTestTag("collection-preview-actions")) and hasClickAction()).fetchSemanticsNodes().size)
-            compose.onNodeWithTag("collection-preview-open").performTouchInput { click() }
-            compose.runOnIdle { assertEquals(games[1].id, opened.last()) }
-            compose.onNodeWithTag("collection-preview-details").performClick()
-            compose.runOnIdle { assertEquals(games[1].id, details.last()) }
-            compose.onNodeWithTag("collection-preview-favorite").assertIsOn().performTouchInput { click() }
-            compose.onNodeWithTag("collection-preview-favorite").assertIsOff().assertIsNotFocused().performTouchInput { click() }
-            compose.onNodeWithTag("collection-preview-favorite").assertIsOn()
         }
     }
 
-    @Test fun narrowListKeepsAnExplicitOpenActionAndVeryShortListOpensDetailsOnTouch() {
+    @Test fun narrowListUsesFooterActionAndVeryShortListOpensDetailsOnTouch() {
         val games = (0..3).map { game(it, "gba") }
         var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY, items = games, allItems = games,
             selectedItemId = games.first().id, loading = false))
         var height by mutableStateOf(400.dp)
+        var selectedAction: FocusedControlAction? = null
         val opened = mutableListOf<ItemId>()
         val details = mutableListOf<ItemId>()
         compose.setContent {
             CompositionLocalProvider(LocalControllerInput provides false) {
                 LauncherTheme(reducedMotion = true, referenceScale = 2f / 3f) {
-                    CollectionDestinationScreen("Library", state, Modifier.size(460.dp, height).testTag("collection-fixture"),
+                    CollectionDestinationScreen("Library", state, Modifier.size(460.dp, height),
                         callbacks(onSelect = { state = state.copy(selectedItemId = it) }, onOpen = { opened += it })
-                            .copy(onOpenDetails = { details += it }), isList = true)
+                            .copy(onOpenDetails = { details += it }, onFocusedAction = { selectedAction = it }), isList = true)
                 }
             }
         }
         compose.onNodeWithContentDescription(games[1].title).performTouchInput { click() }
         compose.onNodeWithTag("collection-preview-compact").assertIsDisplayed()
-        compose.runOnIdle { assertTrue(opened.isEmpty()); assertTrue(details.isEmpty()) }
-        assertTrue(fits(actualBounds("collection-preview-open"), actualBounds("collection-fixture")))
-        compose.onNodeWithTag("collection-preview-favorite").assertIsDisplayed()
-        assertTrue(fits(actualBounds("collection-preview-favorite"), actualBounds("collection-fixture")))
-        compose.onNodeWithTag("collection-preview-open").performClick()
-        compose.runOnIdle { assertEquals(listOf(games[1].id), opened); height = 240.dp }
+        compose.onNodeWithTag("collection-preview-open").assertDoesNotExist()
+        compose.runOnIdle {
+            assertTrue(opened.isEmpty()); assertTrue(details.isEmpty())
+            requireNotNull(selectedAction?.onActivate).invoke()
+            assertEquals(listOf(games[1].id), opened)
+            height = 240.dp
+        }
         compose.onNodeWithTag("collection-preview-compact").assertDoesNotExist()
         compose.onNodeWithContentDescription(games.first().title).performTouchInput { click() }
         compose.runOnIdle {
-            assertEquals("Tiny content keeps launch available through Details", listOf(games.first().id), details)
+            assertEquals(listOf(games.first().id), details)
             assertEquals("The row never launches unexpectedly", listOf(games[1].id), opened)
         }
     }

@@ -30,7 +30,6 @@ class RomFeatureController(
     private val scope:CoroutineScope,
     private val sharedStorage:SharedStoragePaths,
     private val discovery:AndroidSharedRomDiscovery,
-    private val onEmulatorDispatched: (ItemId, String, String) -> Unit = { _, _, _ -> },
 ) : LaunchDispatcher {
     private val interaction=Mutex()
     private val decisionGuard=Any()
@@ -78,7 +77,7 @@ class RomFeatureController(
                 ConsoleEmulatorRow(platform,consoleName(platform),entries.size,
                     if(preferred!=null) selected?.displayName ?: "Saved app unavailable" else when(candidates.size) { 0 -> "No compatible app"; 1 -> "Automatic · ${candidates.single().displayName}"; else -> "Ask when opening" },
                     candidates.size,
-                    if(installed.any { it.cores.isNotEmpty() }) EmulatorRegistry.coresForPlatform(platform).find { it.id==input.cores[platform] }?.displayName ?: "Choose installed RetroArch core" else null)
+                    consoleCoreLabel(installed,preferred,input.cores[platform]))
             }.sortedBy { it.consoleName })
         }.stateIn(scope,SharingStarted.Eagerly,EmulatorSettingsScreenState())
 
@@ -233,7 +232,6 @@ class RomFeatureController(
                 finally { if(!dispatched && preparedKey!=null) withContext(NonCancellable) { cache.releaseFailedReservation(preparedKey!!,newlyReserved) } }
             return when(result) {
                 RomDispatchResult.Started -> {
-                    runCatching { onEmulatorDispatched(entry.itemId, selected.packageName, selected.displayName) }
                     LaunchAcknowledgement.Dispatched(request.operationId)
                 }
                 else -> { mutableMessage.value=result.message(); LaunchAcknowledgement.Failed(request.operationId,LaunchFailureReason.DISPATCH_FAILED) }

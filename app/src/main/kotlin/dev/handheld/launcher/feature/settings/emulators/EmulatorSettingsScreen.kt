@@ -3,6 +3,7 @@ package dev.handheld.launcher.feature.settings.emulators
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
@@ -73,12 +74,15 @@ fun EmulatorSettingsScreen(
             console.coreLabel?.let { coreLabel ->
                 val chooseCore = { callbacks.onChooseCore(console.platformId) }
                 ChoiceRow(
-                    "RetroArch core", coreLabel, chooseCore,
-                    supportingText = "Install the selected core in RetroArch",
+                    "${console.consoleName} core", coreLabel, chooseCore,
+                    modifier = Modifier.padding(start = LauncherTheme.spacing.md),
                     onFocusChanged = settingsFocus("Choose ${console.consoleName} core", LauncherActionMeaning.CHANGE_FILTER, chooseCore, callbacks.onFocusedAction),
                 )
             }
         } }
+        if (state.consoles.any { it.coreLabel != null }) LauncherText(
+            "Each console uses its own RetroArch core. Install the chosen cores in RetroArch.",
+            style = LauncherTheme.typography.settingSupporting, color = LauncherTheme.colors.textSecondary)
     }
 }
 

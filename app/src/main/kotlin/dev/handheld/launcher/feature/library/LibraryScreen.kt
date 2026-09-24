@@ -20,5 +20,7 @@ fun LibraryScreen(
     isList: Boolean = false,
     onLayoutChange: (Boolean) -> Unit = {},
     gridSizePercent: Int = 100,
+    onArtworkLoadingAllowed: (Boolean) -> Unit = {},
 ) = CollectionDestinationScreen("Library", state, modifier, callbacks, systemActions, iconLoader, restoreFocusRequest, allowFocusRequest,
-    isList = isList, onLayoutChange = onLayoutChange, gridSizePercent = gridSizePercent)
+    isList = isList, onLayoutChange = onLayoutChange, gridSizePercent = gridSizePercent,
+    onArtworkLoadingAllowed = onArtworkLoadingAllowed)

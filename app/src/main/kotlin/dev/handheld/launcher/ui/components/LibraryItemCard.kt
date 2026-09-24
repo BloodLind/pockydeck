@@ -1,15 +1,23 @@
 package dev.handheld.launcher.ui.components
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.draw.clipToBounds
+import dev.handheld.launcher.ui.artwork.LocalArtworkLoadingAllowed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -22,7 +30,6 @@ import dev.handheld.launcher.core.designsystem.cards.CardVariant
 import dev.handheld.launcher.core.designsystem.cards.CoverTile
 import dev.handheld.launcher.core.designsystem.cards.CoverArtwork
 import dev.handheld.launcher.ui.artwork.enriched.rememberEnrichedArtwork
-import dev.handheld.launcher.ui.artwork.enriched.ArtworkPendingHint
 import dev.handheld.launcher.ui.artwork.enriched.LocalEnrichedArtworkLoader
 import dev.handheld.launcher.ui.artwork.ArtworkDecodePolicy
 import dev.handheld.launcher.core.designsystem.cards.SearchResultCard
@@ -35,14 +42,15 @@ import dev.handheld.launcher.ui.artwork.local.rememberAndroidIconPainter
 import dev.handheld.launcher.ui.presentation.TileArtwork
 import dev.handheld.launcher.ui.presentation.TileUiModel
 import dev.handheld.launcher.ui.presentation.platformAccent
-import dev.handheld.launcher.runtime.LocalRunningLabels
-import dev.handheld.launcher.runtime.RunningIndicator
+import dev.handheld.launcher.ui.presentation.LocalLastPlayed
+import dev.handheld.launcher.ui.presentation.LastPlayedIndicator
 
 @Immutable
 enum class LibraryItemCardVariant {
     Home,
     Collection,
     SearchResult,
+    List,
 }
 
 /** One production item card used across Home, collections, search, and details surfaces. */
@@ -62,7 +70,6 @@ fun LibraryItemCard(
     artworkActive: Boolean = true,
     artworkTargetSizePx: Int = ArtworkDecodePolicy.DEFAULT_TARGET_PX,
     animateArtwork: Boolean = true,
-    collectionArtworkScale: Float = 1f,
 ) {
     val cardModifier = modifier.semantics { this.selected = selected }
     val unavailable = model.availability !is Availability.Available
@@ -70,22 +77,8 @@ fun LibraryItemCard(
         ?.reason
         ?.presentationLabel
         ?: "Unavailable"
-    val visibleArtwork = artworkActive && (LocalEnrichedArtworkLoader.current?.foreground ?: true) &&
-        (iconLoader?.foreground ?: true)
-    val iconPainter = when (val artwork = model.artwork) {
-        is TileArtwork.AndroidIcon -> iconLoader?.let {
-            rememberAndroidIconPainter(it, artwork.componentId, visibleArtwork, artworkTargetSizePx)
-        }
-        else -> null
-    }
     val artwork: @Composable () -> Unit = {
-        TileArtwork(
-            model = model,
-            iconPainter = iconPainter,
-            active = visibleArtwork,
-            targetSizePx = artworkTargetSizePx,
-            animate = animateArtwork,
-        )
+        LibraryItemArtwork(model, iconLoader, artworkActive, artworkTargetSizePx, animateArtwork)
     }
     val tagLabel = when {
         model.platformLabel == "ANDROID APP" && model.subtitle == "Emulator" -> "EMU"
@@ -94,8 +87,8 @@ fun LibraryItemCard(
         else -> model.platformLabel
     }
     val badge: @Composable () -> Unit = { PlatformBadge(tagLabel, accentColor = model.platformAccent, compact = true) }
-    val runningLabel = if (variant == LibraryItemCardVariant.Home) LocalRunningLabels.current[model.itemId] else null
-    val status: (@Composable () -> Unit)? = if (runningLabel != null) ({ RunningIndicator(runningLabel) }) else null
+    val status: (@Composable () -> Unit)? = if (variant == LibraryItemCardVariant.Home && model.itemId in LocalLastPlayed.current)
+        ({ LastPlayedIndicator(model.platformLabel) }) else null
     val contextualSubtitle = model.subtitle?.takeUnless {
         it.equals(model.platformLabel, ignoreCase = true) || it in setOf("App", "Game", "Emulator", "System")
     }
@@ -108,7 +101,7 @@ fun LibraryItemCard(
         (maxCollectionCardHeight - captionHeight).coerceAtLeast(0.dp)
     } else Dp.Infinity
 
-    if (model.artwork is TileArtwork.AndroidIcon && variant != LibraryItemCardVariant.SearchResult) {
+    if (model.artwork is TileArtwork.AndroidIcon && variant != LibraryItemCardVariant.SearchResult && variant != LibraryItemCardVariant.List) {
         AppIconTile(
             title = model.title,
             activationEnabled = activationEnabled,
@@ -126,7 +119,6 @@ fun LibraryItemCard(
             badge = badge,
             status = status,
             maxArtworkSize = maxArtworkSize,
-            collectionArtworkScale = collectionArtworkScale,
         )
         return
     }
@@ -167,10 +159,10 @@ fun LibraryItemCard(
             focusLift = focusLift,
             subtitleColor = model.platformAccent.takeIf { model.typeLabel == "Game" },
             maxArtworkSize = maxArtworkSize,
-            collectionArtworkScale = collectionArtworkScale,
         )
 
-        LibraryItemCardVariant.SearchResult -> SearchResultCard(
+        LibraryItemCardVariant.SearchResult, LibraryItemCardVariant.List -> SearchResultCard(
+            compact = variant == LibraryItemCardVariant.List,
             title = model.title,
             subtitle = contextualSubtitle,
             activationEnabled = activationEnabled,
@@ -190,6 +182,27 @@ fun LibraryItemCard(
     }
 }
 
+/** Artwork without a card, focus target or action semantics, also used by read-only previews. */
+@Composable
+fun LibraryItemArtwork(
+    model: TileUiModel,
+    iconLoader: AndroidIconLoader? = null,
+    active: Boolean = true,
+    targetSizePx: Int = ArtworkDecodePolicy.DEFAULT_TARGET_PX,
+    animate: Boolean = true,
+    fitCover: Boolean = false,
+) {
+    val visible = active && (LocalEnrichedArtworkLoader.current?.foreground ?: true) &&
+        (iconLoader?.foreground ?: true)
+    val iconPainter = when (val artwork = model.artwork) {
+        is TileArtwork.AndroidIcon -> iconLoader?.let {
+            rememberAndroidIconPainter(it, artwork.componentId, visible, targetSizePx)
+        }
+        else -> null
+    }
+    TileArtwork(model, iconPainter, visible, targetSizePx, animate, fitCover)
+}
+
 @Composable
 private fun TileArtwork(
     model: TileUiModel,
@@ -197,6 +210,7 @@ private fun TileArtwork(
     active: Boolean,
     targetSizePx: Int,
     animate: Boolean,
+    fitCover: Boolean,
 ) {
     if (!active) {
         ArtworkFallback(label = model.typeLabel)
@@ -208,23 +222,37 @@ private fun TileArtwork(
         cover = enriched.painter != null,
         fallback = if (model.artwork is TileArtwork.LocalReference) "Custom artwork unavailable" else model.typeLabel,
     )
-    Box(Modifier.fillMaxSize()) {
-        if (!animate || LauncherTheme.motion.reducedMotion) ArtworkVisualContent(visual)
-        else Crossfade(visual, Modifier.fillMaxSize(), animationSpec = tween(140), label = "Loaded artwork") { frame ->
-            ArtworkVisualContent(frame)
+    val duration = LauncherTheme.motion.artworkDurationMillis
+    val fade = animate && LocalArtworkLoadingAllowed.current && duration > 0 && enriched.painter != null && !enriched.fromMemory
+    val opacity = remember(visual.painter) { Animatable(if (fade) 0f else 1f) }
+    LaunchedEffect(opacity, fade) {
+        if (fade) opacity.animateTo(1f, tween(duration, easing = FastOutSlowInEasing)) else opacity.snapTo(1f)
+    }
+    Box(Modifier.fillMaxSize().clipToBounds()) {
+        // Keep animation reads in the draw layer: a reveal must not recompose every card
+        // on every frame. The short downward slide suggests a cartridge settling in place.
+        if (visual.painter != null) Box(Modifier.fillMaxSize().graphicsLayer { alpha = 1f - opacity.value }) {
+            ArtworkFallback(label = model.typeLabel)
         }
-        if (enriched.pending) ArtworkPendingHint(Modifier.align(Alignment.TopStart).padding(6.dp), animate = animate)
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            val progress = opacity.value
+            alpha = progress
+            translationY = -size.height * .045f * (1f - progress)
+            scaleX = .985f + .015f * progress
+            scaleY = scaleX
+        }) { ArtworkVisualContent(visual, fitCover) }
     }
 }
 
 private data class ArtworkVisual(val painter: Painter?, val cover: Boolean, val fallback: String)
 
 @Composable
-private fun ArtworkVisualContent(visual: ArtworkVisual) {
+private fun ArtworkVisualContent(visual: ArtworkVisual, fitCover: Boolean) {
     val painter = visual.painter
     when {
         painter == null -> ArtworkFallback(label = visual.fallback)
-        visual.cover -> CoverArtwork(painter)
+        visual.cover -> if (fitCover) Image(painter, contentDescription = null,
+            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit) else CoverArtwork(painter)
         else -> AppIconArtwork(painter)
     }
 }

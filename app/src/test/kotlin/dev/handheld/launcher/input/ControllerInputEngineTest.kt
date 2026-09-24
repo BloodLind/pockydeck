@@ -14,6 +14,46 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControllerInputEngineTest {
+    @Test fun `Select has its own shortcut and holding it never repeats the action`() = runTest {
+        val actions = mutableListOf<SemanticInputAction>()
+        val engine = ControllerInputEngine(this, { ConfirmBackMapping.Default }, { false }) { actions += it; true }
+        engine.onButtonDown(ControllerButton.Select, false, 1)
+        engine.onButtonDown(ControllerButton.Select, true, 2)
+        advanceTimeBy(2_000)
+        runCurrent()
+        engine.onButtonUp(ControllerButton.Select)
+        engine.onButtonDown(ControllerButton.Start, false, 3)
+        engine.onButtonUp(ControllerButton.Start)
+        engine.onButtonDown(ControllerButton.Y, false, 4)
+        engine.onButtonUp(ControllerButton.Y)
+        assertEquals(listOf(SemanticInputAction.ITEM_DETAILS, SemanticInputAction.MENU, SemanticInputAction.TERTIARY), actions)
+    }
+
+    @Test fun `dispatch cost counts toward repeat cadence without catch-up bursts after a stall`() = runTest {
+        var workTime = 0L
+        var cost = 25L
+        val times = mutableListOf<Long>()
+        fun now() = testScheduler.currentTime + workTime
+        val engine = ControllerInputEngine(this, { ConfirmBackMapping.Default }, { false },
+            monotonicTimeMillis = ::now) { times += now(); workTime += cost; true }
+        engine.onButtonDown(ControllerButton.DpadDown, false, now())
+        advanceTimeBy(3_500)
+        runCurrent()
+        assertEquals("UI work must not be added to every full-speed repeat delay", 55L, times.last() - times[times.lastIndex - 1])
+        cost = 200L
+        times.clear()
+        advanceTimeBy(300)
+        runCurrent()
+        assertTrue(times.size >= 2)
+        assertTrue("A stall must yield before a new repeat, never replay overdue inputs",
+            times.zipWithNext().all { (a, b) -> b - a >= 216 })
+        engine.onButtonUp(ControllerButton.DpadDown)
+        val stopped = times.size
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(stopped, times.size)
+    }
+
     @Test
     fun `Search Clear explicitly owns Y during ime without enabling other shortcuts`() = runTest {
         var clearEnabled = true

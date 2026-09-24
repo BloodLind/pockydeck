@@ -1,6 +1,10 @@
 package dev.handheld.launcher.integration
 
 import android.os.SystemClock
+import android.os.Handler
+import android.os.HandlerThread
+import android.view.FrameMetrics
+import java.util.concurrent.ConcurrentLinkedQueue
 import android.view.InputDevice
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
@@ -24,6 +28,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
@@ -36,6 +41,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import dev.handheld.launcher.MainActivity
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.core.domain.model.LauncherLocation
@@ -198,6 +204,78 @@ class MainActivityInputDeviceTest {
       }
     }
 
+    @Test fun listKeepsFocusOnRowsAndYSelectShortcutsFollowTheSelectedGame() {
+        tapTag("collection-layout")
+        compose.waitUntil(TIMEOUT_MS) { LauncherDestination.LIBRARY in app.display.value.listDestinations }
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        waitForFocusedCard()
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        waitForFocusedCard()
+        val selected = requireNotNull(library.state.value.selectedItemId)
+        val wasFavorite = selected in library.state.value.favorites
+        try {
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            press(KeyEvent.KEYCODE_DPAD_LEFT)
+            assertEquals(selected, library.state.value.selectedItemId)
+            waitForFocusedCard()
+            compose.onNodeWithTag("collection-preview-actions").assertDoesNotExist()
+            assertEquals(0, compose.onAllNodes(hasAnyAncestor(hasTestTag("collection-preview")) and hasClickAction()).fetchSemanticsNodes().size)
+            compose.onNodeWithTag(LauncherShellTags.footerAction(SemanticInputAction.TERTIARY)).assertIsDisplayed()
+            press(KeyEvent.KEYCODE_BUTTON_Y)
+            compose.waitUntil(TIMEOUT_MS) { (selected in library.state.value.favorites) != wasFavorite }
+            assertEquals(selected, library.state.value.selectedItemId)
+            waitForFocusedCard()
+            press(KeyEvent.KEYCODE_BUTTON_Y)
+            compose.waitUntil(TIMEOUT_MS) { (selected in library.state.value.favorites) == wasFavorite }
+            compose.onNodeWithTag(LauncherShellTags.footerAction(SemanticInputAction.ITEM_DETAILS)).assertIsDisplayed()
+            compose.onNodeWithTag(LauncherShellTags.footerAction(SemanticInputAction.MENU)).assertDoesNotExist()
+            press(KeyEvent.KEYCODE_BUTTON_SELECT)
+            compose.waitUntil(TIMEOUT_MS) { (app.navigation.location.value as? LauncherLocation.ItemDetails)?.itemId == selected }
+            press(faceKey(mapping.back))
+            compose.waitUntil(TIMEOUT_MS) { app.navigation.location.value == LauncherLocation.Destination(LauncherDestination.LIBRARY) }
+            waitForFocusedCard()
+            assertEquals(selected, library.state.value.selectedItemId)
+
+            // Use the actual touch event path, then use the footer without moving to another pane.
+            fun fastTapSelectedRow() {
+                val cardBounds = focusedGridCards().single().boundsInRoot
+                val touchOffset = IntArray(2)
+                compose.runOnIdle { compose.activity.window.decorView.getLocationOnScreen(touchOffset) }
+                val touchDown = SystemClock.uptimeMillis()
+                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                    val event = MotionEvent.obtain(touchDown, SystemClock.uptimeMillis(), action,
+                        cardBounds.center.x + touchOffset[0], cardBounds.center.y + touchOffset[1], 0).apply {
+                        source = InputDevice.SOURCE_TOUCHSCREEN
+                    }
+                    try { instrumentation.sendPointerSync(event) } finally { event.recycle() }
+                }
+                compose.waitForIdle()
+            }
+            fastTapSelectedRow()
+            press(KeyEvent.KEYCODE_BUTTON_Y)
+            compose.waitUntil(TIMEOUT_MS) { (selected in library.state.value.favorites) != wasFavorite }
+            waitForFocusedCard()
+            assertEquals("Y after touch must keep the touched row", selected, library.state.value.selectedItemId)
+            // Re-enter touch mode before using the shared footer actions.
+            fastTapSelectedRow()
+            tapTag(LauncherShellTags.footerAction(SemanticInputAction.TERTIARY))
+            compose.waitUntil(TIMEOUT_MS) { (selected in library.state.value.favorites) == wasFavorite }
+            tapTag(LauncherShellTags.footerAction(SemanticInputAction.ITEM_DETAILS))
+            compose.waitUntil(TIMEOUT_MS) { (app.navigation.location.value as? LauncherLocation.ItemDetails)?.itemId == selected }
+            press(faceKey(mapping.back))
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            waitForFocusedCard()
+            assertEquals(selected, library.state.value.selectedItemId)
+            val bitmap = instrumentation.uiAutomation.takeScreenshot()
+            java.io.File(compose.activity.cacheDir, "list-redesign.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        } finally {
+            runBlocking { container.favoriteRepository.setFavorite(selected, wasFavorite) }
+        }
+    }
+
     @Test fun rightContinuesIntoNextRowAndLeftReturnsToPreviousRow() {
         press(KeyEvent.KEYCODE_DPAD_RIGHT) // The first controller input restores the selected card.
         waitForFocusedCard()
@@ -353,6 +431,200 @@ class MainActivityInputDeviceTest {
         assertEquals("Dock Search Back goes Home", LauncherLocation.Destination(LauncherDestination.HOME), app.navigation.location.value)
     }
 
+    @Test fun backgroundColorAndGrainSettingsRenderLiveAndPreserveOtherPreferences() {
+        val original = runBlocking { container.displayPreferenceRepository.preferences.first() }
+        tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+        val section = hasContentDescription("Display") and hasClickAction()
+        if (compose.onAllNodes(section).fetchSemanticsNodes().isNotEmpty())
+            compose.onNode(section).performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+        fun tint(value: BackgroundTint) {
+            repeat(BackgroundTint.entries.size) {
+                if (app.display.value.backgroundTint != value) {
+                    val previous = app.display.value.backgroundTint
+                    compose.onNodeWithTag("background-tint-choice").performScrollTo()
+                        .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+                    compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundTint != previous }
+                }
+            }
+            assertEquals(value, app.display.value.backgroundTint)
+        }
+        fun level(tag: String, value: Int) {
+            compose.onNodeWithTag(tag).performScrollTo()
+                .performSemanticsAction(SemanticsActions.SetProgress) { it(value.toFloat()) }
+            compose.waitUntil(TIMEOUT_MS) {
+                (if (tag == "background-tint-strength") app.display.value.backgroundTintPercent
+                else app.display.value.backgroundGrainPercent) == value
+            }
+            compose.waitForIdle()
+        }
+        fun sample(fileName: String? = null): Pair<Double, Double> {
+            compose.waitForIdle()
+            val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+            try {
+                fileName?.let { java.io.File(compose.activity.cacheDir, it).outputStream().use { output ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)
+                } }
+                // An empty section of the status strip contains only the shell background.
+                val pixels = (0 until 24).flatMap { y -> (0 until 24).map { x ->
+                    bitmap.getPixel(bitmap.width / 2 + x, 24 + y)
+                } }
+                val blue = pixels.map { android.graphics.Color.blue(it).toDouble() }
+                val red = pixels.map { android.graphics.Color.red(it).toDouble() }
+                val mean = blue.average()
+                return (mean - red.average()) to blue.map { (it - mean) * (it - mean) }.average()
+            } finally { bitmap.recycle() }
+        }
+        try {
+            level("background-tint-strength", 100)
+            level("background-grain-intensity", 0)
+            tint(BackgroundTint.PURPLE)
+            val purple = sample()
+            tint(BackgroundTint.GRAPHITE)
+            val graphite = sample()
+            tint(BackgroundTint.BLUE)
+            val blue = sample()
+            assertTrue("The live shell shows purple, not only the saved value", purple.first > graphite.first + 5)
+            assertTrue("The blue choice visibly changes the shell pigment", blue.first > purple.first + 5)
+            tint(BackgroundTint.PURPLE)
+            level("background-tint-strength", 0)
+            val neutral = sample()
+            assertTrue("Zero strength returns neutral charcoal", kotlin.math.abs(neutral.first - graphite.first) < 2)
+            level("background-grain-intensity", 100)
+            val textured = sample()
+            assertTrue("Grain zero removes the visible texture", textured.second > neutral.second + .3)
+            // Capture the intended softer default, then restore the user's actual settings.
+            level("background-tint-strength", 40)
+            level("background-grain-intensity", 30)
+            compose.onNodeWithTag("background-tint-choice").performScrollTo()
+            sample("background-tint-settings.png")
+            val saved = runBlocking { container.displayPreferenceRepository.preferences.first() }
+            assertEquals(BackgroundTint.PURPLE, saved.backgroundTint)
+            assertEquals(40, saved.backgroundTintPercent)
+            assertEquals(30, saved.backgroundGrainPercent)
+            assertEquals(original.homeArtworkBackground, saved.homeArtworkBackground)
+            assertEquals(original.listArtworkBackground, saved.listArtworkBackground)
+            assertEquals(original.uiScalePercent, saved.uiScalePercent)
+        } finally {
+            runBlocking {
+                container.displayPreferenceRepository.setBackgroundTint(original.backgroundTint)
+                container.displayPreferenceRepository.setBackgroundTintPercent(original.backgroundTintPercent)
+                container.displayPreferenceRepository.setBackgroundGrainPercent(original.backgroundGrainPercent)
+            }
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundTint == original.backgroundTint &&
+                app.display.value.backgroundTintPercent == original.backgroundTintPercent &&
+                app.display.value.backgroundGrainPercent == original.backgroundGrainPercent }
+        }
+    }
+
+    @Test fun homeArtworkBackgroundSettingIsOptionalHomeOnlyAndRestoresOriginalPreference() {
+        val original = runBlocking { container.displayPreferenceRepository.preferences.first().homeArtworkBackground }
+        fun openDisplay() {
+            tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+            val section = hasContentDescription("Display") and hasClickAction()
+            if (compose.onAllNodes(section).fetchSemanticsNodes().isNotEmpty()) {
+                compose.onNode(section).performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            }
+        }
+        fun choose(value: Boolean) {
+            openDisplay()
+            val toggle = compose.onNodeWithTag("home-artwork-background-toggle").performScrollTo()
+            if (app.display.value.homeArtworkBackground != value)
+                toggle.performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.homeArtworkBackground == value }
+            assertEquals(value, runBlocking { container.displayPreferenceRepository.preferences.first().homeArtworkBackground })
+        }
+        try {
+            choose(true)
+            tapTag(LauncherShellTags.destination(LauncherDestination.HOME))
+            compose.waitUntil(TIMEOUT_MS) {
+                compose.onAllNodesWithTag("home-rom-backdrop").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithTag("home-rom-backdrop").assertIsDisplayed()
+            compose.waitForIdle()
+            // Save the real-device preview without changing catalog entries or opening a game.
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                try { java.io.File(compose.activity.cacheDir, "home-backdrop-preview.png").outputStream().use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                } } finally { bitmap.recycle() }
+            }
+            tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+            compose.onNodeWithTag("home-rom-backdrop").assertDoesNotExist()
+            choose(false)
+            tapTag(LauncherShellTags.destination(LauncherDestination.HOME))
+            compose.onNodeWithTag("home-rom-backdrop").assertDoesNotExist()
+        } finally {
+            try { choose(original) }
+            catch (restoreFailure: Throwable) {
+                runBlocking { container.displayPreferenceRepository.setHomeArtworkBackground(original) }
+                throw restoreFailure
+            }
+        }
+    }
+
+    @Test fun listArtworkBackgroundSettingIsIndependentAndOnlyAppearsInLists() {
+        val original = runBlocking { container.displayPreferenceRepository.preferences.first() }
+        fun choose(value: Boolean) {
+            tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+            val section = hasContentDescription("Display") and hasClickAction()
+            if (compose.onAllNodes(section).fetchSemanticsNodes().isNotEmpty()) {
+                compose.onNode(section).performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            }
+            val toggle = compose.onNodeWithTag("list-artwork-background-toggle").performScrollTo()
+            if (app.display.value.listArtworkBackground != value)
+                toggle.performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.listArtworkBackground == value }
+            val stored = runBlocking { container.displayPreferenceRepository.preferences.first() }
+            assertEquals(value, stored.listArtworkBackground)
+            assertEquals("Home keeps its independent setting", original.homeArtworkBackground, stored.homeArtworkBackground)
+        }
+        fun awaitBackdrop() {
+            compose.waitUntil(TIMEOUT_MS) {
+                compose.onAllNodesWithTag("list-rom-backdrop").fetchSemanticsNodes().size == 1
+            }
+            compose.onNodeWithTag("list-rom-backdrop").assertIsDisplayed()
+        }
+        try {
+            cycleToFilter("console:ps2")
+            tapTag("collection-layout")
+            compose.waitUntil(TIMEOUT_MS) { LauncherDestination.LIBRARY in app.display.value.listDestinations }
+            choose(false)
+            tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+            compose.onNodeWithTag("list-rom-backdrop").assertDoesNotExist()
+            choose(true)
+            tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+            awaitBackdrop()
+            compose.waitForIdle()
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                try { java.io.File(compose.activity.cacheDir, "compact-list-backdrop.png").outputStream().use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                } } finally { bitmap.recycle() }
+            }
+            tapTag("collection-layout")
+            compose.waitUntil(TIMEOUT_MS) { LauncherDestination.LIBRARY !in app.display.value.listDestinations }
+            compose.onNodeWithTag("list-rom-backdrop").assertDoesNotExist()
+            tapTag("collection-layout")
+            awaitBackdrop()
+            press(KeyEvent.KEYCODE_DPAD_DOWN)
+            waitForFocusedCard()
+            press(KeyEvent.KEYCODE_BUTTON_SELECT)
+            compose.waitUntil(TIMEOUT_MS) { app.navigation.location.value is LauncherLocation.ItemDetails }
+            compose.onNodeWithTag("list-rom-backdrop").assertDoesNotExist()
+            press(faceKey(mapping.back))
+            awaitBackdrop()
+            tapTag(LauncherShellTags.destination(LauncherDestination.HOME))
+            compose.onNodeWithTag("list-rom-backdrop").assertDoesNotExist()
+            choose(false)
+            tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+            compose.onNodeWithTag("list-rom-backdrop").assertDoesNotExist()
+        } finally {
+            try { choose(original.listArtworkBackground) }
+            catch (restoreFailure: Throwable) {
+                runBlocking { container.displayPreferenceRepository.setListArtworkBackground(original.listArtworkBackground) }
+                throw restoreFailure
+            }
+        }
+    }
+
     @Test fun displayScaleKeepsDockAndFooterInsideTheNativeWindowAndRestoresOriginalSetting() {
         val originalScale = runBlocking { container.displayPreferenceRepository.preferences.first().uiScalePercent }
         tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
@@ -362,18 +634,18 @@ class MainActivityInputDeviceTest {
         }
 
         fun chooseScale(percent: Int) {
-            val choice = hasContentDescription("UI scale $percent%") and hasClickAction()
+            val choice = hasContentDescription("UI scale")
             compose.onNode(choice).performScrollTo()
-                .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+                .performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(percent.toFloat())) }
             compose.waitUntil(TIMEOUT_MS) { app.display.value.uiScalePercent == percent }
-            compose.onNode(choice).assertIsSelected()
+            compose.onNode(choice).assertIsDisplayed()
             assertEquals("Settings must persist the chosen scale", percent,
                 runBlocking { container.displayPreferenceRepository.preferences.first().uiScalePercent })
         }
 
         var testFailure: Throwable? = null
         try {
-            for (percent in listOf(110, 120, 100)) {
+            for (percent in listOf(90, 110, 120, 100)) {
                 chooseScale(percent)
                 compose.waitForIdle()
                 assertChromeInsideNativeWindow(percent)
@@ -453,6 +725,15 @@ class MainActivityInputDeviceTest {
                 focusedResults().single().config[SemanticsProperties.ContentDescription].first())
             assertTrue("Scrolling must not reopen Search editing", !imeIsVisible())
         }
+        val frameTimes = ConcurrentLinkedQueue<Long>()
+        val frameThread = HandlerThread("ScrollFrameMetrics").apply { start() }
+        val frameListener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
+            if (metrics.getMetric(FrameMetrics.FIRST_DRAW_FRAME) == 0L) frameTimes.add(metrics.getMetric(FrameMetrics.TOTAL_DURATION))
+        }
+        compose.runOnIdle {
+            container.enrichedArtworkLoader.trimMemory(clear = true)
+            compose.activity.window.addOnFrameMetricsAvailableListener(frameListener, Handler(frameThread.looper))
+        }
         try {
             waitWithDiagnostics("Applied Search must focus its first real result") { focusedResults().size == 1 }
             changes.clear()
@@ -493,7 +774,14 @@ class MainActivityInputDeviceTest {
             assertTrue("Horizontal held navigation must progress through multiple rows", changes.size >= 25)
             assertTrue(changes.zipWithNext().all { (a, b) -> b.first > a.first })
             assertEquals("Navigation must retain the original query", query, search.state.value.query)
-        } finally { observer.cancel() }
+        } finally {
+            observer.cancel()
+            compose.runOnUiThread { compose.activity.window.removeOnFrameMetricsAvailableListener(frameListener) }
+            frameThread.quitSafely()
+            val frames = frameTimes.toList().sorted()
+            if (frames.isNotEmpty()) android.util.Log.i("HeldSearchTest",
+                "cold artwork scrolling: ${frames.size} frames, p95=${frames[frames.size * 95 / 100] / 1_000_000}ms, over50ms=${frames.count { it > 50_000_000L }}, max=${frames.last() / 1_000_000}ms")
+        }
     }
 
     @Test fun slowTriggerReportsMergeAndAHeldTriggerAcceleratesThenStopsOnRelease() {
@@ -617,6 +905,81 @@ class MainActivityInputDeviceTest {
         }
     }
 
+    @Test fun backReachesLibraryControlsFromDeepGridAndListAndReturnsToTheSameGame() {
+        for (list in listOf(false, true)) {
+            if ((LauncherDestination.LIBRARY in app.display.value.listDestinations) != list) {
+                tapTag("collection-layout")
+                compose.waitUntil(TIMEOUT_MS) { (LauncherDestination.LIBRARY in app.display.value.listDestinations) == list }
+            }
+            press(KeyEvent.KEYCODE_DPAD_DOWN)
+            waitForFocusedCard()
+            try { keyDown(KeyEvent.KEYCODE_DPAD_DOWN); SystemClock.sleep(1_300) }
+            finally { keyUp(KeyEvent.KEYCODE_DPAD_DOWN) }
+            compose.waitForIdle()
+            waitForFocusedCard()
+            val selected = requireNotNull(library.state.value.selectedItemId)
+            assertTrue("The shortcut must work well below the first row",
+                library.state.value.items.indexOfFirst { it.id == selected } >= 12)
+            val anchor = library.state.value.firstVisibleItemId to library.state.value.firstVisibleOffsetPx
+            val beforeFilter = library.state.value.filter
+            val beforeSort = library.state.value.sort
+            fun unchanged() {
+                assertEquals(selected, library.state.value.selectedItemId)
+                assertEquals(anchor, library.state.value.firstVisibleItemId to library.state.value.firstVisibleOffsetPx)
+                assertEquals(beforeFilter, library.state.value.filter)
+                assertEquals(beforeSort, library.state.value.sort)
+            }
+            val backHint = hasAnyAncestor(hasTestTag(LauncherShellTags.footerAction(SemanticInputAction.BACK))) and hasText("Controls")
+            compose.onNode(backHint, useUnmergedTree = true).assertIsDisplayed()
+            press(faceKey(mapping.back))
+            compose.onNodeWithTag("collection-all-filters").assertIsFocused()
+            unchanged()
+            press(faceKey(mapping.confirm)) // Only activate an asserted header control, never a game.
+            val filtersDialog = hasAnyAncestor(hasTestTag(LauncherShellTags.Overlay)) and hasText("All filters")
+            compose.onNode(filtersDialog).assertIsDisplayed()
+            press(faceKey(mapping.back))
+            compose.onNode(filtersDialog).assertDoesNotExist()
+            compose.onNodeWithTag("collection-all-filters").assertIsFocused()
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag("collection-layout").assertIsFocused()
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.onNodeWithTag("collection-sort").assertIsFocused()
+            press(faceKey(mapping.confirm))
+            val sortDialog = hasAnyAncestor(hasTestTag(LauncherShellTags.Overlay)) and hasText("Sort by")
+            compose.onNode(sortDialog).assertIsDisplayed()
+            press(faceKey(mapping.back))
+            compose.onNodeWithTag("collection-sort").assertIsFocused()
+            unchanged()
+            press(KeyEvent.KEYCODE_DPAD_DOWN)
+            waitForFocusedCard()
+            unchanged()
+            press(faceKey(mapping.back))
+            compose.onNodeWithTag("collection-all-filters").assertIsFocused()
+            press(faceKey(mapping.back))
+            waitForFocusedCard()
+            unchanged()
+        }
+    }
+
+    @Test fun controlsShortcutCancelsAnInFlightGridMoveWithoutStealingFocusBack() {
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        waitForFocusedCard()
+        try {
+            keyDown(KeyEvent.KEYCODE_DPAD_DOWN)
+            SystemClock.sleep(25)
+            press(faceKey(mapping.back))
+        } finally { keyUp(KeyEvent.KEYCODE_DPAD_DOWN) }
+        compose.onNodeWithTag("collection-all-filters").assertIsFocused()
+        val selected = library.state.value.selectedItemId
+        SystemClock.sleep(250)
+        compose.waitForIdle()
+        compose.onNodeWithTag("collection-all-filters").assertIsFocused()
+        assertEquals(selected, library.state.value.selectedItemId)
+        press(faceKey(mapping.back))
+        waitForFocusedCard()
+        assertEquals(selected, library.state.value.selectedItemId)
+    }
+
     @Test fun backUsesPageRootsAndDismissesMenuWithoutNavigatingOrCyclingFilters() {
         for (destination in LauncherDestination.dockOrder) {
             tapTag(LauncherShellTags.destination(destination))
@@ -706,7 +1069,7 @@ class MainActivityInputDeviceTest {
         assertTrue("The real Activity window must be laid out", nativeSize.all { it > 0 })
         val tags = listOf(LauncherShellTags.Root, LauncherShellTags.Dock, LauncherShellTags.Footer) +
             LauncherDestination.dockOrder.map(LauncherShellTags::destination) +
-            listOf(SemanticInputAction.CONFIRM, SemanticInputAction.SECONDARY, SemanticInputAction.MENU)
+            listOf(SemanticInputAction.CONFIRM, SemanticInputAction.SECONDARY)
                 .map(LauncherShellTags::footerAction)
         for (tag in tags) {
             val target = compose.onNodeWithTag(tag)

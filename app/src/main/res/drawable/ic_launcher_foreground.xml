@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="1254" android:viewportHeight="1254">
+    <!-- The reference proportions occupy the central 72dp masked viewport. -->
+    <group android:pivotX="627" android:pivotY="627"
+        android:scaleX="0.6666667" android:scaleY="0.6666667">
+        <path android:fillColor="#F3F5F9" android:fillType="evenOdd"
+            android:pathData="M349,423C380,362 437,322 511,322C609,322 688,402 688,500C688,599 609,679 511,679C452,679 399,652 366,609L288,784C278,806 252,816 229,806C206,796 197,771 207,748ZM620,501A112,112 0,1 0,396,501A112,112 0,1 0,620,501Z" />
+        <path android:fillColor="#F3F5F9" android:fillType="evenOdd"
+            android:pathData="M899,603L969,447C979,424 1004,413 1027,423C1050,433 1060,459 1050,482L935,764C921,844 853,904 775,904C678,904 599,827 599,733C599,638 677,561 775,561C823,561 866,577 899,603ZM884,733A108,108 0,1 0,668,733A108,108 0,1 0,884,733Z" />
+        <path android:fillColor="#2866A9"
+            android:pathData="M586,502A78,78 0,1 0,430,502A78,78 0,1 0,586,502Z" />
+        <path android:fillColor="#3D9BFF"
+            android:pathData="M562,502A54,54 0,1 0,454,502A54,54 0,1 0,562,502Z" />
+        <path android:fillColor="#A74036"
+            android:pathData="M851,733A75,75 0,1 0,701,733A75,75 0,1 0,851,733Z" />
+        <path android:fillColor="#FF574A"
+            android:pathData="M828,733A52,52 0,1 0,724,733A52,52 0,1 0,828,733Z" />
+    </group>
+</vector>

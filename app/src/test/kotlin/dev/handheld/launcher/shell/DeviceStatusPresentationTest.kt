@@ -48,7 +48,7 @@ class DeviceStatusPresentationTest {
         val status = snapshot(listOf(volume("private-name", 10 * GIB),
             volume("/private/mount/path", 20 * GIB, readOnly = true))).toShellStatus()
         val storage = status.readings.filter { it.glyph == ShellStatusGlyph.Storage }
-        assertEquals(listOf("INT 100G", "EXT×2 30G"), storage.map { it.displayText })
+        assertEquals(listOf("100G", "×2 30G"), storage.map { it.displayText })
         val description = storage.last().accessibilityDescription!!
         assertTrue(description.contains("External storage 1 available:"))
         assertTrue(description.contains("External storage 2 available:"))
@@ -60,18 +60,18 @@ class DeviceStatusPresentationTest {
     @Test fun unreadableVolumeIsNotSilentlyCountedAsZeroInATotal() {
         val reading = snapshot(listOf(volume("known", 10 * GIB), volume("unknown", null))).toShellStatus()
             .readings.last()
-        assertEquals("EXT×2 10G+?", reading.displayText)
+        assertEquals("×2 10G+?", reading.displayText)
         assertTrue(reading.accessibilityDescription!!.contains("External storage 2 available: unavailable"))
         val unknown = snapshot(listOf(volume("unknown", null))).toShellStatus().readings.last()
-        assertEquals("EXT —", unknown.displayText)
+        assertEquals("—", unknown.displayText)
         assertEquals(StatusValue.Unavailable, unknown.presentation.value)
     }
 
     @Test fun enumerationFailureIsDifferentFromNoMountedExternalVolume() {
         val failed = DeviceStatusSnapshot(freeStorageBytes = StatusValue.Available(100 * GIB)).toShellStatus()
-        assertEquals(listOf("INT 100G", "EXT —"), failed.readings.filter { it.glyph == ShellStatusGlyph.Storage }.map { it.displayText })
+        assertEquals(listOf("100G", "—"), failed.readings.filter { it.glyph == ShellStatusGlyph.Storage }.map { it.displayText })
         val empty = snapshot(emptyList()).toShellStatus()
-        assertEquals(listOf("INT 100G"), empty.readings.filter { it.glyph == ShellStatusGlyph.Storage }.map { it.displayText })
+        assertEquals(listOf("100G"), empty.readings.filter { it.glyph == ShellStatusGlyph.Storage }.map { it.displayText })
     }
 
     @Test fun internalAndExternalStorageUseDifferentTintsFromRamWhileUnknownAndLowRemainHonest() {
@@ -79,9 +79,11 @@ class DeviceStatusPresentationTest {
         val storage = normal.readings.filter { it.glyph == ShellStatusGlyph.Storage }
         assertEquals(ShellStatusTint.InternalStorage, storage[0].tint)
         assertEquals(ShellStatusTint.ExternalStorage, storage[1].tint)
+        assertEquals(dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyph.InternalStorage, storage[0].symbol)
+        assertEquals(dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyph.Storage, storage[1].symbol)
         assertEquals(ShellStatusTint.Memory, normal.readings.single { it.glyph == ShellStatusGlyph.Memory }.tint)
-        assertEquals("INT 100G", storage[0].displayText)
-        assertEquals("EXT 10G", storage[1].displayText)
+        assertEquals("100G", storage[0].displayText)
+        assertEquals("10G", storage[1].displayText)
         assertTrue(storage[0].accessibilityDescription!!.startsWith("Internal storage available:"))
         assertTrue(storage[1].accessibilityDescription!!.startsWith("External storage available:"))
         assertEquals(ShellStatusTint.Muted, snapshot(listOf(volume("missing", null))).toShellStatus().readings.last().tint)
@@ -92,7 +94,7 @@ class DeviceStatusPresentationTest {
         val status = snapshot(listOf(volume("one", Long.MAX_VALUE), volume("two", Long.MAX_VALUE)))
             .copy(batteryTemperatureCelsius = StatusValue.Available(Float.NaN), batteryPercent = StatusValue.Available(101),
                 usedMemoryBytes = StatusValue.Available(20), totalMemoryBytes = StatusValue.Available(10)).toShellStatus()
-        assertEquals("EXT×2 —", status.readings.last().displayText)
+        assertEquals("×2 —", status.readings.last().displayText)
         listOf(ShellStatusGlyph.Temperature, ShellStatusGlyph.Memory).forEach { glyph ->
             assertEquals(StatusValue.Unavailable, status.readings.single { it.glyph == glyph }.presentation.value)
         }

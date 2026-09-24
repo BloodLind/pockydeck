@@ -8,6 +8,9 @@ data class FocusedControlAction(
     val descriptor: LauncherActionDescriptor,
     val onActivate: (() -> Unit)?,
     val itemId: ItemId? = null,
+    val onAdjust: ((Int) -> Unit)? = null,
+    val onBack: (() -> Unit)? = null,
+    val backLabel: String = "Done",
 )
 
 typealias OnFocusedAction = (FocusedControlAction?) -> Unit

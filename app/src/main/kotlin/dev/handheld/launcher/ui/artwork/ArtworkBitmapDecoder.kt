@@ -33,7 +33,18 @@ internal class ArtworkBitmapDecoder(private val resolver: ContentResolver) {
         // a painter/cache; it is safe to release this still-private, unpublished allocation.
         try { coroutine.ensureActive() }
         catch (cancelled: kotlinx.coroutines.CancellationException) { bitmap.recycle(); throw cancelled }
-        return bitmap.asImageBitmap()
+        // Sampling can leave almost twice the requested edge (four times the bytes).
+        // Store only the display bucket so a small Home library fits predictably in memory.
+        val target = ArtworkDecodePolicy.target(targetSizePx)
+        val scale = minOf(1f, target.toFloat() / maxOf(bitmap.width, bitmap.height))
+        val sized = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bitmap,
+            (bitmap.width * scale).toInt().coerceAtLeast(1),
+            (bitmap.height * scale).toInt().coerceAtLeast(1), true).also { if (it !== bitmap) bitmap.recycle() }
+        else bitmap
+        try { coroutine.ensureActive() }
+        catch (cancelled: kotlinx.coroutines.CancellationException) { sized.recycle(); throw cancelled }
+        sized.prepareToDraw()
+        return sized.asImageBitmap()
     }
 
     private fun open(reference: String, coroutine: CoroutineContext): InputStream? {

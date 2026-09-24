@@ -5,6 +5,7 @@ import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsFocused
@@ -24,12 +25,14 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.click
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.handheld.launcher.MainActivity
@@ -42,6 +45,8 @@ import dev.handheld.launcher.shell.LauncherShellTags
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -69,12 +74,14 @@ class LauncherAppIntegrationTest {
         compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SETTINGS)).performTouchInput { click() }
         val home = compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.HOME))
         home.performTouchInput { click() }
+        compose.runOnIdle { pressGamepad(KeyEvent.KEYCODE_DPAD_RIGHT) }
         compose.waitUntil(5_000) { compose.onAllNodes(selectedCard).fetchSemanticsNodes().size == 1 }
         compose.onNode(selectedCard).assertIsFocused()
 
         home.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         home.assertIsFocused()
         home.performTouchInput { click() }
+        compose.runOnIdle { pressGamepad(KeyEvent.KEYCODE_DPAD_RIGHT) }
         compose.waitUntil(5_000) { compose.onAllNodes(selectedCard).fetchSemanticsNodes().size == 1 }
         compose.onNode(selectedCard).assertIsFocused()
         home.assertIsSelected()
@@ -157,6 +164,69 @@ class LauncherAppIntegrationTest {
         compose.waitForIdle()
         compose.onAllNodesWithTag(LauncherShellTags.Root).assertCountEquals(1)
         compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SETTINGS)).assertIsSelected()
+    }
+
+    @Test fun touchedSliderRestoresExactlyAndBackExitsAdjustmentBeforeLeavingSettings() {
+        val container = (compose.activity.application as LauncherApplication).appContainer
+        val mapping = runBlocking { container.controllerPreferenceRepository.confirmBackMapping.first() }
+        val original = runBlocking { container.displayPreferenceRepository.preferences.first().gridSizePercent }
+        fun button(value: ControllerFaceButton) = if (value == ControllerFaceButton.A) KeyEvent.KEYCODE_BUTTON_A else KeyEvent.KEYCODE_BUTTON_B
+        fun press(key: Int) { compose.runOnIdle { pressGamepad(key) }; compose.waitForIdle() }
+        try {
+            compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SETTINGS)).performClick()
+            compose.onNodeWithContentDescription("Display").performClick()
+            val slider = compose.onNodeWithContentDescription("Grid card size")
+            slider.performScrollTo()
+            // Real Activity touch dispatch also switches the root's input mode.
+            val bounds = slider.fetchSemanticsNode().boundsInRoot
+            compose.runOnIdle {
+                val time = SystemClock.uptimeMillis()
+                val offset = IntArray(2)
+                compose.activity.window.decorView.getLocationOnScreen(offset)
+                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                    val event = MotionEvent.obtain(time, time + 20, action,
+                        bounds.center.x + offset[0], bounds.bottom - 25 + offset[1], 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+                    try { compose.activity.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+            }
+            press(KeyEvent.KEYCODE_DPAD_DOWN)
+            slider.assertIsFocused()
+            press(button(mapping.confirm))
+            compose.onNodeWithContentDescription("D-pad Left and Right", useUnmergedTree = true).assertExists()
+            val before = runBlocking { container.displayPreferenceRepository.preferences.first().gridSizePercent }
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            compose.waitUntil(5_000) {
+                runBlocking { container.displayPreferenceRepository.preferences.first().gridSizePercent } > before
+            }
+            press(button(mapping.back))
+            slider.assertIsFocused()
+            compose.onNodeWithContentDescription("D-pad Left and Right", useUnmergedTree = true).assertDoesNotExist()
+            compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SETTINGS)).assertIsSelected()
+            press(KeyEvent.KEYCODE_DPAD_UP)
+            compose.onNodeWithContentDescription("UI scale").assertIsFocused()
+            press(button(mapping.confirm))
+            compose.onNodeWithContentDescription("D-pad Left and Right", useUnmergedTree = true).assertExists()
+            press(button(mapping.back))
+
+            // Returning from controller use to a touched non-first slider must preserve that target.
+            slider.performScrollTo()
+            val secondBounds = slider.fetchSemanticsNode().boundsInRoot
+            compose.runOnIdle {
+                val time = SystemClock.uptimeMillis()
+                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                    val event = MotionEvent.obtain(time, time + 20, action,
+                        secondBounds.center.x, secondBounds.bottom - 25, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+                    try { compose.activity.dispatchTouchEvent(event) } finally { event.recycle() }
+                }
+            }
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            slider.assertIsFocused()
+            press(KeyEvent.KEYCODE_DPAD_LEFT)
+            assertTrue("A slider outside adjustment mode must allow leaving to the settings sidebar",
+                compose.onAllNodes(hasContentDescription("Grid card size") and isFocused()).fetchSemanticsNodes().isEmpty())
+        } finally {
+            runBlocking { container.displayPreferenceRepository.setGridSizePercent(original) }
+        }
     }
 
     private fun pressGamepad(keyCode: Int) {

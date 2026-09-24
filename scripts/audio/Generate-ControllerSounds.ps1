@@ -1,6 +1,5 @@
-# Original launcher cues synthesized from sine waves. No samples or recordings are used.
-# Reproduce the checked-in mono PCM WAVs with PowerShell 7 or Windows PowerShell.
-# Low fundamentals, rounded 10 ms attacks and soft tails leave room for media playback.
+# Original console-style ticks and pops, synthesized without sampled recordings.
+# Dry navigation transients and rounded action pops, matched RMS, no echo/reverb.
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
@@ -10,67 +9,72 @@ $outputDirectory = Join-Path $projectRoot 'app/src/main/res/raw'
 $sampleRate = 44100
 
 function Write-Cue {
-    param([string]$Name, [int]$DurationMs, [object[]]$Voices)
+    param([string]$Name, [int]$DurationMs, [double]$StartHz, [double]$EndHz, [double]$BodyHz, [double]$Chime = 0, [switch]$Dry)
     $sampleCount = [int]($sampleRate * $DurationMs / 1000)
-    $destination = Join-Path $outputDirectory ($Name + '.wav')
-    $writer = [IO.BinaryWriter]::new([IO.File]::Create($destination))
+    $samples = [double[]]::new($sampleCount)
+    $envelopes = [double[]]::new($sampleCount)
+    $sum = 0.0
+    $weight = 0.0
+    # Identical, deterministic navigation clicks: focus timing must not change timbre.
+    $random = [Random]::new(173)
+    $low = 0.0
+    $bass = 0.0
+    for ($index = 0; $index -lt $sampleCount; $index++) {
+        $time = $index / [double]$sampleRate
+        $duration = ($sampleCount - 1) / [double]$sampleRate
+        $attack = 0.5 - 0.5 * [Math]::Cos([Math]::Min(1.0, $time / 0.0018) * [Math]::PI)
+        $tail = 0.5 - 0.5 * [Math]::Cos([Math]::Min(1.0, ($duration - $time) / 0.007) * [Math]::PI)
+        $envelope = $attack * $tail * [Math]::Exp(-3.8 * $time / $duration)
+        $phase = 2 * [Math]::PI * ($EndHz * $time + ($StartHz - $EndHz) * 0.004 * (1 - [Math]::Exp(-$time / 0.004)))
+        $body = [Math]::Sin(2 * [Math]::PI * $BodyHz * $time)
+        $spark = [Math]::Sin(2 * [Math]::PI * $EndHz * 2.1 * $time) * [Math]::Exp(-$time / 0.004)
+        $chimeTone = $Chime * [Math]::Sin(2 * [Math]::PI * $EndHz * 1.5 * $time)
+        if ($Dry) {
+            # Broad filtered noise, no oscillator, beating partials or pitch sweep.
+            $low += 0.30 * (($random.NextDouble() * 2 - 1) - $low)
+            $bass += 0.045 * ($low - $bass)
+            $envelope = $attack * $tail * [Math]::Exp(-2.0 * $time / $duration)
+            $value = $envelope * ($low - $bass)
+        } else {
+            $value = $envelope * (0.74 * [Math]::Sin($phase) + 0.18 * $body + 0.08 * $spark + $chimeTone)
+        }
+        $samples[$index] = $value
+        $envelopes[$index] = $envelope
+        $sum += $value
+        $weight += $envelope
+    }
+    # Remove DC without introducing an edge at the start or end of the sample.
+    $energy = 0.0
+    $peak = 0.0
+    for ($index = 0; $index -lt $sampleCount; $index++) {
+        $samples[$index] -= ($sum / $weight) * $envelopes[$index]
+        $energy += $samples[$index] * $samples[$index]
+        $peak = [Math]::Max($peak, [Math]::Abs($samples[$index]))
+    }
+    $rms = [Math]::Sqrt($energy / $sampleCount)
+    $gain = [Math]::Min(0.044 / $rms, 0.20 / $peak)
+    $writer = [IO.BinaryWriter]::new([IO.File]::Create((Join-Path $outputDirectory ($Name + '.wav'))))
     try {
         $writer.Write([Text.Encoding]::ASCII.GetBytes('RIFF'))
         $writer.Write([int](36 + $sampleCount * 2))
         $writer.Write([Text.Encoding]::ASCII.GetBytes('WAVEfmt '))
         $writer.Write([int]16)
-        $writer.Write([int16]1) # PCM
-        $writer.Write([int16]1) # mono
+        $writer.Write([int16]1)
+        $writer.Write([int16]1)
         $writer.Write([int]$sampleRate)
         $writer.Write([int]($sampleRate * 2))
         $writer.Write([int16]2)
         $writer.Write([int16]16)
         $writer.Write([Text.Encoding]::ASCII.GetBytes('data'))
         $writer.Write([int]($sampleCount * 2))
-        for ($index = 0; $index -lt $sampleCount; $index++) {
-            $time = $index / [double]$sampleRate
-            $value = 0.0
-            foreach ($voice in $Voices) {
-                $elapsed = $time - $voice.Start / 1000.0
-                $duration = $voice.Length / 1000.0
-                if ($elapsed -ge 0 -and $elapsed -lt $duration) {
-                    $progress = $elapsed / $duration
-                    $attack = 0.5 - 0.5 * [Math]::Cos([Math]::Min(1.0, $elapsed / 0.010) * [Math]::PI)
-                    $tail = 0.5 - 0.5 * [Math]::Cos([Math]::Min(1.0, ($duration - $elapsed) / 0.026) * [Math]::PI)
-                    $envelope = $attack * $tail * [Math]::Exp(-2.4 * $progress)
-                    $phase = 2 * [Math]::PI * ($voice.From * $elapsed +
-                        ($voice.To - $voice.From) * $elapsed * $elapsed / (2 * $duration))
-                    $tone = [Math]::Sin($phase) + 0.025 * [Math]::Sin($phase * 2)
-                    $value += $voice.Gain * $envelope * $tone
-                }
-            }
-            $bounded = [Math]::Max(-0.95, [Math]::Min(0.95, $value))
-            $writer.Write([int16][Math]::Round($bounded * 32767))
-        }
+        foreach ($value in $samples) { $writer.Write([int16][Math]::Round($value * $gain * 32767)) }
     } finally { $writer.Dispose() }
-    Write-Output "$Name.wav: $DurationMs ms, $sampleRate Hz, 16-bit mono PCM"
+    Write-Output "$Name.wav: $DurationMs ms, RMS $([Math]::Round($rms * $gain, 4)), peak $([Math]::Round($peak * $gain, 4))"
 }
 
-Write-Cue 'ui_move' 62 @(
-    @{ Start = 0; Length = 62; From = 380; To = 350; Gain = 0.26 }
-)
-Write-Cue 'ui_filter' 72 @(
-    @{ Start = 0; Length = 72; From = 420; To = 455; Gain = 0.26 }
-)
-Write-Cue 'ui_page' 96 @(
-    @{ Start = 0; Length = 78; From = 380; To = 470; Gain = 0.24 },
-    @{ Start = 18; Length = 78; From = 570; To = 625; Gain = 0.08 }
-)
-Write-Cue 'ui_confirm' 132 @(
-    @{ Start = 0; Length = 94; From = 330; To = 390; Gain = 0.25 },
-    @{ Start = 32; Length = 100; From = 520; To = 585; Gain = 0.19 }
-)
-Write-Cue 'ui_back' 110 @(
-    @{ Start = 0; Length = 92; From = 490; To = 350; Gain = 0.24 },
-    @{ Start = 18; Length = 92; From = 290; To = 245; Gain = 0.10 }
-)
-# A warm fifth marks an actual game/app selection, distinct from a header movement tick.
-Write-Cue 'ui_select' 94 @(
-    @{ Start = 0; Length = 94; From = 330; To = 345; Gain = 0.23 },
-    @{ Start = 12; Length = 82; From = 495; To = 518; Gain = 0.12 }
-)
+Write-Cue 'ui_move' 18 -Dry
+Write-Cue 'ui_select' 18 -Dry
+Write-Cue 'ui_confirm' 72 1040 880 440 0.12
+Write-Cue 'ui_back' 60 680 490 260
+Write-Cue 'ui_page' 56 880 720 360 0.06
+Write-Cue 'ui_filter' 40 1080 850 400

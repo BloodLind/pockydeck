@@ -50,6 +50,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import dev.handheld.launcher.ui.artwork.LocalArtworkLoadingAllowed
+import dev.handheld.launcher.ui.artwork.rememberArtworkLoadGate
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
@@ -130,18 +133,15 @@ fun CollectionDestinationScreen(
     isList: Boolean = false,
     onLayoutChange: (Boolean) -> Unit = {},
     gridSizePercent: Int = 100,
+    onArtworkLoadingAllowed: (Boolean) -> Unit = {},
 ) = BoxWithConstraints(modifier.fillMaxSize()) {
-    val columns = when {
-        maxWidth >= 760.dp -> 5
-        maxWidth >= 500.dp -> 4
-        else -> 3
-    }
-    val fontScale = LocalDensity.current.fontScale
-    val baseColumns = if (fontScale > 1.2f) (columns - 1).coerceAtLeast(2) else columns
-    val artworkScale = gridSizePercent.coerceIn(70, 140) / 100f
+    val gap = LauncherTheme.spacing.xs
+    val targetWidth = 152.dp * (gridSizePercent.coerceIn(70, 140) / 100f) *
+        LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val columns = collectionGridColumns(maxWidth.value, targetWidth.value, gap.value)
     CollectionBody(title, state, callbacks, systemActions, iconLoader,
-        if (isList) 1 else (baseColumns / artworkScale).roundToInt().coerceIn(2, 10),
-        restoreFocusRequest, allowFocusRequest, isList, onLayoutChange, artworkScale)
+        if (isList) 1 else columns,
+        restoreFocusRequest, allowFocusRequest, isList, onLayoutChange, onArtworkLoadingAllowed)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -157,9 +157,15 @@ private fun CollectionBody(
     allowFocusRequest: Boolean,
     isList: Boolean,
     onLayoutChange: (Boolean) -> Unit,
-    artworkScale: Float,
+    onArtworkLoadingAllowed: (Boolean) -> Unit,
 ) {
     val grid = rememberLazyGridState()
+    val artworkGate = rememberArtworkLoadGate { grid.isScrollInProgress }
+    val artworkLoadingAllowed by artworkGate.allowed.collectAsState()
+    val loadingAllowed = artworkLoadingAllowed && !grid.isScrollInProgress
+    val publishLoadingAllowed by rememberUpdatedState(onArtworkLoadingAllowed)
+    androidx.compose.runtime.SideEffect { publishLoadingAllowed(loadingAllowed) }
+    DisposableEffect(state.destination) { onDispose { publishLoadingAllowed(false) } }
     val laidOutItemCount by remember { derivedStateOf { grid.layoutInfo.totalItemsCount } }
     val inputMode = LocalInputModeManager.current
     val controllerInput = LocalControllerInput.current
@@ -181,10 +187,6 @@ private fun CollectionBody(
     var viewportRestored by remember { mutableStateOf(false) }
     var filterStripFocused by remember { mutableStateOf(false) }
     var focusedHeaderKey by remember { mutableStateOf<String?>(null) }
-    var previewHasFocus by remember { mutableStateOf(false) }
-    var previewOpenFocused by remember { mutableStateOf(false) }
-    var splitPreviewVisible by remember { mutableStateOf(false) }
-    val previewOpenFocus = remember { FocusRequester() }
     val allFilterFocus = remember { FocusRequester() }
     val allFiltersFocus = remember { FocusRequester() }
     val sortFocus = remember { FocusRequester() }
@@ -198,7 +200,9 @@ private fun CollectionBody(
             .mapTo(mutableSetOf()) { it.key }
     } }
     val navigator = rememberGridNavigation(itemKeys, focusedGridItem?.value, columns, grid, requesters,
-        enabled = allowFocusRequest && controllerInput && !state.searching, reducedMotion = LauncherTheme.motion.reducedMotion)
+        enabled = allowFocusRequest && controllerInput && !state.searching && focusedHeaderKey == null && !filterStripFocused,
+        reducedMotion = LauncherTheme.motion.reducedMotion,
+        onMoving = artworkGate::onNavigation)
     suspend fun restoreSelection(restoreViewport: Boolean = false): Boolean {
         if (!focusAllowed) return false
         val anchor = state.firstVisibleItemId?.let { target -> state.items.indexOfFirst { it.id == target } } ?: -1
@@ -226,11 +230,18 @@ private fun CollectionBody(
         }
         return false
     }
+    fun returnToSelection() {
+        scope.launch { if (!restoreSelection() && focusAllowed) allFilterFocus.requestFocus() }
+    }
+    fun focusPageControls() {
+        navigator.cancel()
+        inputMode.requestInputMode(InputMode.Keyboard)
+        (if (callbacks.onOpenFilters != null) allFiltersFocus else allFilterFocus).requestFocus()
+    }
     RegisterPageNavigation { direction ->
-        if (previewHasFocus) {
-            if (direction == FocusDirection.Left && previewOpenFocused) { scope.launch { restoreSelection() }; true } else false
-        } else if (isList && focusedGridItem != null && (direction == FocusDirection.Left || direction == FocusDirection.Right)) {
-            if (direction == FocusDirection.Right && splitPreviewVisible) { previewOpenFocus.requestFocus(); true } else false
+        if (isList && focusedGridItem != null && (direction == FocusDirection.Left || direction == FocusDirection.Right)) {
+            // The information pane never owns selection, including its touch-scrollable text.
+            true
         } else if (filterStripFocused || focusedHeaderKey != null) {
             // Only fully visible categories belong to the D-pad path. Moving through the
             // strip must never bring a clipped/off-screen chip into view implicitly.
@@ -262,7 +273,7 @@ private fun CollectionBody(
                     if (next == null) false else { requestHeader(next); true }
                 }
                 FocusDirection.Down -> {
-                    scope.launch { if (!restoreSelection() && focusAllowed) allFilterFocus.requestFocus() }
+                    returnToSelection()
                     true
                 }
                 else -> false
@@ -310,6 +321,7 @@ private fun CollectionBody(
             .distinctUntilChanged().collect { (index, offset) -> rememberAnchor(currentRenderedItemIds.getOrNull(index), offset) }
     }
 
+    CompositionLocalProvider(LocalArtworkLoadingAllowed provides (artworkLoadingAllowed && !grid.isScrollInProgress)) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
         // Keep header native targets available, but do not paint Android's temporary
         // fallback focus while a changed filter is restoring the resulting card.
@@ -323,7 +335,9 @@ private fun CollectionBody(
                 (LauncherTheme.spacing.sm + LauncherTheme.spacing.xxs) * 2f).coerceAtLeast(48.dp)
             val compactHeader = maxWidth < titleWidth + controls.minimumWidth + sortWidth + 48.dp + LauncherTheme.spacing.xs * 3f
             val headerCallbacks = callbacks.copy(onFocusedAction = {
-                if (!restoringCardFocus) callbacks.onFocusedAction(it)
+                if (!restoringCardFocus) callbacks.onFocusedAction(it?.let { action ->
+                    if (state.items.isEmpty()) action else action.copy(onBack = ::returnToSelection, backLabel = "Back")
+                })
             })
             val headerFocus: (String, Boolean) -> Unit = { key, focused ->
                 if (focused) focusedHeaderKey = key else if (focusedHeaderKey == key) focusedHeaderKey = null
@@ -386,16 +400,18 @@ private fun CollectionBody(
             val availableCardHeight = (maxHeight - (if (compactPreview) 48.dp + LauncherTheme.spacing.xs else 0.dp) -
                 (LauncherTheme.depth.focusLift + LauncherTheme.spacing.xs) * 2f).coerceAtLeast(0.dp)
             val listWidth = if (splitPreview) (maxWidth - LauncherTheme.spacing.md) * .45f else maxWidth
-            val columnWidth = (listWidth - LauncherTheme.spacing.xs * (columns - 1)) / columns
-            val artSize = if (isList) 72.dp * LauncherTheme.referenceScale
-                else minOf(176.dp * LauncherTheme.referenceScale * artworkScale, columnWidth, availableCardHeight)
+            val columnWidth = (listWidth - 14.dp - LauncherTheme.spacing.xs * (columns - 1)) / columns
+            val artSize = if (isList) 56.dp * LauncherTheme.referenceScale
+                else columnWidth
             val artworkTargetPx = with(LocalDensity.current) { artSize.roundToPx().coerceAtLeast(1) }
-            SideEffect { splitPreviewVisible = splitPreview }
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md)) {
+            Row(Modifier.weight(if (splitPreview) .45f else 1f).fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns), state = grid,
-                modifier = Modifier.weight(if (splitPreview) .45f else 1f).fillMaxSize().testTag("collection-grid"),
+                modifier = Modifier.weight(1f).fillMaxSize()
+                    .then(dev.handheld.launcher.core.designsystem.foundation.contentEntrance(state.filter to isList)).testTag("collection-grid"),
                 contentPadding = PaddingValues(vertical = LauncherTheme.depth.focusLift + LauncherTheme.spacing.xs),
                 horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
@@ -403,26 +419,36 @@ private fun CollectionBody(
                 items(state.items, key = { it.id.value }) { item ->
                     val model = item.toTileUiModel(state.overrides[item.id], item.id in state.recentIds)
                     val open = { callbacks.onSelect(item.id); callbacks.onOpen(item.id) }
+                    val rowAction = FocusedControlAction(
+                        LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, model.primaryActionLabel, model.canOpen),
+                        if (model.canOpen) open else null, item.id,
+                        onBack = ::focusPageControls, backLabel = "Controls",
+                    )
+                    LaunchedEffect(focusedGridItem, model.canOpen, model.primaryActionLabel) {
+                        if (focusedGridItem == item.id) callbacks.onFocusedAction(rowAction)
+                    }
                     val requester = remember(item.id) { FocusRequester() }
                     DisposableEffect(item.id, requester) {
                         requesters[item.id.value] = requester
                         onDispose { if (requesters[item.id.value] === requester) requesters.remove(item.id.value) }
                     }
                     LibraryItemCard(
-                        model, if (isList) LibraryItemCardVariant.SearchResult else LibraryItemCardVariant.Collection, state.selectedItemId == item.id,
+                        model, if (isList) LibraryItemCardVariant.List else LibraryItemCardVariant.Collection, state.selectedItemId == item.id,
                         // Keep the native target attached during filtering. The ViewModel's
                         // synchronous launch guard rejects activation until criteria settle.
-                        activationEnabled = model.canOpen,
+                        activationEnabled = model.canOpen || isList,
                         maxCollectionCardHeight = availableCardHeight,
-                        collectionArtworkScale = artworkScale,
                         artworkActive = item.id.value in visibleArtworkKeys,
                         artworkTargetSizePx = artworkTargetPx,
-                        animateArtwork = !grid.isScrollInProgress,
+                        animateArtwork = artworkLoadingAllowed,
                         modifier = Modifier.fillMaxWidth()
                             .focusRequester(requester),
                         iconLoader = iconLoader, onActivate = {
-                            if (isList && !controllerInput) {
+                            // Confirm invokes rowAction directly. Native row clicks always
+                            // select, even if touch-down/up arrive before input-mode recomposition.
+                            if (isList) {
                                 callbacks.onSelect(item.id)
+                                callbacks.onFocusedAction(rowAction)
                                 if (!splitPreview && !compactPreview) callbacks.onOpenDetails(item.id)
                             } else open()
                         },
@@ -430,10 +456,7 @@ private fun CollectionBody(
                             if (focused) {
                                 focusedGridItem = item.id
                                 callbacks.onSelect(item.id)
-                                callbacks.onFocusedAction(FocusedControlAction(
-                                    LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, model.primaryActionLabel, model.canOpen),
-                                    if (model.canOpen) open else null, item.id,
-                                ))
+                                callbacks.onFocusedAction(rowAction)
                             } else if (focusedGridItem == item.id) {
                                 // A filtered-out card loses focus as it leaves composition. Keep
                                 // its intent until the replacement card is placed; an intentional
@@ -449,24 +472,23 @@ private fun CollectionBody(
                         onFocusChanged = { focused -> callbacks.focused(action.title, LauncherActionMeaning.ACTIVATE, { callbacks.onOpenSystemAction(action.key) }, focused) })
                 }
             }
+            Box(Modifier.width(10.dp).fillMaxSize()) { CatalogScrollIndicator(grid, columns) }
+            }
             if (splitPreview && selectedItem != null) CollectionListPreview(
                 item = selectedItem, model = selectedItem.toTileUiModel(state.overrides[selectedItem.id], selectedItem.id in state.recentIds),
-                favorite = selectedItem.id in state.favorites, callbacks = callbacks, iconLoader = iconLoader,
-                modifier = Modifier.weight(.55f).fillMaxSize().onFocusChanged { previewHasFocus = it.hasFocus }.focusGroup(),
-                openFocus = previewOpenFocus,
-                onOpenFocusChanged = { previewOpenFocused = it },
+                favorite = selectedItem.id in state.favorites, iconLoader = iconLoader,
+                modifier = Modifier.weight(.55f).fillMaxSize(),
             )
             }
             if (compactPreview && selectedItem != null) CollectionListPreview(
                 item = selectedItem, model = selectedItem.toTileUiModel(state.overrides[selectedItem.id], selectedItem.id in state.recentIds),
-                favorite = selectedItem.id in state.favorites, callbacks = callbacks, iconLoader = iconLoader,
-                modifier = Modifier.fillMaxWidth().onFocusChanged { previewHasFocus = it.hasFocus }.focusGroup(),
-                openFocus = previewOpenFocus, compact = true,
-                onOpenFocusChanged = { previewOpenFocused = it },
+                favorite = selectedItem.id in state.favorites, iconLoader = iconLoader,
+                modifier = Modifier.fillMaxWidth(), compact = true,
             )
             }
             }
         }
+    }
     }
 }
 

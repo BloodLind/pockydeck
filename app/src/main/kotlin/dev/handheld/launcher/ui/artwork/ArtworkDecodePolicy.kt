@@ -12,8 +12,10 @@ internal object ArtworkDecodePolicy {
         if (width !in 1..8192 || height !in 1..8192 || width.toLong() * height > 24_000_000) return null
         val target = target(targetPx)
         var sample = 1
-        // BitmapFactory rounds sampled dimensions up for some formats.
-        while ((maxOf(width, height) + sample - 1) / sample > target) sample *= 2
+        // Retain enough pixels for the display bucket instead of decoding below it and
+        // upscaling a soft image. Power-of-two sampling keeps the long edge below 2x target
+        // (unless the original is already smaller); the byte-bounded cache still owns retention.
+        while (maxOf(width, height) / (sample * 2) >= target) sample *= 2
         return sample
     }
 }

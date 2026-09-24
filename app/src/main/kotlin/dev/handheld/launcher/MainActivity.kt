@@ -63,7 +63,16 @@ class MainActivity : ComponentActivity() {
     private var searchClearEnabled = false
     private var foregroundResumed = false
     private val soundPreferences by lazy { ControllerSoundPreferences(this) }
-    private val controllerSounds by lazy { ControllerSoundEffects(this) { soundPreferences.enabled.value } }
+    private val controllerSounds by lazy {
+        ControllerSoundEffects(this, volumePercent = { soundPreferences.volumePercent.value },
+            hapticsEnabled = { soundPreferences.vibrationEnabled.value },
+            hapticFeedback = { cue ->
+                soundPreferences.vibrationEnabled.value && window.decorView.performHapticFeedback(
+                    if (cue == dev.handheld.launcher.audio.ControllerSoundCue.CONFIRM)
+                        android.view.HapticFeedbackConstants.CONTEXT_CLICK
+                    else android.view.HapticFeedbackConstants.CLOCK_TICK)
+            }, enabled = { soundPreferences.enabled.value })
+    }
     private val notificationAccess by lazy { NotificationStatusAccess(this) }
     private lateinit var inputHost: FrameLayout
     private val nativeFocusFallback = ViewTreeObserver.OnGlobalFocusChangeListener { _, next ->
@@ -83,6 +92,7 @@ class MainActivity : ComponentActivity() {
             ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
         }, imeFaceActionsEnabled = { searchEditorActive },
             onSearchClearEnabled = { searchClearEnabled },
+            onRepeatHoldChanged = controllerSounds::onRepeatHoldChanged,
             dispatch = { controllerSounds.dispatch(it, dispatchSemantic) })
     }
     private val rolePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -145,11 +155,16 @@ class MainActivity : ComponentActivity() {
         inputHost.viewTreeObserver.addOnGlobalFocusChangeListener(nativeFocusFallback)
         content.setContent {
           val controllerSoundsEnabled by soundPreferences.enabled.collectAsStateWithLifecycle()
+          val soundVolumePercent by soundPreferences.volumePercent.collectAsStateWithLifecycle()
+          val vibrationEnabled by soundPreferences.vibrationEnabled.collectAsStateWithLifecycle()
           InterceptPlatformTextInput(inlineTextInput) {
             LauncherApp(container, appViewModel, homeViewModel, reducedMotion, homeRoleHeld,
                 bindInput = { dispatchSemantic = it }, nativeConfirm = ::activateNativeFocusedControl,
                 bindTouchInput = { touchInput = it },
-                onImeVisibilityChanged = controller::onImeVisibilityChanged,
+                onImeVisibilityChanged = {
+                    controller.onImeVisibilityChanged(it)
+                    if (it) controllerSounds.cancelHaptics()
+                },
                 onSearchEditorActiveChanged = { searchEditorActive = it },
                 onSearchClearEnabledChanged = { searchClearEnabled = it },
                 notificationAccessGranted = notificationAccessGranted,
@@ -158,6 +173,14 @@ class MainActivity : ComponentActivity() {
                 onSetupStorageAccess = ::setupStorageAccess,
                 controllerSoundsEnabled = controllerSoundsEnabled,
                 onSetControllerSoundsEnabled = ::setControllerSoundsEnabled,
+                soundVolumePercent = soundVolumePercent,
+                onSetSoundVolumePercent = ::setSoundVolumePercent,
+                vibrationEnabled = vibrationEnabled,
+                onSetVibrationEnabled = {
+                    soundPreferences.setVibrationEnabled(it)
+                    controllerSounds.cancelHaptics()
+                },
+                onTouchFeedback = { controllerSounds.onTouchActivation() },
                 onExpectItemSelection = controllerSounds::expectItemSelection,
                 onItemSelected = { controllerSounds.onItemSelected() })
           }
@@ -205,7 +228,12 @@ class MainActivity : ComponentActivity() {
 
     private fun setControllerSoundsEnabled(enabled: Boolean) {
         soundPreferences.setEnabled(enabled)
-        if (!enabled) controllerSounds.stop()
+        controllerSounds.onPreferencesChanged()
+    }
+
+    private fun setSoundVolumePercent(percent: Int) {
+        soundPreferences.setVolumePercent(percent)
+        controllerSounds.onPreferencesChanged()
     }
 
     @SuppressLint("RestrictedApi") // Continue through the same public Window.Callback path.

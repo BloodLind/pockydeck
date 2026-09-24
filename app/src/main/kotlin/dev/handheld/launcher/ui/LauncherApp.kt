@@ -1,5 +1,7 @@
 package dev.handheld.launcher.ui
 
+import dev.handheld.launcher.ui.presentation.color
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
@@ -58,6 +60,7 @@ import dev.handheld.launcher.platform.system.SupportedSystemAction
 import dev.handheld.launcher.shell.*
 import kotlinx.coroutines.launch
 import java.util.Locale
+import dev.handheld.launcher.ui.presentation.toTileUiModel
 import dev.handheld.launcher.ui.artwork.enriched.LocalEnrichedArtworkLoader
 import dev.handheld.launcher.feature.settings.metadata.ArtworkSettingsCallbacks
 import dev.handheld.launcher.core.data.metadata.ArtworkSummary
@@ -84,12 +87,19 @@ fun LauncherApp(
     onSetControllerSoundsEnabled: (Boolean) -> Unit = {},
     onExpectItemSelection: () -> Unit = {},
     onItemSelected: () -> Unit = {},
+    soundVolumePercent: Int = 40,
+    onSetSoundVolumePercent: (Int) -> Unit = {},
+    vibrationEnabled: Boolean = true,
+    onSetVibrationEnabled: (Boolean) -> Unit = {},
+    onTouchFeedback: () -> Unit = {},
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
     val display by app.display.collectAsStateWithLifecycle()
     val appError by app.error.collectAsStateWithLifecycle()
     val homeState by home.state.collectAsStateWithLifecycle()
+    var homeArtworkLoadingAllowed by remember { mutableStateOf(false) }
+    val collectionArtworkLoadingAllowed = remember { mutableStateMapOf<LauncherDestination, Boolean>() }
     val launchState by container.launchCoordinator.state.collectAsStateWithLifecycle()
     val roleState by container.homeRoleRequests.state.collectAsStateWithLifecycle()
     val romSources by container.romController.sourcesState.collectAsStateWithLifecycle()
@@ -99,7 +109,7 @@ fun LauncherApp(
     val romMessage by container.romController.message.collectAsStateWithLifecycle()
     val artworkSummary by container.artworkRepository.summary.collectAsStateWithLifecycle(ArtworkSummary())
     val status by container.deviceStatus.status.collectAsStateWithLifecycle(DeviceStatusSnapshot())
-    val runningApps by container.runningApps.state.collectAsStateWithLifecycle(dev.handheld.launcher.runtime.RunningAppState())
+    val launchHistory by container.successfulOpenRepository.records.collectAsStateWithLifecycle(emptyList())
     val pageModels = listOf(LauncherDestination.LIBRARY, LauncherDestination.APPS,
         LauncherDestination.FAVORITES, LauncherDestination.SEARCH).associateWith { destination ->
         viewModel<CollectionViewModel>(key = "collection.${destination.persistedKey}",
@@ -290,22 +300,26 @@ fun LauncherApp(
     val selectedItemId = focused?.itemId ?: (location as? LauncherLocation.ItemDetails)?.itemId
     val selectedItem = library.allItems.find { it.id == selectedItemId }
     val collectionUpdating = pageStates[destination]?.searching == true
-    val searchCanClear = destination == LauncherDestination.SEARCH && searchPageActions?.hasQuery == true
+    val searchCanClear = destination == LauncherDestination.SEARCH && searchPageActions?.hasQuery == true &&
+        (selectedItem == null || searchEditorActions != null)
     val primary = if (modalVisible) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select")
         else if (searchEditorActions != null) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Apply")
+        else if (focused?.onAdjust != null) LauncherActionDescriptor(SemanticInputAction.NAVIGATE_RIGHT, LauncherActionMeaning.CHANGE_FILTER, "Adjust")
         else focused?.descriptor?.let { it.copy(input = SemanticInputAction.CONFIRM, enabled = it.enabled && !collectionUpdating) }
             ?: LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select", false)
     val footer = ControllerActionFooter(buildList {
         add(primary)
-        if (modalVisible || searchEditorActions != null || imeVisible || location !is LauncherLocation.Destination ||
+        if (modalVisible || searchEditorActions != null || imeVisible || focused?.onBack != null || location !is LauncherLocation.Destination ||
             destination == LauncherDestination.SETTINGS || destination == LauncherDestination.SEARCH)
             add(LauncherActionDescriptor(SemanticInputAction.BACK, LauncherActionMeaning.GO_BACK,
-                if (!modalVisible && searchEditorActions != null) "Cancel" else "Back"))
+                if (!modalVisible && focused?.onBack != null) focused?.backLabel ?: "Back" else if (!modalVisible && searchEditorActions != null) "Cancel" else "Back"))
         if (!modalVisible && searchEditorActions == null) {
             add(LauncherActionDescriptor(SemanticInputAction.SECONDARY, LauncherActionMeaning.OPEN_SEARCH, "Search"))
-            if (!searchCanClear && selectedItem != null && location !is LauncherLocation.ItemDetails)
-                add(LauncherActionDescriptor(SemanticInputAction.TERTIARY, LauncherActionMeaning.OPEN_DETAILS, "Details"))
-            add(LauncherActionDescriptor(SemanticInputAction.MENU, LauncherActionMeaning.OPEN_MENU, "Menu"))
+            if (!searchCanClear && selectedItem != null && SupportedItemAction.TOGGLE_FAVORITE in selectedItem.supportedActions)
+                add(LauncherActionDescriptor(SemanticInputAction.TERTIARY, LauncherActionMeaning.TOGGLE_FAVORITE,
+                    if (selectedItem.id in library.favorites) "Unfavorite" else "Favorite", !collectionUpdating))
+            if (selectedItem != null && location !is LauncherLocation.ItemDetails && SupportedItemAction.VIEW_DETAILS in selectedItem.supportedActions)
+                add(LauncherActionDescriptor(SemanticInputAction.ITEM_DETAILS, LauncherActionMeaning.OPEN_DETAILS, "Details", !collectionUpdating))
         }
         if (!modalVisible && searchCanClear)
             add(LauncherActionDescriptor(SemanticInputAction.TERTIARY, LauncherActionMeaning.CLEAR_SEARCH, "Clear"))
@@ -317,11 +331,14 @@ fun LauncherApp(
                     searchEditorActions?.apply?.invoke(); true
                 } else if (!modalVisible && focused?.onActivate != null) { focused?.onActivate?.invoke(); true }
                 else nativeConfirm()
-                SemanticInputAction.BACK -> { goBack(); true }
+                SemanticInputAction.BACK -> { if (!modalVisible && focused?.onBack != null) focused?.onBack?.invoke() else goBack(); true }
                 SemanticInputAction.SECONDARY -> { openSearch(); true }
                 SemanticInputAction.TERTIARY -> if (descriptor.meaning == LauncherActionMeaning.CLEAR_SEARCH) {
                     searchPageActions?.clear?.invoke(); true
-                } else { selectedItemId?.let(::openDetails); selectedItemId != null }
+                } else {
+                    selectedItemId?.let { dataActions.setFavorite(it, it !in library.favorites) }; selectedItemId != null
+                }
+                SemanticInputAction.ITEM_DETAILS -> { selectedItemId?.let(::openDetails); selectedItemId != null }
                 SemanticInputAction.MENU -> { showMenu(); true }
                 else -> false
             }
@@ -345,6 +362,7 @@ fun LauncherApp(
         onSearchClearEnabledChanged(searchCanClear && !modalVisible)
         bindInput { action ->
             val enteringControllerMode = !controllerInput
+            val touchedControl = controlRestoreFocus
             val changingDestination = action == SemanticInputAction.PREVIOUS_DESTINATION || action == SemanticInputAction.NEXT_DESTINATION
             if ((changingDestination && !modalVisible) || enteringControllerMode) dockFocusAllowed = false
             controllerInput = true
@@ -363,12 +381,39 @@ fun LauncherApp(
                 location !is LauncherLocation.ItemDetails && (direction != null || homeCardStep))
                 selectionFeedback.navigate(fromItem = selectionFeedback.hasItemFocus)
             else selectionFeedback.reset()
+            if (enteringControllerMode && !modalVisible && searchEditorActions == null &&
+                action == SemanticInputAction.TERTIARY && selectedItemId != null) {
+                // Y acts immediately on the touched row and restores that same native target
+                // once keyboard mode is composed; Android's fallback must not pick row one.
+                val restoreLocation = location
+                if (touchedControl == null) pageActivationRequest++ else scope.launch {
+                    withFrameNanos { }
+                    withFrameNanos { }
+                    if (controllerInput && app.navigation.location.value == restoreLocation &&
+                        !runCatching(touchedControl).isSuccess) pageActivationRequest++
+                }
+            }
             when {
                 enteringControllerMode && !modalVisible && (direction != null || action == SemanticInputAction.CONFIRM) && searchEditorActions == null -> {
-                    pageActivationRequest++; true
+                    val restore = touchedControl
+                    val restoreLocation = location
+                    if (restore == null) pageActivationRequest++ else scope.launch {
+                        // Let touch-mode targets become focusable before restoring the exact leaf.
+                        // Capture it before Android's fallback focus can replace the saved target.
+                        withFrameNanos { }
+                        withFrameNanos { }
+                        if (controllerInput && app.navigation.location.value == restoreLocation &&
+                            !runCatching(restore).isSuccess) pageActivationRequest++
+                    }
+                    true
+                }
+                !modalVisible && focused?.onAdjust != null &&
+                    (direction == FocusDirection.Left || direction == FocusDirection.Right) -> {
+                    focused?.onAdjust?.invoke(if (direction == FocusDirection.Right) 1 else -1); true
                 }
                 direction != null -> if (!modalVisible && pageNavigation?.move(direction) == true) true else focusManager.moveFocus(direction)
-                action == SemanticInputAction.BACK -> { goBack(); true }
+                action == SemanticInputAction.CONFIRM && !modalVisible && focused?.onAdjust != null -> { focused?.onActivate?.invoke(); true }
+                action == SemanticInputAction.BACK -> { if (!modalVisible && focused?.onBack != null) focused?.onBack?.invoke() else goBack(); true }
                 modalVisible -> if (action == SemanticInputAction.CONFIRM) nativeConfirm() else true
                 action == SemanticInputAction.PREVIOUS_DESTINATION || action == SemanticInputAction.NEXT_DESTINATION -> {
                     val order = LauncherDestination.dockOrder
@@ -391,11 +436,12 @@ fun LauncherApp(
                         true
                     }
                 }
+                action == SemanticInputAction.MENU -> { showMenu(); true }
                 else -> footer.actions.find { it.input == action }?.let(actionPort::dispatch) ?: false
             }
         }
     }
-    BackHandler { goBack() }
+    BackHandler { if (!modalVisible && focused?.onBack != null) focused?.onBack?.invoke() else goBack() }
     LaunchedEffect(appError) { appError?.let(::showError) }
     LaunchedEffect(homeState.refreshState) {
         if (homeState.refreshState is AndroidCatalogRefreshState.Ready) container.iconLoader.clear()
@@ -411,7 +457,9 @@ fun LauncherApp(
     LaunchedEffect(modalVisible) {
         if (!modalVisible && modalOrigin != null) {
             withFrameNanos { }
-            if (modalOrigin == location && controllerInput) {
+            if (modalOrigin == location) {
+                // Restore the touched opener as well. Controller decoration remains governed
+                // by controllerInput, so retaining native focus does not show a touch outline.
                 inputMode.requestInputMode(InputMode.Keyboard)
                 // Compose 1.7 group restoration can stop at an implicit scroll target.
                 // The opener supplies its exact leaf requester; groups are only fallbacks
@@ -431,6 +479,9 @@ fun LauncherApp(
     val uiDensity = remember(systemDensity, display.uiScaleFactor) {
         Density(systemDensity.density * display.uiScaleFactor, systemDensity.fontScale)
     }
+    val lastPlayed = remember(library.allItems, launchHistory) {
+        dev.handheld.launcher.ui.presentation.lastPlayedByConsole(library.allItems, launchHistory)
+    }
     CompositionLocalProvider(LocalDensity provides uiDensity) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val density = LocalDensity.current
@@ -441,7 +492,9 @@ fun LauncherApp(
                 density.density, density.fontScale, display.uiScaleFactor))
         }
         val imeBottom = with(density) { WindowInsets.ime.getBottom(this).toDp() }
-        LauncherTheme(reducedMotion || display.reduceMotion, metrics.referenceScale, uiScaleFactor = display.uiScaleFactor) {
+        LauncherTheme(reducedMotion || display.reduceMotion, metrics.referenceScale, uiScaleFactor = display.uiScaleFactor,
+            backgroundTint = display.backgroundTint.color, backgroundTintPercent = display.backgroundTintPercent,
+            backgroundGrainPercent = display.backgroundGrainPercent) {
             val pageMotion = pageTransition(location, reducedMotion || display.reduceMotion)
             val registry = LauncherRouteRegistry(LauncherDestination.dockOrder.map { route ->
                 LauncherDestinationRoute(route) { context ->
@@ -463,10 +516,9 @@ fun LauncherApp(
                                 ), container.iconLoader)
                             else EmptyState("Item unavailable", "This item is no longer in the catalog.", "Back", ::goBack, bounds)
                         } else when (route) {
-                            LauncherDestination.HOME -> CompositionLocalProvider(
-                                dev.handheld.launcher.runtime.LocalRunningLabels provides runningApps.labels,
-                            ) {
+                            LauncherDestination.HOME -> CompositionLocalProvider(dev.handheld.launcher.ui.presentation.LocalLastPlayed provides lastPlayed) {
                                 HomeRoute(home, metrics, container.iconLoader, bounds,
+                                    onArtworkLoadingAllowed = { homeArtworkLoadingAllowed = it },
                                     onOpenLibrary = { selectDestination(LauncherDestination.LIBRARY) },
                                     onOpenDetails = ::openDetails,
                                     allowFocusRequest = !modalVisible && controllerInput,
@@ -479,18 +531,27 @@ fun LauncherApp(
                                         CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
                                     }, romSources, romEmulators, artworkSummary,
                                     uiScalePercent = display.uiScalePercent, reduceMotion = display.reduceMotion,
+                                    homeArtworkBackground = display.homeArtworkBackground,
+                                    listArtworkBackground = display.listArtworkBackground,
+                                    backgroundTint = display.backgroundTint,
+                                    backgroundTintPercent = display.backgroundTintPercent,
+                                    backgroundGrainPercent = display.backgroundGrainPercent,
                                     gridSizePercent = display.gridSizePercent,
                                     notificationAccessGranted = notificationAccessGranted,
-                                    controllerSoundsEnabled = controllerSoundsEnabled,
-                                    runningIndicatorsEnabled = runningApps.enabled,
-                                    runningStatusSummary = runningApps.summary), bounds, SettingsCallbacks(
+                                    controllerSoundsEnabled = controllerSoundsEnabled, homeRoleHeld = homeRoleHeld,
+                                    soundVolumePercent = soundVolumePercent, vibrationEnabled = vibrationEnabled), bounds, SettingsCallbacks(
                                     onSetControllerSoundsEnabled = onSetControllerSoundsEnabled,
-                                    onSetRunningIndicators = container.runningApps::setEnabled,
-                                    onSetupRunningStatus = { if (!container.runningApps.requestSetup()) showError("Shizuku setup is unavailable.") },
+                                    onSetSoundVolumePercent = onSetSoundVolumePercent,
+                                    onSetVibrationEnabled = onSetVibrationEnabled,
                                     onSetupNotificationAccess = onSetupNotificationAccess,
                                     onSetUiScalePercent = app::setUiScalePercent,
                                     onSetGridSizePercent = app::setGridSizePercent,
                                     onSetReduceMotion = app::setReduceMotion,
+                                    onSetHomeArtworkBackground = app::setHomeArtworkBackground,
+                                    onSetListArtworkBackground = app::setListArtworkBackground,
+                                    onSetBackgroundTint = app::setBackgroundTint,
+                                    onSetBackgroundTintPercent = app::setBackgroundTintPercent,
+                                    onSetBackgroundGrainPercent = app::setBackgroundGrainPercent,
                                     onSetConfirmBackMapping = app::setMapping,
                                     artwork = ArtworkSettingsCallbacks(
                                         onSetPaused = { artworkAction { container.artworkRepository.setPaused(it) } },
@@ -548,11 +609,14 @@ fun LauncherApp(
                                     onOpenSort = { rememberModalOrigin(); sortMenuDestination = route })
                                 when (route) {
                                     LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
-                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent)
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent,
+                                        onArtworkLoadingAllowed = { collectionArtworkLoadingAllowed[route] = it })
                                     LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
-                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent)
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent,
+                                        onArtworkLoadingAllowed = { collectionArtworkLoadingAllowed[route] = it })
                                     LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
-                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent)
+                                        isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent,
+                                        onArtworkLoadingAllowed = { collectionArtworkLoadingAllowed[route] = it })
                                     LauncherDestination.SEARCH -> SearchScreen(current, bounds, callbacks, vm::query,
                                         searchableActions, container.iconLoader, queryFocusRequest,
                                         restoreFocusRequest = pageActivationRequest, allowFocusRequest = !modalVisible,
@@ -566,6 +630,7 @@ fun LauncherApp(
                 }
             })
             CompositionLocalProvider(LocalControlFocusRestoration provides { controlRestoreFocus = it },
+                dev.handheld.launcher.core.designsystem.contract.LocalTouchFeedback provides onTouchFeedback,
                 LocalControllerInput provides controllerInput,
                 LocalPageNavigation provides publishPageNavigation,
                 LocalEnrichedArtworkLoader provides container.enrichedArtworkLoader) {
@@ -574,6 +639,21 @@ fun LauncherApp(
                 actionPort, mapping, LauncherShellInsets(imeBottom),
                 modifier = Modifier.focusRequester(shellFocus).focusGroup(),
                 onDestinationSelected = ::selectDestination,
+                background = {
+                    if (location == LauncherLocation.Destination(LauncherDestination.HOME)) {
+                        dev.handheld.launcher.feature.home.HomeRomBackdrop(homeState.selectedItem,
+                            enabled = display.homeArtworkBackground, loadingAllowed = homeArtworkLoadingAllowed)
+                    } else if (location is LauncherLocation.Destination && destination in display.listDestinations) {
+                        val current = pageStates[destination]
+                        val item = current?.items?.firstOrNull { it.id == current.selectedItemId } ?: current?.items?.firstOrNull()
+                        dev.handheld.launcher.ui.artwork.RomArtworkBackdrop(
+                            selected = item?.toTileUiModel(current?.overrides?.get(item.id), item.id in current?.recentIds.orEmpty()),
+                            enabled = display.listArtworkBackground,
+                            loadingAllowed = collectionArtworkLoadingAllowed[destination] == true,
+                            testTag = "list-rom-backdrop",
+                        )
+                    }
+                },
                 onDestinationFocused = { value ->
                     focusedDock = value.takeIf { dockFocusAllowed }
                     if (value != null && dockFocusAllowed) publishFocus(FocusedControlAction(
@@ -696,7 +776,7 @@ fun LauncherApp(
 }
 
 private fun homeRoleSummary(held: Boolean, state: HomeRoleRequestState): String = when {
-    held -> "Handheld Launcher is your default Home app"
+    held -> "PockyDeck is your default. Choose another launcher in Android settings to switch away."
     state is HomeRoleRequestState.Requested -> "Waiting for Android selection"
     state is HomeRoleRequestState.Declined -> "Not selected. You can keep using the launcher normally."
     state is HomeRoleRequestState.Unsupported -> "Home selection is unavailable on this device"

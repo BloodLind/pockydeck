@@ -39,7 +39,6 @@ android {
 
     buildFeatures {
         compose = true
-        aidl = true
     }
 
     packaging {
@@ -64,8 +63,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.work.runtime)
-    implementation(libs.shizuku.api)
-    implementation(libs.shizuku.provider)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

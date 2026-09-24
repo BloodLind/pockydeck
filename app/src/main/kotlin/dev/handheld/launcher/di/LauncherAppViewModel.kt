@@ -71,6 +71,11 @@ class LauncherAppViewModel(
     fun setUiScalePercent(value: Int) = saveDisplay { displayPreferences?.setUiScalePercent(value) }
     fun setGridSizePercent(value: Int) = saveDisplay { displayPreferences?.setGridSizePercent(value) }
     fun setReduceMotion(value: Boolean) = saveDisplay { displayPreferences?.setReduceMotion(value) }
+    fun setHomeArtworkBackground(value: Boolean) = saveDisplay { displayPreferences?.setHomeArtworkBackground(value) }
+    fun setListArtworkBackground(value: Boolean) = saveDisplay { displayPreferences?.setListArtworkBackground(value) }
+    fun setBackgroundTint(value: BackgroundTint) = saveDisplay { displayPreferences?.setBackgroundTint(value) }
+    fun setBackgroundTintPercent(value: Int) = saveDisplay { displayPreferences?.setBackgroundTintPercent(value) }
+    fun setBackgroundGrainPercent(value: Int) = saveDisplay { displayPreferences?.setBackgroundGrainPercent(value) }
     fun setCollectionListMode(destination: LauncherDestination, isList: Boolean) =
         saveDisplay { displayPreferences?.setCollectionListMode(destination, isList) }
 

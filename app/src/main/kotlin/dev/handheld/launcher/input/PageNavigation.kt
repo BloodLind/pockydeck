@@ -13,7 +13,10 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.abs
 
-fun interface PageNavigation { fun move(direction: FocusDirection): Boolean }
+fun interface PageNavigation {
+    fun move(direction: FocusDirection): Boolean
+    fun cancel() {}
+}
 val LocalPageNavigation = staticCompositionLocalOf<(PageNavigation?) -> Unit> { {} }
 
 @Composable
@@ -76,7 +79,8 @@ fun rememberGridNavigation(
     val previousMoveNanos = remember { arrayOfNulls<Long>(1) }
     val animateMove = remember { booleanArrayOf(true) }
     val moves = remember { Channel<Unit>(Channel.CONFLATED) }
-    LaunchedEffect(enabled) {
+    var cancellationEpoch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(enabled, cancellationEpoch) {
         if (!enabled) { pending[0] = null; previousMoveNanos[0] = null; return@LaunchedEffect }
         for (ignored in moves) {
           try {
@@ -109,6 +113,8 @@ fun rememberGridNavigation(
                     }
                 }
                 withFrameNanos { }
+                // A jump to page controls must not let the in-flight move steal focus back.
+                if (pending[0] == null || !latestEnabled) break
                 val placedLayout = grid.layoutInfo
                 val contentStart = placedLayout.viewportStartOffset + placedLayout.beforeContentPadding
                 val contentEnd = placedLayout.viewportEndOffset - placedLayout.afterContentPadding
@@ -138,9 +144,18 @@ fun rememberGridNavigation(
     }
     DisposableEffect(Unit) { onDispose { moves.close() } }
     return remember {
-        PageNavigation { direction ->
+        object : PageNavigation {
+          override fun cancel() {
+            pending[0] = null
+            pendingDirection[0] = null
+            previousMoveNanos[0] = null
+            while (moves.tryReceive().isSuccess) { /* Discard queued scrolling work. */ }
+            cancellationEpoch++
+          }
+
+          override fun move(direction: FocusDirection): Boolean {
             val current = pending[0] ?: latestFocused
-            if (!latestEnabled || current == null) false
+            return if (!latestEnabled || current == null) false
             else {
                 val index = latestKeys.indexOf(current)
                 val target = gridMoveTarget(index, latestKeys.size, latestColumns, direction)
@@ -159,6 +174,7 @@ fun rememberGridNavigation(
                     true
                 }
             }
+          }
         }
     }
 }

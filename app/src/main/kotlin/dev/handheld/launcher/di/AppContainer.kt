@@ -111,16 +111,19 @@ class AppContainer(
     val romCache by lazy { PreparedRomCache(applicationContext) }
     val romController by lazy { RomFeatureController(romRepository,romSourceAccess,romScanner,
         AndroidEmulatorResolver(applicationContext),AndroidRomLauncher(applicationContext),romCache,applicationScope,
-        sharedStoragePaths,sharedRomDiscovery, runningApps::recordEmulator) }
-    val runningApps by lazy { dev.handheld.launcher.runtime.RunningAppMonitor(applicationContext,
-        catalogRepository, romRepository, applicationScope) }
+        sharedStoragePaths,sharedRomDiscovery) }
     val launchCoordinator by lazy {
         LaunchCoordinator(catalogRepository, navigationSnapshotRepository, launchDispatcher,
             successfulOpenRepository, applicationScope)
     }
     val homeRoleRequests by lazy { HomeRoleRequestCoordinator(activityRequestPort) }
     @Volatile private var artworkForeground = true
-    private val iconLoaderDelegate = lazy { AndroidIconLoader(applicationContext).also { it.setForeground(artworkForeground) } }
+    private val iconLoaderDelegate = lazy { AndroidIconLoader(applicationContext).also { loader ->
+        loader.setForeground(artworkForeground)
+        // Process-owned icons survive normal backgrounding. Invalidate on package changes
+        // even while the Activity's catalog observer is stopped.
+        BroadcastAndroidPackageChangeMonitor(applicationContext).start(loader::clear)
+    } }
     val iconLoader get() = iconLoaderDelegate.value
     private val artworkDatabase by lazy { ArtworkDatabase.open(applicationContext) }
     val artworkRepository by lazy {

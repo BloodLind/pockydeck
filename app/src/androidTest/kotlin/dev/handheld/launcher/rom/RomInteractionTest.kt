@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
@@ -53,6 +54,9 @@ class RomInteractionTest {
         }
         compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SETTINGS)).performClick()
         compose.onNodeWithContentDescription("ROM folders").performScrollTo().performClick()
+        // RequestFocus alone cannot activate keyboard focus from Android touch mode.
+        compose.runOnIdle { press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        compose.waitForIdle()
         compose.waitUntil(5_000) {
             container.romController.sourcesState.value.cacheLimitLabel == "${originalLimit / RoomRomLibraryRepository.GIB} GiB"
         }
@@ -108,12 +112,14 @@ class RomInteractionTest {
     }
 
     @Test fun touchOpenedChoiceRestoresTouchedRowInsteadOfPreviousKeyboardControl() {
+        compose.onNodeWithTag("settings-body-list").performScrollToKey("rom-add-folder")
         val previousControl = compose.onNode(
             hasContentDescription("Add ROM folder") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button),
         )
         previousControl.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         previousControl.assertIsFocused()
-        compose.onNodeWithContentDescription("Cache limit").performScrollTo().performTouchInput { click() }
+        compose.onNodeWithTag("settings-body-list").performScrollToKey("rom-cache-limit")
+        compose.onNodeWithContentDescription("Cache limit").performTouchInput { click() }
         compose.waitUntil(5_000) { container.romController.choice.value?.title == "Game cache limit" }
         compose.onNodeWithText("Close").performTouchInput { click() }
         compose.waitUntil(5_000) { container.romController.choice.value == null }
@@ -123,7 +129,8 @@ class RomInteractionTest {
     }
 
     private fun openCacheChoice() {
-        val control = compose.onNodeWithContentDescription("Cache limit").performScrollTo()
+        compose.onNodeWithTag("settings-body-list").performScrollToKey("rom-cache-limit")
+        val control = compose.onNodeWithContentDescription("Cache limit")
         control.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         control.assertIsFocused()
         control.performClick()

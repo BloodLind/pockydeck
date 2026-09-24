@@ -35,6 +35,7 @@ import dev.handheld.launcher.core.designsystem.foundation.ShellMetricsInput
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -102,6 +103,38 @@ class LauncherShellPresentationTest {
         compose.runOnIdle { status = status.copy(bluetoothEnabled = false, notificationsPresent = false) }
         compose.onNodeWithContentDescription("Bluetooth enabled").assertDoesNotExist()
         compose.onNodeWithContentDescription("Notifications available").assertDoesNotExist()
+    }
+
+    @Test fun compactSystemLegendsKeepFullTouchTargetsAndContentFollowsTheStatusStrip() {
+        val actions = listOf(
+            LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Play"),
+            LauncherActionDescriptor(SemanticInputAction.ITEM_DETAILS, LauncherActionMeaning.OPEN_DETAILS, "Details"),
+            LauncherActionDescriptor(SemanticInputAction.MENU, LauncherActionMeaning.OPEN_MENU, "Menu"),
+        )
+        var density = 1f
+        val dispatched = mutableListOf<LauncherActionDescriptor>()
+        compose.setContent {
+            density = LocalDensity.current.density
+            ShellFixture(LauncherShellState(status = LauncherShellStatus(clock = "10:42"),
+                footer = ControllerActionFooter(actions)), SemanticActionPort { dispatched += it; true }, reducedMotion = true)
+        }
+        val status = compose.onNodeWithTag(LauncherShellTags.Status).fetchSemanticsNode().boundsInRoot
+        val content = compose.onNodeWithTag(LauncherShellTags.Content).fetchSemanticsNode().boundsInRoot
+        assertEquals("No unused band below status", status.bottom, content.top, 1f)
+        assertTrue("Status is a compact read-only strip", status.height / density <= 40f)
+        actions.forEach { action ->
+            val tag = LauncherShellTags.footerAction(action.input)
+            val target = compose.onNodeWithTag(tag)
+            val bounds = target.fetchSemanticsNode().boundsInRoot
+            val glyph = compose.onNodeWithTag("$tag-glyph", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue("Touch height survives smaller artwork", bounds.height / density >= 47.9f)
+            assertTrue("The entire legend fits its action", glyph.top >= bounds.top && glyph.bottom <= bounds.bottom)
+            assertTrue("Small glyphs leave breathing room", glyph.height < bounds.height * .7f)
+            if (action.input != SemanticInputAction.CONFIRM)
+                assertTrue("Start/Select use compact measured text", glyph.width / density < 54f)
+            target.performClick()
+        }
+        compose.runOnIdle { assertEquals(actions, dispatched) }
     }
 
     @Composable

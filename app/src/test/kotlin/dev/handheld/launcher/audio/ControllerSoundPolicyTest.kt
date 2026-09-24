@@ -17,6 +17,62 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ControllerSoundPolicyTest {
+    @Test fun `accelerating held direction never halves the click rate at the old 80ms boundary`() = runTest {
+        for (cardSelection in listOf(false, true)) {
+            val actionTimes = mutableListOf<Long>()
+            val soundTimes = mutableListOf<Long>()
+            val gains = mutableListOf<Float>()
+            val playback = ControllerSoundPlayback({ _, gain ->
+                soundTimes += testScheduler.currentTime
+                gains += gain
+                soundTimes.size
+            }, {}, { _, _ -> }, { testScheduler.currentTime })
+            val dispatcher = ControllerSoundDispatcher({ it(); true }, { testScheduler.currentTime },
+                { true }, { 40 }, playback)
+            val feedback = ControllerSoundPolicy({ true }, { true }, { testScheduler.currentTime }, dispatcher::request)
+            feedback.setActive(true)
+            val engine = ControllerInputEngine(this, { ConfirmBackMapping.Default }, { false },
+                monotonicTimeMillis = { testScheduler.currentTime }) { action ->
+                feedback.dispatch(action) {
+                    actionTimes += testScheduler.currentTime
+                    if (cardSelection) feedback.onItemSelected()
+                    true
+                }
+            }
+            engine.onButtonDown(ControllerButton.DpadDown, false, testScheduler.currentTime)
+            advanceTimeBy(7_000); runCurrent()
+            engine.reset()
+            assertTrue(actionTimes.size > 80)
+            assertEquals("Every changed selection must remain audible through acceleration", actionTimes, soundTimes)
+            val intervals = soundTimes.drop(1).zipWithNext { a, b -> b - a }
+            assertEquals(115L, intervals.first())
+            assertEquals(55L, intervals.last())
+            assertTrue("No sudden doubling of gaps as navigation speeds up", intervals.zipWithNext().all { (a, b) -> b <= a })
+            assertTrue("No gain pumping within a hold", gains.zipWithNext().all { (a, b) -> b <= a })
+            advanceTimeBy(1_000); runCurrent()
+            assertEquals("Release leaves no delayed audio", actionTimes.size, soundTimes.size)
+        }
+    }
+
+    @Test fun `slow native playback cannot spend the guard and admit an immediate second cue`() {
+        var now = 0L
+        var starts = 0
+        val feedback = ControllerSoundPolicy({ true }, { true }, { now }) {
+            starts++
+            now += 120 // A delayed native audio-driver call on a handheld.
+            true
+        }
+        feedback.setActive(true)
+        assertTrue(feedback.onItemSelected())
+        assertFalse(feedback.onItemSelected())
+        now = 159
+        assertFalse(feedback.onTouchActivation())
+        assertEquals(1, starts)
+        now = 160
+        assertTrue(feedback.onItemSelected())
+        assertEquals(2, starts)
+    }
+
     @Test
     fun `slow digital and analog reports sound once in either order before deliberate repeats`() = runTest {
         for (button in listOf(ControllerButton.LeftTrigger, ControllerButton.RightTrigger)) {
@@ -161,10 +217,10 @@ class ControllerSoundPolicyTest {
         assertTrue(feedback.dispatch(SemanticInputAction.NEXT_FILTER) { true })
         assertFalse(feedback.onItemSelected())
         assertTrue(feedback.dispatch(SemanticInputAction.CONFIRM) { true })
-        now = 77 // Move62ms plus16ms rendering margin is still occupied.
+        now = 39 // Reject duplicate feedback inside the navigation guard.
         assertTrue(feedback.dispatch(SemanticInputAction.NAVIGATE_LEFT) { true })
         assertEquals(listOf(ControllerSoundCue.MOVE), played)
-        now = 78
+        now = 40
         assertTrue(feedback.onItemSelected())
         now = 1_000
         assertEquals("Skipped events never become deferred playback", listOf(ControllerSoundCue.MOVE, ControllerSoundCue.SELECT), played)
@@ -250,7 +306,7 @@ class ControllerSoundPolicyTest {
         runCurrent()
         assertTrue(handled > startedAt.size)
         assertTrue(startedAt.size > 10)
-        assertTrue(startedAt.zipWithNext().all { (previous, next) -> next - previous >= 88 })
+        assertTrue(startedAt.zipWithNext().all { (previous, next) -> next - previous >= 80 })
         engine.reset()
         val stoppedCount = startedAt.size
         advanceTimeBy(1_000)

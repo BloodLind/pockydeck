@@ -1,11 +1,14 @@
 package dev.handheld.launcher.shell
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -34,6 +37,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.testTag
@@ -156,14 +164,18 @@ fun LauncherShell(
     onDestinationFocused: (LauncherDestination?) -> Unit = {},
     content: @Composable (Modifier) -> Unit,
     overlay: @Composable () -> Unit = {},
+    background: @Composable () -> Unit = {},
 ) {
     val layout = LauncherShellLayoutPolicy.calculate(metrics, insets)
+    val colors = LauncherTheme.colors
+    val shellBackground = remember(colors) { colors.backgroundGradient() }
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(LauncherTheme.colors.backgroundGradient())
+            .background(shellBackground)
             .testTag(LauncherShellTags.Root),
     ) {
+        background()
         if (layout.statusBounds.height > 0.dp) StatusStrip(
             status = state.status,
             bounds = layout.statusBounds,
@@ -208,9 +220,8 @@ private fun StatusStrip(
     val scale = LauncherTheme.referenceScale
     Row(
         modifier = modifier
-            .offset(bounds.left, bounds.top + 16.dp * scale)
-            .width(bounds.width)
-            .heightIn(min = 20.dp * scale * LauncherTheme.smallControlScale * LocalDensity.current.fontScale)
+            .offset(bounds.left, bounds.top)
+            .size(bounds.width, bounds.height)
             .padding(horizontal = gutter),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -252,13 +263,30 @@ private fun StatusReadings(
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        readings.filter { it.presentation.shouldRender }.let { visible ->
-            visible.forEachIndexed { index, reading ->
-                if (index > 0) Spacer(Modifier.width(LauncherTheme.spacing.sm))
-                StatusReading(reading, if (constrained) Modifier.weight(
-                    when (reading.glyph) { ShellStatusGlyph.Temperature -> 1f; ShellStatusGlyph.Memory -> 1.7f; else -> 2f },
-                    fill = false,
-                ) else Modifier, constrained = constrained)
+        val visible = readings.filter { it.presentation.shouldRender }
+        val telemetry = visible.filter { it.glyph != ShellStatusGlyph.Storage }
+        val storage = visible.filter { it.glyph == ShellStatusGlyph.Storage }
+        telemetry.forEachIndexed { index, reading ->
+            if (index > 0) Spacer(Modifier.width(LauncherTheme.spacing.sm))
+            StatusReading(reading, if (constrained) Modifier.weight(
+                if (reading.glyph == ShellStatusGlyph.Memory) 1.7f else 1f, fill = false,
+            ) else Modifier, constrained = constrained)
+        }
+        if (storage.isNotEmpty()) {
+            if (telemetry.isNotEmpty()) Spacer(Modifier.width(LauncherTheme.spacing.sm))
+            Row((if (constrained) Modifier.weight(3.4f, fill = false) else Modifier)
+                .testTag("launcher-storage-group")
+                .background(LauncherTheme.colors.surfaceControl.copy(alpha = .6f), RoundedCornerShape(LauncherTheme.shapes.smallControl))
+                .padding(horizontal = LauncherTheme.spacing.xs, vertical = LauncherTheme.spacing.xxs / 2),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
+                LauncherText("Free", style = LauncherTheme.typography.statusValue,
+                    color = LauncherTheme.colors.textSecondary, maxLines = 1)
+                storage.forEachIndexed { index, reading ->
+                    if (index > 0) Box(Modifier.width(1.dp).height(12.dp * LauncherTheme.referenceScale)
+                        .background(LauncherTheme.colors.borderEmphasis))
+                    StatusReading(reading, if (constrained) Modifier.weight(1f, fill = false) else Modifier, constrained)
+                }
             }
         }
     }
@@ -338,7 +366,9 @@ private fun NavigationDock(
 ) {
     var locallyFocusedDestination by remember { mutableStateOf<LauncherDestination?>(null) }
     val renderedFocus = (locallyFocusedDestination ?: focusedDestination).takeIf { focusEnabled }
-    val slotSize = (52.8.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale).coerceAtLeast(48.dp)
+    val slotSize = (58.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale).coerceAtLeast(48.dp)
+    val verticalInset = LauncherTheme.spacing.xs * .75f
+    val capsuleHeight = slotSize + verticalInset * 2
     Box(
         modifier = modifier
             .offset(layout.dockBounds.left, layout.dockBounds.top)
@@ -346,14 +376,15 @@ private fun NavigationDock(
         contentAlignment = Alignment.TopCenter,
     ) {
         Row(
-            modifier = Modifier.offset(y = layout.dockCenterY - layout.dockBounds.top - slotSize / 2f),
+            modifier = Modifier.offset(y = layout.dockCenterY - layout.dockBounds.top - capsuleHeight / 2f),
             horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ControllerGlyph("L1", "Previous destination")
             Row(
                 Modifier.background(LauncherTheme.colors.surfaceDock, CircleShape)
-                    .border(1.dp * LauncherTheme.referenceScale, LauncherTheme.colors.borderEmphasis, CircleShape),
+                    .border(1.dp * LauncherTheme.referenceScale, LauncherTheme.colors.borderEmphasis, CircleShape)
+                    .padding(horizontal = LauncherTheme.spacing.xs, vertical = verticalInset),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
               LauncherDestination.dockOrder.forEach { destination ->
@@ -396,13 +427,23 @@ private fun DockDestination(
     onSelected: () -> Unit,
     onFocused: (Boolean) -> Unit,
 ) {
-    val visualSize = 52.8.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    val visualSize = 58.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    val touchFeedback = dev.handheld.launcher.core.designsystem.contract.LocalTouchFeedback.current
+    val controllerInput = LocalControllerInput.current
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val base = if (selected) LauncherTheme.colors.destinationSelected else LauncherTheme.colors.dockInactive
+    val fill by animateColorAsState(
+        if (pressed) LauncherTheme.colors.borderEmphasis.compositeOver(base) else base,
+        tween(if (pressed) 0 else LauncherTheme.motion.pressedDurationMillis / 2), label = "dock press",
+    )
     Box(
         modifier = Modifier
             .size(visualSize.coerceAtLeast(48.dp))
             .testTag(LauncherShellTags.destination(destination))
             .onFocusChanged { onFocused(it.isFocused) }
-            .clickable(role = Role.Tab, onClick = onSelected)
+            .clickable(interactionSource = source, indication = null, role = Role.Tab,
+                onClick = { onSelected(); if (!controllerInput) touchFeedback() })
             .semantics { this.selected = selected },
         contentAlignment = Alignment.Center,
     ) {
@@ -410,7 +451,7 @@ private fun DockDestination(
             modifier = Modifier
                 .size(visualSize)
                 .background(
-                    color = if (selected) LauncherTheme.colors.destinationSelected else LauncherTheme.colors.dockInactive,
+                    color = fill,
                     shape = CircleShape,
                 )
                 .then(
@@ -421,7 +462,7 @@ private fun DockDestination(
         ) {
             LauncherGlyphIcon(
                 glyph = destination.glyph(),
-                modifier = Modifier.size(28.6.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
+                modifier = Modifier.size(31.5.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
                 contentDescription = destination.label(),
                 tint = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textPrimary,
             )
@@ -438,14 +479,16 @@ private fun ShellFooter(
     confirmBackMapping: ConfirmBackMapping,
     modifier: Modifier = Modifier,
 ) {
+    if (footer.actions.isEmpty()) return
     val reducedMotion = LauncherTheme.motion.reducedMotion
+    val transitionDuration = LauncherTheme.motion.transitionDurationMillis
     val reveal = remember { Animatable(1f) }
     val visibleActions = footer.actions.map { Triple(it.input, it.meaning, it.label) }
     LaunchedEffect(visibleActions, confirmBackMapping, reducedMotion) {
         if (reducedMotion) reveal.snapTo(1f)
         else {
             reveal.snapTo(.72f)
-            reveal.animateTo(1f, tween(120))
+            reveal.animateTo(1f, tween(transitionDuration))
         }
     }
     Box(
@@ -453,27 +496,22 @@ private fun ShellFooter(
             .offset(layout.footerBounds.left, layout.footerBounds.top)
             .size(layout.footerBounds.width, layout.footerBounds.height),
     ) {
-        Box(
-            Modifier
-                .offset(y = layout.footerDividerY - layout.footerBounds.top)
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(LauncherTheme.colors.borderSubtle),
-        )
         Row(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .then(if (reducedMotion) Modifier else Modifier.animateContentSize(
-                    animationSpec = tween(120), alignment = Alignment.CenterEnd))
                 .padding(horizontal = gutter)
+                .then(if (reducedMotion) Modifier else Modifier.animateContentSize(
+                    animationSpec = tween(transitionDuration), alignment = Alignment.CenterEnd))
+                .testTag("launcher-shell-footer-actions")
+                .footerPill(LauncherTheme.colors.surfaceDock.copy(alpha = .75f), footerPillHeight())
+                .padding(horizontal = LauncherTheme.spacing.sm)
                 .graphicsLayer { alpha = reveal.value },
-            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xl),
+            horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             footer.actions.forEach { descriptor ->
                 key(descriptor.input) {
-                    FooterAction(descriptor, actionPort, confirmBackMapping,
-                        visualOffset = (layout.footerDividerY - layout.footerBounds.top) / 2f - 8.dp * LauncherTheme.referenceScale)
+                    FooterAction(descriptor, actionPort, confirmBackMapping)
                 }
             }
         }
@@ -485,26 +523,41 @@ private fun FooterAction(
     descriptor: LauncherActionDescriptor,
     actionPort: SemanticActionPort,
     confirmBackMapping: ConfirmBackMapping,
-    visualOffset: Dp,
 ) {
+    val touchFeedback = dev.handheld.launcher.core.designsystem.contract.LocalTouchFeedback.current
+    val controllerInput = LocalControllerInput.current
+    val directionHint = descriptor.input == SemanticInputAction.NAVIGATE_RIGHT || descriptor.input == SemanticInputAction.NAVIGATE_LEFT
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val fill by animateColorAsState(
+        if (pressed && descriptor.enabled && !directionHint) LauncherTheme.colors.borderEmphasis else Color.Transparent,
+        tween(if (pressed) 0 else LauncherTheme.motion.pressedDurationMillis / 2), label = "footer press",
+    )
     Box(
         modifier = Modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
             .height(48.dp)
             .testTag(LauncherShellTags.footerAction(descriptor.input))
+            .footerPill(fill, footerPillHeight())
             .semantics { if (!descriptor.enabled) disabled() }
             .focusProperties { canFocus = false }
-            .clickable(enabled = descriptor.enabled) { actionPort.dispatch(descriptor) },
+            .then(if (directionHint) Modifier else Modifier.clickable(interactionSource = source,
+                indication = null, enabled = descriptor.enabled) {
+                if (actionPort.dispatch(descriptor) && !controllerInput) touchFeedback()
+            }),
         contentAlignment = Alignment.Center,
     ) {
       Row(
-        modifier = Modifier.offset(y = visualOffset),
-        horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ControllerGlyph(
+        if (descriptor.input == SemanticInputAction.NAVIGATE_RIGHT || descriptor.input == SemanticInputAction.NAVIGATE_LEFT)
+            dev.handheld.launcher.core.designsystem.controls.HorizontalDpadGlyph()
+        else ControllerGlyph(
             glyph = descriptor.input.footerLegend(confirmBackMapping),
             semanticLabel = descriptor.label,
+            modifier = Modifier.testTag("${LauncherShellTags.footerAction(descriptor.input)}-glyph"),
+            compact = true,
         )
         LauncherText(
             text = descriptor.label,
@@ -515,6 +568,18 @@ private fun FooterAction(
         )
       }
     }
+}
+
+/** Paint only the content-sized band; its actions retain their full 48 dp touch allocation. */
+@Composable
+private fun footerPillHeight(): Dp = with(LocalDensity.current) {
+    LauncherTheme.typography.actionLabel.lineHeight.toDp()
+} + LauncherTheme.spacing.sm
+
+private fun Modifier.footerPill(color: Color, height: Dp): Modifier = drawBehind {
+    val paintedHeight = height.toPx().coerceAtMost(size.height)
+    drawRoundRect(color, Offset(0f, (size.height - paintedHeight) / 2f),
+        Size(size.width, paintedHeight), CornerRadius(paintedHeight / 2f))
 }
 
 private fun LauncherDestination.glyph(): LauncherGlyph = when (this) {
@@ -540,6 +605,7 @@ private fun SemanticInputAction.footerLegend(mapping: ConfirmBackMapping): Strin
     SemanticInputAction.BACK -> mapping.back.legend()
     SemanticInputAction.SECONDARY -> "X"
     SemanticInputAction.TERTIARY -> "Y"
+    SemanticInputAction.ITEM_DETAILS -> "SELECT"
     SemanticInputAction.MENU -> "START"
     SemanticInputAction.PREVIOUS_DESTINATION -> "L"
     SemanticInputAction.NEXT_DESTINATION -> "R"

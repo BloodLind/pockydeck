@@ -3,6 +3,7 @@ package dev.handheld.launcher.feature.home
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import dev.handheld.launcher.ui.artwork.LocalArtworkLoadingAllowed
+import dev.handheld.launcher.ui.artwork.rememberArtworkLoadGate
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -35,6 +42,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
@@ -78,6 +87,7 @@ fun HomeRoute(
     allowFocusRequest: Boolean = true,
     pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
+    onArtworkLoadingAllowed: (Boolean) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val renderedReturnSequence = state.returnToStartSequence
@@ -100,6 +110,7 @@ fun HomeRoute(
             }
         },
         onFocusedActionChanged = onFocusedActionChanged,
+        onArtworkLoadingAllowed = onArtworkLoadingAllowed,
     )
 }
 
@@ -119,9 +130,16 @@ fun HomeScreen(
     allowFocusRequest: Boolean = true,
     pageActivationRequest: Int = 1,
     onFocusedActionChanged: (HomeFocusedAction?) -> Unit = {},
+    onArtworkLoadingAllowed: (Boolean) -> Unit = {},
 ) {
     val selected = state.selectedItem
     val rowState = rememberLazyListState()
+    val artworkGate = rememberArtworkLoadGate { rowState.isScrollInProgress }
+    val artworkLoadingAllowed by artworkGate.allowed.collectAsState()
+    val loadingAllowed = artworkLoadingAllowed && !rowState.isScrollInProgress
+    val publishLoadingAllowed by rememberUpdatedState(onArtworkLoadingAllowed)
+    SideEffect { publishLoadingAllowed(loadingAllowed) }
+    DisposableEffect(Unit) { onDispose { publishLoadingAllowed(false) } }
     val itemIds = state.items.map { it.itemId }
     val requesters = remember(itemIds) { itemIds.associateWith { FocusRequester() } }
     val libraryRequester = remember { FocusRequester() }
@@ -142,6 +160,8 @@ fun HomeScreen(
     val currentFocusAllowed by rememberUpdatedState(allowFocusRequest)
     val currentViewportChanged by rememberUpdatedState(onViewportChanged)
     val density = LocalDensity.current
+    val artworkTargetSizePx = homeArtworkTargetSizePx(with(density) { metrics.homeCardAllocatedSize.roundToPx() })
+    if (metrics.hasUsableHomeCard) HomeArtworkBuffer(state.items, iconLoader, artworkTargetSizePx)
     val shadowOffset = with(density) { (2.dp * metrics.referenceScale).toPx() }
     val shadowBlur = with(density) { (3.dp * metrics.referenceScale).toPx() }
 
@@ -154,7 +174,12 @@ fun HomeScreen(
                     .height(metrics.metadataReservation),
                 verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
             ) {
-                PlatformBadge(selected.platformLabel, homeAccent = true, accentColor = selected.platformAccent)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.sm)) {
+                    PlatformBadge(selected.platformLabel, homeAccent = true, accentColor = selected.platformAccent)
+                    if (selected.itemId in dev.handheld.launcher.ui.presentation.LocalLastPlayed.current) {
+                        dev.handheld.launcher.ui.presentation.LastPlayedTag(selected.platformLabel)
+                    }
+                }
                 LauncherText(
                     text = selected.title,
                     style = LauncherTheme.typography.homeTitle.copy(
@@ -192,6 +217,7 @@ fun HomeScreen(
                     )
                     .wrapContentSize(Alignment.TopStart, unbounded = true),
             ) {
+                CompositionLocalProvider(LocalArtworkLoadingAllowed provides true) {
                 LazyRow(
                     modifier = Modifier
                         .testTag("home-row")
@@ -209,13 +235,21 @@ fun HomeScreen(
                             activationEnabled = item.canOpen && state.pendingLaunchItemId == null,
                             modifier = Modifier
                                 .size(metrics.homeCardAllocatedSize)
+                                .pointerInput(item.itemId) {
+                                    awaitPointerEventScope {
+                                        while (true) if (awaitPointerEvent().type == PointerEventType.Enter) onSelect(item.itemId)
+                                    }
+                                }
                                 .focusRequester(requesters.getValue(item.itemId)),
                             focusFrameWidth = metrics.focusFrameReservation,
                             focusLift = metrics.focusLiftReservation,
                             iconLoader = iconLoader,
+                            artworkTargetSizePx = artworkTargetSizePx,
+                            animateArtwork = artworkLoadingAllowed,
                             onActivate = activate,
                             onFocusChanged = { focused ->
                                 if (focused && currentPositionRestored) {
+                                    if (state.selectedItemId != item.itemId) artworkGate.onNavigation()
                                     onSelect(item.itemId)
                                     focusedTarget = HomeFocusTarget.Item(item.itemId)
                                 } else if (focusedTarget == HomeFocusTarget.Item(item.itemId)) {
@@ -254,6 +288,7 @@ fun HomeScreen(
                             focusLift = metrics.focusLiftReservation,
                         )
                     }
+                }
                 }
             }
         } else {

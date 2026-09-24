@@ -10,6 +10,7 @@ enum class SemanticInputAction {
     BACK,
     SECONDARY,
     TERTIARY,
+    ITEM_DETAILS,
     MENU,
     PREVIOUS_DESTINATION,
     NEXT_DESTINATION,

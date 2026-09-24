@@ -76,27 +76,28 @@ private fun DeviceStatusSnapshot.storageReadings(): List<ShellStatusReading> {
         ?: StorageVolumeStatus("internal", StorageVolumeKind.INTERNAL, freeStorageBytes)
     val external = volumes?.filter { it.kind == StorageVolumeKind.EXTERNAL }.orEmpty()
     return buildList {
-        add(storageReading("INT", listOf(internal)))
+        add(storageReading(listOf(internal)))
         when {
-            external.isNotEmpty() -> add(storageReading(if (external.size == 1) "EXT" else "EXT×${external.size}", external))
+            external.isNotEmpty() -> add(storageReading(external))
             storageVolumes == StatusValue.Unavailable -> add(ShellStatusReading(
                 StatusPresentation("External storage available", StatusValue.Unavailable, "External storage available"),
                 ShellStatusGlyph.Storage, LauncherStatusGlyph.Storage, ShellStatusTint.Muted,
-                displayText = "EXT —", accessibilityDescription = "External storage availability is unknown"))
+                displayText = "—", accessibilityDescription = "External storage availability is unknown"))
         }
     }
 }
 
-private fun storageReading(label: String, volumes: List<StorageVolumeStatus>): ShellStatusReading {
+private fun storageReading(volumes: List<StorageVolumeStatus>): ShellStatusReading {
+    val prefix = if (volumes.size > 1) "×${volumes.size} " else ""
     val known = volumes.mapNotNull { (it.availableBytes as? StatusValue.Available)?.value?.takeIf { value -> value >= 0 } }
     val total = known.fold(0L as Long?) { sum, bytes ->
         if (sum == null || Long.MAX_VALUE - sum < bytes) null else sum + bytes
     }
     val hasUnknown = known.size != volumes.size || total == null
     val compact = when {
-        known.isEmpty() || total == null -> "$label —"
-        hasUnknown -> "$label ${compactBytes(total)}+?"
-        else -> "$label ${compactBytes(total)}"
+        known.isEmpty() || total == null -> "${prefix}—"
+        hasUnknown -> "$prefix${compactBytes(total)}+?"
+        else -> "$prefix${compactBytes(total)}"
     }
     val description = volumes.mapIndexed { index, volume ->
         val name = if (volume.kind == StorageVolumeKind.INTERNAL) "Internal storage" else if (volumes.size == 1) "External storage" else "External storage ${index + 1}"
@@ -107,7 +108,11 @@ private fun storageReading(label: String, volumes: List<StorageVolumeStatus>): S
     return ShellStatusReading(
         StatusPresentation(if (volumes.first().kind == StorageVolumeKind.INTERNAL) "Internal storage available" else "External storage available",
             if (known.isEmpty() || total == null) StatusValue.Unavailable else StatusValue.Available(compact), description),
-        ShellStatusGlyph.Storage, if (low) LauncherStatusGlyph.StorageLow else LauncherStatusGlyph.Storage,
+        ShellStatusGlyph.Storage, when {
+            volumes.first().kind == StorageVolumeKind.INTERNAL -> LauncherStatusGlyph.InternalStorage
+            low -> LauncherStatusGlyph.StorageLow
+            else -> LauncherStatusGlyph.Storage
+        },
         tint = when {
             known.isEmpty() || total == null -> ShellStatusTint.Muted
             low -> ShellStatusTint.Hot

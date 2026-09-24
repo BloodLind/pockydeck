@@ -39,6 +39,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 
+internal const val HOME_CARD_LIMIT = 20
+
 @Immutable
 data class HomeUiState(
     val items: List<TileUiModel> = emptyList(),
@@ -331,7 +333,6 @@ class HomeViewModel(
     }
 
     companion object {
-        private const val HOME_CARD_LIMIT = 20
         private const val SNAPSHOT_DEBOUNCE_MS = 250L
         private const val SELECTED_KEY = "home.selected"
         private const val ANCHOR_KEY = "home.anchor"

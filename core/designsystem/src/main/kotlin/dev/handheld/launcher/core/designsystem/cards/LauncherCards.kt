@@ -81,11 +81,11 @@ fun ArtworkFallback(
 /** Two readable title lines; list results may reserve a subtitle line to keep rows aligned. */
 @Composable
 fun TileCaption(title: String, subtitle: String? = null, modifier: Modifier = Modifier, subtitleColor: Color? = null,
-    reserveSubtitle: Boolean = true, textAlign: TextAlign = TextAlign.Start) {
+    reserveSubtitle: Boolean = true, textAlign: TextAlign = TextAlign.Start, titleLines: Int = 2) {
     val type = LauncherTheme.typography
     Column(modifier.fillMaxWidth()) {
         LauncherText(title, Modifier.fillMaxWidth(), style = type.tileTitle.copy(textAlign = textAlign),
-            minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            minLines = titleLines, maxLines = titleLines, overflow = TextOverflow.Ellipsis)
         if (subtitle != null || reserveSubtitle) {
             LauncherText(subtitle.orEmpty(), Modifier.fillMaxWidth(), style = type.tileSubtitle.copy(textAlign = textAlign),
                 color = subtitleColor ?: LauncherTheme.colors.textSecondary, maxLines = 1,
@@ -109,7 +109,6 @@ private fun CardActivation(
     focusFrameWidth: Dp,
     focusLift: Dp,
     maxArtworkSize: Dp = Dp.Infinity,
-    collectionArtworkScale: Float = 1f,
     caption: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -127,8 +126,7 @@ private fun CardActivation(
         }.clickable(source, indication = null, enabled = activationEnabled,
             role = Role.Button, onClick = {
                 if (controllerInput) restoration.requester.requestFocus()
-                restoration.record()
-                onActivate()
+                restoration.activate { onActivate() }
             }).semantics(mergeDescendants = true) {
                 this.selected = selected
                 contentDescription = title
@@ -147,9 +145,8 @@ private fun CardActivation(
         }
         if (caption != null) {
             BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                val artworkScale = collectionArtworkScale.takeIf { it.isFinite() }?.coerceIn(.7f, 1.4f) ?: 1f
-                frame(Modifier.size(minOf(maxWidth, 176.dp * LauncherTheme.referenceScale * artworkScale,
-                    maxArtworkSize.coerceAtLeast(0.dp))))
+                // Density is owned by the grid; artwork fills its actual cell allocation.
+                frame(Modifier.size(minOf(maxWidth, maxArtworkSize.coerceAtLeast(0.dp))))
             }
         } else frame(Modifier)
         caption?.invoke()
@@ -176,7 +173,6 @@ fun CoverTile(
     subtitleColor: Color? = null,
     status: (@Composable () -> Unit)? = null,
     maxArtworkSize: Dp = Dp.Infinity,
-    collectionArtworkScale: Float = 1f,
 ) {
     require(variant != CardVariant.AppIcon) { "Use AppIconTile for the app variant" }
     val isCollection = variant == CardVariant.CollectionCover
@@ -185,7 +181,6 @@ fun CoverTile(
         RoundedCornerShape(if (isCollection) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
         maxArtworkSize = maxArtworkSize,
-        collectionArtworkScale = collectionArtworkScale,
         caption = if (isCollection) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp), subtitleColor,
             reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {
@@ -231,7 +226,6 @@ fun AppIconTile(
     badge: (@Composable () -> Unit)? = null,
     status: (@Composable () -> Unit)? = null,
     maxArtworkSize: Dp = Dp.Infinity,
-    collectionArtworkScale: Float = 1f,
 ) {
     val scale = LauncherTheme.referenceScale
     val type = LauncherTheme.typography
@@ -243,7 +237,6 @@ fun AppIconTile(
         RoundedCornerShape(if (showCaption) LauncherTheme.shapes.collectionOuter else LauncherTheme.shapes.homeOuter),
         focusFrameWidth, focusLift,
         maxArtworkSize = maxArtworkSize,
-        collectionArtworkScale = collectionArtworkScale,
         caption = if (showCaption) ({ TileCaption(title, subtitle, Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
             reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {
@@ -301,15 +294,17 @@ fun SearchResultCard(
     focusLift: Dp = LauncherTheme.depth.focusLift,
     subtitleColor: Color? = null,
     status: (@Composable () -> Unit)? = null,
+    compact: Boolean = false,
 ) {
-    val imageSize = 72.dp * LauncherTheme.referenceScale
+    val imageSize = (if (compact) 56.dp else 72.dp) * LauncherTheme.referenceScale
     CardActivation(title, activationEnabled, unavailable, unavailableReason, selected,
         onActivate, onFocusChanged, modifier, RoundedCornerShape(LauncherTheme.shapes.smallControl),
         focusFrameWidth, focusLift) {
         Row(Modifier.fillMaxWidth().padding(LauncherTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             CardArtwork(Modifier.size(imageSize), artwork, badge, badgePadding = LauncherTheme.spacing.xxs / 2)
             Column(Modifier.weight(1f).padding(start = LauncherTheme.spacing.sm)) {
-                TileCaption(title, subtitle, subtitleColor = subtitleColor, reserveSubtitle = status == null)
+                TileCaption(title, subtitle, subtitleColor = subtitleColor, reserveSubtitle = !compact && status == null,
+                    titleLines = if (compact) 1 else 2)
                 status?.invoke()
             }
         }

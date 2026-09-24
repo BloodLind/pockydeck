@@ -55,10 +55,16 @@ class AndroidIconLoader(
     private val decoding = Semaphore(2)
     private val sameComponent = Array(16) { Mutex() }
 
+    private fun cacheKey(componentId: CurrentUserAndroidComponentId, targetSizePx: Int): String =
+        "${componentId.itemId.value}@${ArtworkDecodePolicy.target(targetSizePx).coerceIn(1, maximumIconSizePx)}"
+
+    internal fun cached(componentId: CurrentUserAndroidComponentId, targetSizePx: Int): ImageBitmap? =
+        cache.get(cacheKey(componentId, targetSizePx))
+
     suspend fun load(componentId: CurrentUserAndroidComponentId, targetSizePx: Int = maximumIconSizePx): AndroidIconResult {
         currentCoroutineContext().ensureActive()
         val target = ArtworkDecodePolicy.target(targetSizePx).coerceAtMost(maximumIconSizePx).coerceAtLeast(1)
-        val key = "${componentId.itemId.value}@$target"
+        val key = cacheKey(componentId, target)
         cache.get(key)?.let { return AndroidIconResult.Loaded(it) }
         val revision = cache.revision
         return withContext(dispatcher) {
@@ -98,7 +104,7 @@ class AndroidIconLoader(
         generation++
     }
 
-    fun setForeground(value: Boolean) { memoryOwner.updateForeground(value); if (!value) trimMemory(clear = true) }
+    fun setForeground(value: Boolean) { memoryOwner.updateForeground(value) }
     fun trimMemory(clear: Boolean) = cache.trimTo(if (clear) 0 else cache.maximumBytes / 2)
 
     companion object {
@@ -117,14 +123,14 @@ fun rememberAndroidIconResult(
     val artworkActive = active && loader.foreground
     val target = ArtworkDecodePolicy.target(targetSizePx)
     val result = remember(loader, componentId, artworkActive, target, loader.generation, loader.memoryOwner.generation) {
-        mutableStateOf<AndroidIconResult?>(null)
+        mutableStateOf<AndroidIconResult?>(if (artworkActive) loader.cached(componentId, target)?.let(AndroidIconResult::Loaded) else null)
     }
     DisposableEffect(result) {
         val unregister = if (artworkActive) loader.memoryOwner.onBackground { result.value = null } else ({})
         onDispose { unregister(); result.value = null }
     }
     LaunchedEffect(result) {
-        if (!artworkActive) return@LaunchedEffect
+        if (!artworkActive || result.value != null) return@LaunchedEffect
         val job = currentCoroutineContext().job
         val unregister = loader.memoryOwner.onBackground { result.value = null; job.cancel() }
         try { result.value = loader.load(componentId, target) }
@@ -145,14 +151,14 @@ fun rememberAndroidIconPainter(
     // Do not remember a Loaded(ImageBitmap) as a key: stopped compositions would retain
     // that key even after their observable result and painter delegate have been cleared.
     val painter = remember(loader, componentId, artworkActive, target, loader.generation, loader.memoryOwner.generation) {
-        mutableStateOf<ReleasableArtworkPainter?>(null)
+        mutableStateOf(if (artworkActive) loader.cached(componentId, target)?.let(loader.memoryOwner::painter) else null)
     }
     DisposableEffect(painter) {
         val unregister = if (artworkActive) loader.memoryOwner.onBackground { painter.value = null } else ({})
         onDispose { unregister(); painter.value?.release(); painter.value = null }
     }
     LaunchedEffect(painter) {
-        if (!artworkActive) return@LaunchedEffect
+        if (!artworkActive || painter.value != null) return@LaunchedEffect
         val job = currentCoroutineContext().job
         val unregister = loader.memoryOwner.onBackground { painter.value = null; job.cancel() }
         try {

@@ -107,7 +107,7 @@ class ShellPreviewActivity : ComponentActivity() {
             LauncherActionDescriptor(SemanticInputAction.BACK, LauncherActionMeaning.GO_BACK, "Back",
                 enabled = destination != LauncherDestination.HOME || dialog != null),
             LauncherActionDescriptor(SemanticInputAction.SECONDARY, LauncherActionMeaning.OPEN_SEARCH, "Search"),
-            LauncherActionDescriptor(SemanticInputAction.TERTIARY, LauncherActionMeaning.OPEN_DETAILS, "Details"),
+            LauncherActionDescriptor(SemanticInputAction.ITEM_DETAILS, LauncherActionMeaning.OPEN_DETAILS, "Details"),
             LauncherActionDescriptor(SemanticInputAction.MENU, LauncherActionMeaning.OPEN_MENU, "Menu"),
         ))
         val actionPort = SemanticActionPort { action ->

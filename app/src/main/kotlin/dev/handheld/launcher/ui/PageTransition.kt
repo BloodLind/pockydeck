@@ -14,10 +14,11 @@ import androidx.compose.ui.unit.dp
 /** One live page: replaced controls disappear immediately while the new page fades/slides in. */
 @Composable
 internal fun pageTransition(key: Any, reducedMotion: Boolean): Modifier {
+    val duration = dev.handheld.launcher.core.designsystem.theme.LauncherTheme.motion.transitionDurationMillis
     val progress = remember(key, reducedMotion) { Animatable(if (reducedMotion) 1f else 0f) }
     val distance = with(LocalDensity.current) { 8.dp.toPx() }
     LaunchedEffect(progress) {
-        if (!reducedMotion) progress.animateTo(1f, tween(160, easing = FastOutSlowInEasing))
+        if (!reducedMotion) progress.animateTo(1f, tween(duration, easing = FastOutSlowInEasing))
     }
     return Modifier.graphicsLayer {
         alpha = progress.value

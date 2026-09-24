@@ -30,13 +30,14 @@ enum class LauncherGlyph(val label: String, internal val resourceId: Int) {
     Close("Close", R.drawable.ic_material_close),
 }
 
-/** Official Material Symbols Outlined at weight 200. Values choose an appropriate variant. */
+/** Material status symbols plus the launcher’s internal-drive outline. Values choose the variant. */
 enum class LauncherStatusGlyph(internal val resourceId: Int) {
     Temperature(R.drawable.ic_material_device_thermostat),
     TemperatureLow(R.drawable.ic_material_thermometer_loss),
     TemperatureHigh(R.drawable.ic_material_thermometer_gain),
     Memory(R.drawable.ic_material_memory),
     MemoryHigh(R.drawable.ic_material_memory),
+    InternalStorage(R.drawable.ic_internal_storage),
     Storage(R.drawable.ic_material_sd_card),
     StorageLow(R.drawable.ic_material_sd_card_alert),
     Wifi(R.drawable.ic_material_wifi),

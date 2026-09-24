@@ -57,7 +57,7 @@ private fun SettingSurface(
                 if (it.isFocused) restoration.record()
             }
             .clickable(source, indication = null, enabled = enabled, role = Role.Button,
-                onClick = { restoration.record(); onActivate() }),
+                onClick = { restoration.activate { onActivate() } }),
         focused = focused && LocalControllerInput.current,
         pressed = pressed,
         enabled = enabled,
@@ -135,7 +135,7 @@ fun ToggleRow(
             }
             .toggleable(value = checked, enabled = enabled, role = Role.Switch,
                 interactionSource = source, indication = null,
-                onValueChange = { restoration.record(); onCheckedChange(it) }),
+                onValueChange = { restoration.activate { onCheckedChange(it) } }),
         focused = focused && LocalControllerInput.current,
         pressed = pressed,
         enabled = enabled,

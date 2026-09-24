@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original launcher drive outline; paired with the SD-card symbol for removable storage. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="1.2"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M5,4.5L19,4.5Q20,4.5 20,5.5L21,16.5L21,18.5Q21,19.5 20,19.5L4,19.5Q3,19.5 3,18.5L3,16.5L4,5.5Q4,4.5 5,4.5ZM3.5,15.5L20.5,15.5M6,17.5L8,17.5M17,17.5L18,17.5" />
+</vector>

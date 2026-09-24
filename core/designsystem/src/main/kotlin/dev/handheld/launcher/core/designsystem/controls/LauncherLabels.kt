@@ -2,6 +2,7 @@ package dev.handheld.launcher.core.designsystem.controls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +15,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
@@ -110,7 +115,24 @@ fun FilterNavigationHint(label: String, description: String, modifier: Modifier 
 
 /** Raw physical legends. The shell supplies their current meaning and activation target. */
 @Composable
-fun ControllerGlyph(glyph: String, semanticLabel: String?, modifier: Modifier = Modifier) {
+fun ControllerGlyph(glyph: String, semanticLabel: String?, modifier: Modifier = Modifier, compact: Boolean = false) {
+    if (glyph.equals("SELECT", true)) {
+        SelectButtonGlyph(semanticLabel, modifier, compact)
+        return
+    }
+    if (glyph.equals("START", true)) {
+        val type = LauncherTheme.typography.controlLabel
+        Box(modifier.clearAndSetSemantics {
+            if (semanticLabel != null) contentDescription = semanticLabel
+        }.background(LauncherTheme.colors.destinationSelected, RoundedCornerShape(LauncherTheme.shapes.smallControl / 2))
+            .padding(horizontal = LauncherTheme.spacing.xs * .75f, vertical = LauncherTheme.spacing.xxs * .5f),
+            contentAlignment = Alignment.Center) {
+            LauncherText(glyph.uppercase(java.util.Locale.ROOT),
+                style = type.copy(fontSize = type.fontSize * .90f, lineHeight = type.lineHeight * .90f),
+                color = LauncherTheme.colors.destinationSelectedContent, maxLines = 1)
+        }
+        return
+    }
     val button = LauncherFaceButton.entries.firstOrNull { it.legend.equals(glyph, ignoreCase = true) }
     if (button != null) {
         val colors = LauncherTheme.colors
@@ -120,19 +142,16 @@ fun ControllerGlyph(glyph: String, semanticLabel: String?, modifier: Modifier = 
             LauncherFaceButton.B -> colors.cancel
             else -> colors.destinationSelected
         }
-        val shape = if (button == LauncherFaceButton.Start) {
-            RoundedCornerShape(LauncherTheme.shapes.smallControl)
-        } else CircleShape
         Box(modifier.clearAndSetSemantics {
             if (semanticLabel != null) contentDescription = semanticLabel
-        }.then(if (button == LauncherFaceButton.Start) Modifier.sizeIn(
-            minWidth = 48.dp * scale * LauncherTheme.smallControlScale,
-            minHeight = 24.dp * scale * LauncherTheme.smallControlScale,
-        ) else Modifier.size(28.dp * scale * LauncherTheme.smallControlScale)).background(background, shape)
-            .then(if (button == LauncherFaceButton.Start) Modifier.padding(horizontal = 3.dp * scale) else Modifier),
+        }.size((if (compact) 26.dp else 28.dp) * scale * LauncherTheme.smallControlScale)
+            .background(background, CircleShape),
             contentAlignment = Alignment.Center) {
-            LauncherFaceGlyph(button, semanticLabel = null,
-                color = if (button == LauncherFaceButton.B) colors.textPrimary else colors.destinationSelectedContent)
+            val type = LauncherTheme.typography.controlLabel
+            LauncherText(button.legend,
+                style = if (compact) type.copy(fontSize = type.fontSize * .95f, lineHeight = type.lineHeight * .95f) else type,
+                color = if (button == LauncherFaceButton.B) colors.textPrimary else colors.destinationSelectedContent,
+                maxLines = 1)
         }
     } else {
         Box(modifier.clearAndSetSemantics {
@@ -144,5 +163,29 @@ fun ControllerGlyph(glyph: String, semanticLabel: String?, modifier: Modifier = 
                 color = LauncherTheme.colors.destinationSelectedContent, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
+    }
+}
+
+/** Compact view/select symbol; its adjacent action label carries the current meaning. */
+@Composable
+private fun SelectButtonGlyph(semanticLabel: String?, modifier: Modifier, compact: Boolean) {
+    val background = LauncherTheme.colors.destinationSelected
+    val foreground = LauncherTheme.colors.destinationSelectedContent
+    Canvas(modifier
+        .size((if (compact) 26.dp else 28.dp) * LauncherTheme.referenceScale * LauncherTheme.smallControlScale)
+        .clearAndSetSemantics {
+            contentDescription = if (semanticLabel == null) "Select" else "Select: $semanticLabel"
+        }
+        .background(background, CircleShape)) {
+        val unit = size.minDimension / 26f
+        val corner = CornerRadius(1f * unit)
+        val outline = Stroke(1.5f * unit)
+        drawRoundRect(foreground, Offset(5.5f * unit, 6.5f * unit),
+            Size(10f * unit, 9f * unit), corner, style = outline)
+        // An opaque front panel separates the outlines at their overlap.
+        drawRoundRect(background, Offset(10.5f * unit, 10.5f * unit),
+            Size(10f * unit, 9f * unit), corner)
+        drawRoundRect(foreground, Offset(10.5f * unit, 10.5f * unit),
+            Size(10f * unit, 9f * unit), corner, style = outline)
     }
 }

@@ -80,7 +80,7 @@ fun LauncherDialog(
         })
         val margin = LauncherTheme.spacing.lg
         LauncherSurface(
-            modifier = modifier.align(Alignment.Center)
+            modifier = modifier.then(dev.handheld.launcher.core.designsystem.foundation.contentEntrance(title)).align(Alignment.Center)
                 .width(minOf(560.dp, (maxWidth - margin * 2).coerceAtLeast(0.dp)))
                 .heightIn(max = (maxHeight - margin * 2).coerceAtLeast(0.dp))
                 .focusRequester(initialFocus)

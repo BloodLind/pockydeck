@@ -1,6 +1,7 @@
 package dev.handheld.launcher.core.domain.repository
 
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
 import dev.handheld.launcher.core.domain.model.DisplayPreferences
 import dev.handheld.launcher.core.domain.model.LauncherDestination
@@ -18,6 +19,11 @@ interface DisplayPreferenceRepository {
     suspend fun setUiScalePercent(percent: Int)
     suspend fun setGridSizePercent(percent: Int)
     suspend fun setReduceMotion(enabled: Boolean)
+    suspend fun setHomeArtworkBackground(enabled: Boolean)
+    suspend fun setListArtworkBackground(enabled: Boolean)
+    suspend fun setBackgroundTint(tint: BackgroundTint)
+    suspend fun setBackgroundTintPercent(percent: Int)
+    suspend fun setBackgroundGrainPercent(percent: Int)
     suspend fun setCollectionListMode(destination: LauncherDestination, isList: Boolean)
 }
 

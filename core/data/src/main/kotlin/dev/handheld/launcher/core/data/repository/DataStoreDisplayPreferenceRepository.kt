@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.edit
 import dev.handheld.launcher.core.data.local.LauncherPreferenceKeys
 import dev.handheld.launcher.core.data.local.LauncherPreferencesStore
 import dev.handheld.launcher.core.domain.model.DisplayPreferences
+import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.core.domain.repository.DisplayPreferenceRepository
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -17,6 +18,13 @@ class DataStoreDisplayPreferenceRepository(store: LauncherPreferencesStore) : Di
             uiScalePercent = (values[LauncherPreferenceKeys.uiScalePercent] as? Int)
                 ?.takeIf { it in DisplayPreferences.supportedScales } ?: 100,
             reduceMotion = values[LauncherPreferenceKeys.reduceMotion] as? Boolean ?: false,
+            homeArtworkBackground = values[LauncherPreferenceKeys.homeArtworkBackground] as? Boolean ?: false,
+            listArtworkBackground = values[LauncherPreferenceKeys.listArtworkBackground] as? Boolean ?: false,
+            backgroundTint = BackgroundTint.fromPersistedKey(values[LauncherPreferenceKeys.backgroundTint] as? String),
+            backgroundTintPercent = (values[LauncherPreferenceKeys.backgroundTintPercent] as? Int)
+                ?.takeIf { it in DisplayPreferences.supportedBackgroundLevels } ?: 40,
+            backgroundGrainPercent = (values[LauncherPreferenceKeys.backgroundGrainPercent] as? Int)
+                ?.takeIf { it in DisplayPreferences.supportedBackgroundLevels } ?: 30,
             listDestinations = decodeListDestinations(values[LauncherPreferenceKeys.listDestinations]),
             gridSizePercent = (values[LauncherPreferenceKeys.gridSizePercent] as? Int)
                 ?.takeIf { it in DisplayPreferences.supportedGridSizes } ?: 100,
@@ -32,9 +40,31 @@ class DataStoreDisplayPreferenceRepository(store: LauncherPreferencesStore) : Di
         dataStore.edit { it[LauncherPreferenceKeys.reduceMotion] = enabled }
     }
 
+    override suspend fun setHomeArtworkBackground(enabled: Boolean) {
+        dataStore.edit { it[LauncherPreferenceKeys.homeArtworkBackground] = enabled }
+    }
+
+    override suspend fun setListArtworkBackground(enabled: Boolean) {
+        dataStore.edit { it[LauncherPreferenceKeys.listArtworkBackground] = enabled }
+    }
+
     override suspend fun setGridSizePercent(percent: Int) {
         require(percent in DisplayPreferences.supportedGridSizes)
         dataStore.edit { it[LauncherPreferenceKeys.gridSizePercent] = percent }
+    }
+
+    override suspend fun setBackgroundTint(tint: BackgroundTint) {
+        dataStore.edit { it[LauncherPreferenceKeys.backgroundTint] = tint.persistedKey }
+    }
+
+    override suspend fun setBackgroundTintPercent(percent: Int) {
+        require(percent in DisplayPreferences.supportedBackgroundLevels)
+        dataStore.edit { it[LauncherPreferenceKeys.backgroundTintPercent] = percent }
+    }
+
+    override suspend fun setBackgroundGrainPercent(percent: Int) {
+        require(percent in DisplayPreferences.supportedBackgroundLevels)
+        dataStore.edit { it[LauncherPreferenceKeys.backgroundGrainPercent] = percent }
     }
 
     override suspend fun setCollectionListMode(destination: LauncherDestination, isList: Boolean) {

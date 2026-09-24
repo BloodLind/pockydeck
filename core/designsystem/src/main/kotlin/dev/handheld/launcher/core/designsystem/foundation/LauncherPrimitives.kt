@@ -116,6 +116,11 @@ fun LauncherSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val colors = LauncherTheme.colors
+    val motion = LauncherTheme.motion
+    val controlLift by animateDpAsState(
+        if (focused && !motion.reducedMotion) 2.dp else 0.dp,
+        tween(motion.focusDurationMillis), label = "control focus lift",
+    )
     val base = when {
         selected -> colors.destinationSelected
         emphasized -> colors.borderEmphasis.compositeOver(colors.surfaceControl)
@@ -140,6 +145,7 @@ fun LauncherSurface(
     ) {
         Box(
             Modifier.padding(visualPadding)
+                .graphicsLayer { translationY = -controlLift.toPx() }
                 .then(if (compact) Modifier.heightIn(min = 24.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale) else Modifier)
                 .background(background, shape)
                 .border(if (focused) 2.dp else if (compact) 1.dp * LauncherTheme.referenceScale else 1.dp,

@@ -82,10 +82,13 @@ data class ShellMetrics(
             val g = w * .0375
             val gutter = g.asDp()
 
-            // Preserve reference proportions independently of invisible touch allocations.
-            val desiredStatus = maxOf(h * if (compact) .16 else .13, (20.0 * fs + 16.0) * controlScale).coerceAtMost(h)
-            val desiredDock = maxOf(h * if (compact) .18 else .152, 74.0 * controlScale, 48.0).coerceAtMost(h)
-            val desiredFooter = maxOf(h * if (compact) .10 else .08, 52.0, (20.0 * fs + 20.0) * controlScale).coerceAtMost(h)
+            // Chrome follows its contents, not a percentage of the screen's height.
+            // Retain full touch targets while giving the recovered space to the page.
+            val desiredStatus = maxOf(40.0 * controlScale, 24.0 * fs + 8.0).coerceAtMost(h)
+            // Match the 58-unit circles at 1.15 control scale, minimum touch slots,
+            // 6-unit inner padding per side, and 3-unit clearance outside the capsule.
+            val desiredDock = (maxOf(58.0 * 1.15 * controlScale, 48.0) + 18.0 * controlScale).coerceAtMost(h)
+            val desiredFooter = maxOf(48.0, (18.0 * fs + 12.0) * controlScale).coerceAtMost(h)
             val total = desiredStatus + desiredDock + desiredFooter
             val bandScale = if (total > h && total > 0.0) h / total else 1.0
             val status = desiredStatus * bandScale
@@ -100,6 +103,8 @@ data class ShellMetrics(
             val contentWidth = (w - g * 2.0).coerceAtLeast(0.0)
             // Two title lines, a padded platform badge and their separation, in native units.
             // This text region remains useful for a short-window fallback when artwork is absent.
+            // Home keeps its established composition independently of the tighter page chrome.
+            // Small windows/large text still use the available space from the status strip down.
             val metadataTop = (if (compact) status else h * .149).coerceIn(status, contentEnd)
             // Include native line-box rounding and the platform badge's padding. An exact
             // arithmetic two-line sum can otherwise cause Text to ellipsize at one line.
@@ -135,9 +140,9 @@ data class ShellMetrics(
                 contentBounds = ShellBounds(gutter, contentTop, width - gutter, contentBottom),
                 dockBounds = ShellBounds(0.dp, contentBottom, width, contentBottom + dockHeight),
                 footerBounds = ShellBounds(0.dp, contentBottom + dockHeight, width, height),
-                dockCenterY = (if (compact) contentEnd + dock / 2.0 else h * .852)
+                dockCenterY = (contentEnd + dock / 2.0)
                     .coerceIn(dockCenterMinimum, dockCenterMaximum).asDp(),
-                footerDividerY = (h - footer + minOf(8.0 * controlScale, footer * .15)).asDp(),
+                footerDividerY = (h - footer).asDp(),
                 homeMetadataTop = metadataTop.asDp(),
                 homeCardArtworkSize = cardSize,
                 homeCardGap = if (hasCard) gapReference.coerceAtLeast(0.dp) else 0.dp,

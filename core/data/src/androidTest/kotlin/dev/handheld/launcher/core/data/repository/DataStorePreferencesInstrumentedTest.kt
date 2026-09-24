@@ -17,6 +17,7 @@ import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.CurrentUserAndroidComponentId
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
 import dev.handheld.launcher.core.domain.model.DisplayPreferences
+import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.core.domain.model.InventoryScope
 import dev.handheld.launcher.core.domain.model.ItemId
 import dev.handheld.launcher.core.domain.model.LaunchOperationId
@@ -104,6 +105,82 @@ class DataStorePreferencesInstrumentedTest {
         assertEquals(DisplayPreferences(uiScalePercent = 120, reduceMotion = true), displayPreferences.preferences.first())
         assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
         assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.SETTINGS).first())
+    }
+
+    @Test fun backgroundAppearancePersistsAcrossReopenWithoutChangingArtworkChoices() = runBlocking {
+        assertEquals(DisplayPreferences(), displayPreferences.preferences.first())
+        displayPreferences.setHomeArtworkBackground(true)
+        displayPreferences.setListArtworkBackground(true)
+        displayPreferences.setUiScalePercent(110)
+        for (tint in BackgroundTint.entries) {
+            displayPreferences.setBackgroundTint(tint)
+            displayPreferences.setBackgroundTintPercent(70)
+            displayPreferences.setBackgroundGrainPercent(0)
+            reopenStore()
+            assertEquals(DisplayPreferences(uiScalePercent = 110, homeArtworkBackground = true,
+                listArtworkBackground = true, backgroundTint = tint, backgroundTintPercent = 70, backgroundGrainPercent = 0),
+                displayPreferences.preferences.first())
+        }
+        displayPreferences.setBackgroundTintPercent(0)
+        displayPreferences.setBackgroundGrainPercent(100)
+        reopenStore()
+        assertEquals(0, displayPreferences.preferences.first().backgroundTintPercent)
+        assertEquals(100, displayPreferences.preferences.first().backgroundGrainPercent)
+    }
+
+    @Test fun malformedBackgroundFieldsFallBackIndependentlyAndInvalidWritesAreRejected() = runBlocking {
+        displayPreferences.setUiScalePercent(120)
+        displayPreferences.setListArtworkBackground(true)
+        displayPreferences.setBackgroundTint(BackgroundTint.GREEN)
+        displayPreferences.setBackgroundTintPercent(80)
+        displayPreferences.setBackgroundGrainPercent(60)
+        val before = store.dataStore.data.first().asMap()
+        for (invalid in listOf(-1, 35, 101)) {
+            assertTrue(runCatching { displayPreferences.setBackgroundTintPercent(invalid) }.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(runCatching { displayPreferences.setBackgroundGrainPercent(invalid) }.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(before, store.dataStore.data.first().asMap())
+        }
+        store.dataStore.edit {
+            it[LauncherPreferenceKeys.backgroundTint] = "unsupported"
+            it[LauncherPreferenceKeys.backgroundTintPercent] = 101
+            it[stringPreferencesKey("display.background_grain_percent")] = "50"
+        }
+        reopenStore()
+        assertEquals(DisplayPreferences(uiScalePercent = 120, listArtworkBackground = true), displayPreferences.preferences.first())
+    }
+
+    @Test fun optionalHomeBackdropDefaultsOffAndCanBeDisabledAfterReopeningWithoutChangingOtherSettings() = runBlocking {
+        assertEquals(false, displayPreferences.preferences.first().homeArtworkBackground)
+        displayPreferences.setUiScalePercent(110)
+        displayPreferences.setReduceMotion(true)
+        displayPreferences.setGridSizePercent(80)
+        displayPreferences.setHomeArtworkBackground(true)
+        reopenStore()
+        assertEquals(DisplayPreferences(110, true, gridSizePercent = 80, homeArtworkBackground = true),
+            displayPreferences.preferences.first())
+        displayPreferences.setHomeArtworkBackground(false)
+        reopenStore()
+        assertEquals(DisplayPreferences(110, true, gridSizePercent = 80), displayPreferences.preferences.first())
+    }
+
+    @Test fun listBackdropDefaultsOffAndPersistsIndependentlyOfHomeAndLayout() = runBlocking {
+        assertEquals(false, displayPreferences.preferences.first().listArtworkBackground)
+        displayPreferences.setCollectionListMode(LauncherDestination.LIBRARY, true)
+        displayPreferences.setUiScalePercent(110)
+        displayPreferences.setListArtworkBackground(true)
+        reopenStore()
+        val listEnabled = DisplayPreferences(uiScalePercent = 110,
+            listDestinations = setOf(LauncherDestination.LIBRARY), listArtworkBackground = true)
+        assertEquals(listEnabled, displayPreferences.preferences.first())
+        displayPreferences.setHomeArtworkBackground(true)
+        displayPreferences.setListArtworkBackground(false)
+        reopenStore()
+        assertEquals(listEnabled.copy(homeArtworkBackground = true, listArtworkBackground = false),
+            displayPreferences.preferences.first())
+        displayPreferences.setListArtworkBackground(true)
+        displayPreferences.setHomeArtworkBackground(false)
+        reopenStore()
+        assertEquals(listEnabled, displayPreferences.preferences.first())
     }
 
     @Test

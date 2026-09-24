@@ -1,31 +1,34 @@
 package dev.handheld.launcher.core.designsystem.theme
 
 import android.graphics.Matrix
+import android.graphics.BitmapShader
+import android.graphics.ComposeShader
+import android.graphics.PorterDuff
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.handheld.launcher.core.designsystem.R
 
 /** Semantic roles derived from the Home reference. Keep essential labels on primary/secondary. */
 @Immutable
 data class LauncherColors(
-    val backgroundTop: Color = Color(0xFF313042),
-    val backgroundMiddle: Color = Color(0xFF282736),
-    val backgroundBottom: Color = Color(0xFF232230),
+    val backgroundTop: Color = lerp(Color(0xFF35373B), Color(0xFF4C425E), .4f),
+    val backgroundMiddle: Color = lerp(Color(0xFF2B2D31), lerp(Color(0xFF4C425E), Color.Black, .18f), .4f),
+    val backgroundBottom: Color = lerp(Color(0xFF222429), lerp(Color(0xFF4C425E), Color.Black, .34f), .4f),
     val surfaceCard: Color = Color(0xFF252831),
     val surfaceApp: Color = Color(0xFF23262F),
     val surfaceArtwork: Color = Color(0xFF1C1E24),
@@ -43,25 +46,30 @@ data class LauncherColors(
     val cancel: Color = Color(0xFFE05244),
     val borderSubtle: Color = Color(0x0DFFFFFF),
     val borderEmphasis: Color = Color(0x1AFFFFFF),
+    val backgroundGrainPercent: Int = 30,
 ) {
     /**
      * The single shell background recipe; callers should apply it once at the shell root.
-     * Recreates Home's ellipse: 120% width by 100% height, centered at 50% / 0%.
+     * Tinted charcoal lighting with soft, stationary matte-plastic grain.
      * ShaderBrush supplies actual pixel bounds, including after a window-size change.
      */
     fun backgroundGradient(): Brush = object : ShaderBrush() {
-        override fun createShader(size: Size): Shader = RadialGradient(
-            0f,
-            0f,
-            1f,
-            intArrayOf(backgroundTop.toArgb(), backgroundMiddle.toArgb(), backgroundBottom.toArgb()),
-            floatArrayOf(0f, .55f, 1f),
-            Shader.TileMode.CLAMP,
-        ).apply {
-            setLocalMatrix(Matrix().apply {
-                setScale((size.width * 1.2f).coerceAtLeast(1f), size.height.coerceAtLeast(1f))
-                postTranslate(size.width * .5f, 0f)
-            })
+        override fun createShader(size: Size): Shader {
+            val lighting = RadialGradient(
+                0f,
+                0f,
+                1f,
+                intArrayOf(backgroundTop.toArgb(), backgroundMiddle.toArgb(), backgroundBottom.toArgb()),
+                floatArrayOf(0f, .55f, 1f),
+                Shader.TileMode.CLAMP,
+            ).apply {
+                setLocalMatrix(Matrix().apply {
+                    setScale((size.width * 1.2f).coerceAtLeast(1f), size.height.coerceAtLeast(1f))
+                    postTranslate(size.width * .5f, 0f)
+                })
+            }
+            return if (backgroundGrainPercent <= 0) lighting else ComposeShader(lighting,
+                BitmapShader(plasticGrain(backgroundGrainPercent), Shader.TileMode.REPEAT, Shader.TileMode.REPEAT), PorterDuff.Mode.SRC_OVER)
         }
     }
 }
@@ -86,17 +94,9 @@ data class LauncherTypography(
     val settingValue: TextStyle,
 )
 
-private val PlusJakartaSans = FontFamily(
-    Font(R.font.plus_jakarta_sans_regular, FontWeight.Normal),
-    Font(R.font.plus_jakarta_sans_medium, FontWeight.Medium),
-    Font(R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
-    Font(R.font.plus_jakarta_sans_bold, FontWeight.Bold),
-    // Explicit 800 is the initial heavy style; avoid synthesized 900.
-    Font(R.font.plus_jakarta_sans_extrabold, FontWeight.ExtraBold),
-)
-
+// Android's native sans-serif keeps the interface neutral and consistent with system dialogs.
 private fun TextStyle.role(size: Int, weight: FontWeight, lineHeight: Int = size + 4) = copy(
-    fontFamily = PlusJakartaSans,
+    fontFamily = FontFamily.SansSerif,
     fontSize = size.sp,
     lineHeight = lineHeight.sp,
     fontWeight = weight,
@@ -105,21 +105,21 @@ private fun TextStyle.role(size: Int, weight: FontWeight, lineHeight: Int = size
 // The source uses approximately 1280 reference units. ShellMetrics converts these to
 // native dp/sp for the current window; the 360dpi Flip 2 uses a 2/3 reference scale.
 // System font scale remains independent and is applied by Android's normal sp layout.
-private val DefaultTypography = TextStyle(fontFamily = PlusJakartaSans).let { base ->
+private val DefaultTypography = TextStyle(fontFamily = FontFamily.SansSerif).let { base ->
     LauncherTypography(
-        homeTitle = base.role(34, FontWeight.ExtraBold, 40).copy(letterSpacing = (-.85).sp),
+        homeTitle = base.role(32, FontWeight.Bold, 38).copy(letterSpacing = (-.4).sp),
         pageTitle = base.role(24, FontWeight.Bold, 30),
-        tileTitleLarge = base.role(18, FontWeight.ExtraBold, 24),
-        clock = base.role(14, FontWeight.Normal, 18),
+        tileTitleLarge = base.role(18, FontWeight.Bold, 24),
+        clock = base.role(13, FontWeight.Medium, 16).copy(fontFeatureSettings = "tnum"),
         actionPrimary = base.role(13, FontWeight.Bold, 18),
-        actionLabel = base.role(12, FontWeight.Medium, 16),
+        actionLabel = base.role(14, FontWeight.SemiBold, 18),
         controlLabel = base.role(12, FontWeight.Bold, 16),
-        statusValue = base.role(11, FontWeight.Normal, 14),
-        platformLabel = base.role(11, FontWeight.ExtraBold, 16).copy(letterSpacing = .55.sp),
-        badgeLabel = base.role(10, FontWeight.ExtraBold, 13),
+        statusValue = base.role(11, FontWeight.Medium, 14).copy(fontFeatureSettings = "tnum"),
+        platformLabel = base.role(11, FontWeight.Bold, 16).copy(letterSpacing = .3.sp),
+        badgeLabel = base.role(10, FontWeight.Bold, 13),
         tileTitle = base.role(14, FontWeight.Bold, 18),
         tileSubtitle = base.role(12, FontWeight.Medium, 16),
-        body = base.role(16, FontWeight.Normal, 22),
+        body = base.role(14, FontWeight.Normal, 20),
         settingLabel = base.role(14, FontWeight.Medium, 20),
         settingSupporting = base.role(12, FontWeight.Medium, 16),
         settingValue = base.role(14, FontWeight.SemiBold, 20),
@@ -146,9 +146,9 @@ private fun LauncherTypography.scaled(scale: Float): LauncherTypography {
     }
     return copy(
         homeTitle = homeTitle.scaled(), pageTitle = pageTitle.scaled(),
-        tileTitleLarge = tileTitleLarge.scaled(), clock = clock.scaled(LauncherTheme.smallControlScale),
+        tileTitleLarge = tileTitleLarge.scaled(), clock = clock.scaled(),
         actionPrimary = actionPrimary.scaled(LauncherTheme.smallControlScale), actionLabel = actionLabel.scaled(LauncherTheme.smallControlScale),
-        controlLabel = controlLabel.scaled(LauncherTheme.smallControlScale), statusValue = statusValue.scaled(LauncherTheme.smallControlScale),
+        controlLabel = controlLabel.scaled(LauncherTheme.smallControlScale), statusValue = statusValue.scaled(),
         platformLabel = platformLabel.scaled(), badgeLabel = badgeLabel.scaled(),
         tileTitle = tileTitle.scaled(), tileSubtitle = tileSubtitle.scaled(),
         body = body.scaled(), settingLabel = settingLabel.scaled(LauncherTheme.smallControlScale),
@@ -190,6 +190,8 @@ data class LauncherMotion(
 ) {
     val focusDurationMillis: Int get() = if (reducedMotion) 0 else 160
     val pressedDurationMillis: Int get() = if (reducedMotion) 0 else 100
+    val artworkDurationMillis: Int get() = if (reducedMotion) 0 else 160
+    val transitionDurationMillis: Int get() = if (reducedMotion) 0 else 160
 }
 
 val LocalLauncherColors = staticCompositionLocalOf { LauncherColors() }
@@ -208,6 +210,9 @@ object LauncherTheme {
         reducedMotion: Boolean = false,
         referenceScale: Float = 1f,
         uiScaleFactor: Float = 1f,
+        backgroundTint: Color = Color(0xFF4C425E),
+        backgroundTintPercent: Int = 40,
+        backgroundGrainPercent: Int = 30,
         content: @Composable () -> Unit,
     ) {
         val reference = referenceScale.takeIf { it.isFinite() && it > 0f } ?: 1f
@@ -216,8 +221,17 @@ object LauncherTheme {
         val spacing = LauncherSpacing()
         val shapes = LauncherShapes()
         val depth = LauncherDepth()
+        val colors = remember(backgroundTint, backgroundTintPercent, backgroundGrainPercent) {
+            val amount = if (backgroundTint == Color(0xFF35373B)) 0f else backgroundTintPercent.coerceIn(0, 100) / 100f
+            LauncherColors(
+                backgroundTop = lerp(Color(0xFF35373B), backgroundTint, amount),
+                backgroundMiddle = lerp(Color(0xFF2B2D31), lerp(backgroundTint, Color.Black, .18f), amount),
+                backgroundBottom = lerp(Color(0xFF222429), lerp(backgroundTint, Color.Black, .34f), amount),
+                backgroundGrainPercent = backgroundGrainPercent.coerceIn(0, 100),
+            )
+        }
         androidx.compose.runtime.CompositionLocalProvider(
-            LocalLauncherColors provides LauncherColors(),
+            LocalLauncherColors provides colors,
             LocalLauncherTypography provides DefaultTypography.scaled(scale),
             LocalLauncherSpacing provides spacing.copy(
                 xxs = spacing.xxs * scale, xs = spacing.xs * scale, sm = spacing.sm * scale,

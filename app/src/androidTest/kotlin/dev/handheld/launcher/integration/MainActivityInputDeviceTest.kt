@@ -325,7 +325,15 @@ class MainActivityInputDeviceTest {
 
     @Test fun touchingTheDockClearsCardFocusAndControllerInputRestoresItsHighlight() {
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        waitForFocusedCard()
+        // Focus changes publish the selected item through an asynchronous StateFlow.
+        // Capture the baseline only after the native card and rendered model agree.
+        waitWithDiagnostics("The initial focused card and saved selection must agree") {
+            val card = focusedGridCards().singleOrNull()
+            val selectedTitle = library.state.value.selectedItem?.title
+            card != null && card.config[SemanticsProperties.Selected] && selectedTitle != null &&
+                selectedTitle in card.config[SemanticsProperties.ContentDescription]
+        }
+        compose.waitForIdle()
         val selected = library.state.value.selectedItemId
 
         // A dock tap exercises MainActivity.dispatchTouchEvent without ever opening a game.

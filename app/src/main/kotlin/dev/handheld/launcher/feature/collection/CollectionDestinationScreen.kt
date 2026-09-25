@@ -452,7 +452,9 @@ private fun CollectionBody(
                             .focusRequester(requester)
                             // Native dialog dismissal must not focus/scroll a background
                             // card while the shell is still restoring the header opener.
-                            .focusProperties { canFocus = allowFocusRequest },
+                            .then(if (!allowFocusRequest && controllerInput) Modifier.focusProperties {
+                                canFocus = false
+                            } else Modifier),
                         iconLoader = iconLoader, onActivate = {
                             // Confirm invokes rowAction directly. Native row clicks always
                             // select, even if touch-down/up arrive before input-mode recomposition.

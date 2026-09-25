@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import dev.handheld.launcher.core.data.local.LauncherPreferenceKeys
 import dev.handheld.launcher.core.data.local.LauncherPreferencesStore
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.ControllerButtonLayout
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
 import dev.handheld.launcher.core.domain.model.ItemId
@@ -25,6 +26,14 @@ class DataStoreControllerPreferenceRepository(
     override val confirmBackMapping: Flow<ConfirmBackMapping> = dataStore.data
         .map(::decodeMapping)
         .distinctUntilChanged()
+
+    override val buttonLayout: Flow<ControllerButtonLayout> = dataStore.data
+        .map { ControllerButtonLayout.fromPersistedKey(it.safeString(LauncherPreferenceKeys.buttonLayout)) }
+        .distinctUntilChanged()
+
+    override suspend fun setButtonLayout(layout: ControllerButtonLayout) {
+        dataStore.edit { it[LauncherPreferenceKeys.buttonLayout] = layout.persistedKey }
+    }
 
     override suspend fun setConfirmBackMapping(mapping: ConfirmBackMapping) {
         dataStore.edit { preferences ->

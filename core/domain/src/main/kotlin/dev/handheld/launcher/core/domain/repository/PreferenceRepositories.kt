@@ -1,17 +1,20 @@
 package dev.handheld.launcher.core.domain.repository
 
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.ControllerButtonLayout
 import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
 import dev.handheld.launcher.core.domain.model.DisplayPreferences
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import kotlinx.coroutines.flow.Flow
 
-/** Absence or invalid optional storage must emit [ConfirmBackMapping.Default]. */
+/** Missing or invalid fields fall back independently to the mapping and layout defaults. */
 interface ControllerPreferenceRepository {
     val confirmBackMapping: Flow<ConfirmBackMapping>
+    val buttonLayout: Flow<ControllerButtonLayout>
 
     suspend fun setConfirmBackMapping(mapping: ConfirmBackMapping)
+    suspend fun setButtonLayout(layout: ControllerButtonLayout)
 }
 
 interface DisplayPreferenceRepository {

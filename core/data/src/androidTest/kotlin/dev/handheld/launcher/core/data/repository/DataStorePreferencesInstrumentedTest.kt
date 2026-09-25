@@ -13,6 +13,7 @@ import dev.handheld.launcher.core.data.local.LauncherDatabase
 import dev.handheld.launcher.core.domain.model.Availability
 import dev.handheld.launcher.core.domain.model.CatalogInventory
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.ControllerButtonLayout
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.CurrentUserAndroidComponentId
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
@@ -80,6 +81,42 @@ class DataStorePreferencesInstrumentedTest {
 
             assertEquals(swapped, controllerPreferences.confirmBackMapping.first())
         }
+    }
+
+    @Test fun buttonLayoutSurvivesReopenWithoutChangingMappingOrOtherPreferences() = runBlocking {
+        assertEquals(ControllerButtonLayout.XBOX, controllerPreferences.buttonLayout.first())
+        val mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        val snapshot = DestinationSnapshot(LauncherDestination.LIBRARY, query = "retained")
+        controllerPreferences.setConfirmBackMapping(mapping)
+        displayPreferences.setUiScalePercent(140)
+        navigationSnapshots.save(snapshot)
+        for (layout in listOf(ControllerButtonLayout.NINTENDO, ControllerButtonLayout.XBOX)) {
+            controllerPreferences.setButtonLayout(layout)
+            reopenStore()
+            assertEquals(layout, controllerPreferences.buttonLayout.first())
+            assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+            assertEquals(140, displayPreferences.preferences.first().uiScalePercent)
+            assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.LIBRARY).first())
+        }
+        controllerPreferences.setButtonLayout(ControllerButtonLayout.NINTENDO)
+        controllerPreferences.setConfirmBackMapping(ConfirmBackMapping.Default)
+        reopenStore()
+        assertEquals(ControllerButtonLayout.NINTENDO, controllerPreferences.buttonLayout.first())
+    }
+
+    @Test fun invalidButtonLayoutFallsBackWithoutResettingPhysicalBindings() = runBlocking {
+        val mapping = ConfirmBackMapping(ControllerFaceButton.B, ControllerFaceButton.A)
+        controllerPreferences.setConfirmBackMapping(mapping)
+        for (value in listOf("unknown", "", "NINTENDO")) {
+            store.dataStore.edit { it[LauncherPreferenceKeys.buttonLayout] = value }
+            reopenStore()
+            assertEquals(ControllerButtonLayout.XBOX, controllerPreferences.buttonLayout.first())
+            assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+        }
+        store.dataStore.edit { it[intPreferencesKey("controller.button_layout")] = 1 }
+        reopenStore()
+        assertEquals(ControllerButtonLayout.XBOX, controllerPreferences.buttonLayout.first())
+        assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
     }
 
     @Test

@@ -17,7 +17,9 @@ class BackgroundColorSelectionTest {
         try {
             val controller = object : ControllerPreferenceRepository {
                 override val confirmBackMapping = flowOf(ConfirmBackMapping.Default)
+                override val buttonLayout = flowOf(ControllerButtonLayout.Default)
                 override suspend fun setConfirmBackMapping(mapping: ConfirmBackMapping) = Unit
+                override suspend fun setButtonLayout(layout: ControllerButtonLayout) = Unit
             }
             val app = LauncherAppViewModel(controller, SavedStateHandle(), repository)
             runCurrent()

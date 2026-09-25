@@ -82,7 +82,7 @@ import dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyph
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyphIcon
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
-import dev.handheld.launcher.core.domain.model.ControllerFaceButton
+import dev.handheld.launcher.core.domain.model.ControllerButtonLayout
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.core.domain.model.StatusValue
 import java.text.SimpleDateFormat
@@ -168,6 +168,7 @@ fun LauncherShell(
     confirmBackMapping: ConfirmBackMapping = ConfirmBackMapping.Default,
     insets: LauncherShellInsets = LauncherShellInsets(),
     modifier: Modifier = Modifier,
+    buttonLayout: ControllerButtonLayout = ControllerButtonLayout.Default,
     onDestinationSelected: (LauncherDestination) -> Unit,
     onDestinationFocused: (LauncherDestination?) -> Unit = {},
     content: @Composable (Modifier) -> Unit,
@@ -211,6 +212,7 @@ fun LauncherShell(
             footer = state.footer,
             actionPort = actionPort,
             confirmBackMapping = confirmBackMapping,
+            buttonLayout = buttonLayout,
             modifier = Modifier.testTag(LauncherShellTags.Footer),
         )
         Box(Modifier.fillMaxSize().testTag(LauncherShellTags.Overlay)) { overlay() }
@@ -545,6 +547,7 @@ private fun ShellFooter(
     footer: ControllerActionFooter,
     actionPort: SemanticActionPort,
     confirmBackMapping: ConfirmBackMapping,
+    buttonLayout: ControllerButtonLayout,
     modifier: Modifier = Modifier,
 ) {
     if (footer.actions.isEmpty()) return
@@ -552,7 +555,7 @@ private fun ShellFooter(
     val transitionDuration = LauncherTheme.motion.transitionDurationMillis
     val reveal = remember { Animatable(1f) }
     val visibleActions = footer.actions.map { Triple(it.input, it.meaning, it.label) }
-    LaunchedEffect(visibleActions, confirmBackMapping, reducedMotion) {
+    LaunchedEffect(visibleActions, confirmBackMapping, buttonLayout, reducedMotion) {
         if (reducedMotion) reveal.snapTo(1f)
         else {
             reveal.snapTo(.72f)
@@ -579,7 +582,7 @@ private fun ShellFooter(
         ) {
             footer.actions.forEach { descriptor ->
                 key(descriptor.input) {
-                    FooterAction(descriptor, actionPort, confirmBackMapping)
+                    FooterAction(descriptor, actionPort, confirmBackMapping, buttonLayout)
                 }
             }
         }
@@ -591,6 +594,7 @@ private fun FooterAction(
     descriptor: LauncherActionDescriptor,
     actionPort: SemanticActionPort,
     confirmBackMapping: ConfirmBackMapping,
+    buttonLayout: ControllerButtonLayout,
 ) {
     val touchFeedback = dev.handheld.launcher.core.designsystem.contract.LocalTouchFeedback.current
     val controllerInput = LocalControllerInput.current
@@ -624,8 +628,8 @@ private fun FooterAction(
             dev.handheld.launcher.core.designsystem.controls.HorizontalDpadGlyph(
                 allDirections = descriptor.input == SemanticInputAction.NAVIGATE_UP || descriptor.input == SemanticInputAction.NAVIGATE_DOWN)
         else ControllerGlyph(
-            glyph = descriptor.input.footerLegend(confirmBackMapping),
-            semanticLabel = descriptor.label,
+            glyph = descriptor.input.footerLegend(confirmBackMapping, buttonLayout),
+            semanticLabel = "${descriptor.input.footerLegend(confirmBackMapping, buttonLayout)}: ${descriptor.label}",
             modifier = Modifier.testTag("${LauncherShellTags.footerAction(descriptor.input)}-glyph"),
             compact = true,
         )
@@ -670,11 +674,12 @@ private fun LauncherDestination.label(): String = when (this) {
     LauncherDestination.SEARCH -> "Search"
 }
 
-private fun SemanticInputAction.footerLegend(mapping: ConfirmBackMapping): String = when (this) {
-    SemanticInputAction.CONFIRM -> mapping.confirm.legend()
-    SemanticInputAction.BACK -> mapping.back.legend()
-    SemanticInputAction.SECONDARY -> "X"
-    SemanticInputAction.TERTIARY -> "Y"
+internal fun SemanticInputAction.footerLegend(mapping: ConfirmBackMapping,
+    layout: ControllerButtonLayout = ControllerButtonLayout.Default): String = when (this) {
+    SemanticInputAction.CONFIRM -> layout.labelFor(mapping.confirm)
+    SemanticInputAction.BACK -> layout.labelFor(mapping.back)
+    SemanticInputAction.SECONDARY -> layout.leftLabel
+    SemanticInputAction.TERTIARY -> layout.topLabel
     SemanticInputAction.ITEM_DETAILS -> "SELECT"
     SemanticInputAction.MENU -> "START"
     SemanticInputAction.PREVIOUS_DESTINATION -> "L"
@@ -685,9 +690,4 @@ private fun SemanticInputAction.footerLegend(mapping: ConfirmBackMapping): Strin
     SemanticInputAction.NAVIGATE_DOWN,
     SemanticInputAction.NAVIGATE_LEFT,
     SemanticInputAction.NAVIGATE_RIGHT -> "D-PAD"
-}
-
-private fun ControllerFaceButton.legend(): String = when (this) {
-    ControllerFaceButton.A -> "A"
-    ControllerFaceButton.B -> "B"
 }

@@ -71,6 +71,7 @@ internal object LauncherPreferenceKeys {
     val listDestinations = stringSetPreferencesKey("display.list_destinations")
     val confirmButton = stringPreferencesKey("controller.confirm_button")
     val backButton = stringPreferencesKey("controller.back_button")
+    val buttonLayout = stringPreferencesKey("controller.button_layout")
 
     fun snapshot(destination: LauncherDestination): SnapshotKeys {
         val prefix = "navigation.${destination.persistedKey}"

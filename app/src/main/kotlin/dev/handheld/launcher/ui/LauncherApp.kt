@@ -95,6 +95,7 @@ fun LauncherApp(
 ) {
     val location by app.navigation.location.collectAsStateWithLifecycle()
     val mapping by app.mapping.collectAsStateWithLifecycle()
+    val buttonLayout by app.buttonLayout.collectAsStateWithLifecycle()
     val display by app.display.collectAsStateWithLifecycle()
     val appError by app.error.collectAsStateWithLifecycle()
     val homeState by home.state.collectAsStateWithLifecycle()
@@ -165,7 +166,7 @@ fun LauncherApp(
     }
     val searchableActions = remember(container) {
         container.systemActions.actions + listOf(
-            SupportedSystemAction("launcher-controls", "Confirm and Back buttons", "Choose the launcher's A/B controller mapping", "launcher:controls"),
+            SupportedSystemAction("launcher-controls", "Controller buttons", "Choose button labels and Confirm/Back controls", "launcher:controls"),
             SupportedSystemAction("launcher-display", "UI scale and motion", "Adjust launcher controls, text size and animation", "launcher:display"),
             SupportedSystemAction("launcher-home", "Default Home launcher", "Choose which launcher opens with the Home button", "launcher:home"),
             SupportedSystemAction("launcher-rom-folders", "ROM folders", "Add, scan or restore your game folders and manage the extraction cache", "launcher:rom-folders"),
@@ -545,6 +546,7 @@ fun LauncherApp(
                                         CategorySummary(category, collectionCategoryCount(category, library.allItems, library.overrides))
                                     }, romSources, romEmulators, artworkSummary,
                                     uiScalePercent = display.uiScalePercent, reduceMotion = display.reduceMotion,
+                                    buttonLayout = buttonLayout,
                                     homeArtworkBackground = display.homeArtworkBackground,
                                     listArtworkBackground = display.listArtworkBackground,
                                     backgroundTint = display.backgroundTint,
@@ -569,6 +571,7 @@ fun LauncherApp(
                                     onSetBackgroundTintPercent = app::setBackgroundTintPercent,
                                     onSetBackgroundGrainPercent = app::setBackgroundGrainPercent,
                                     onSetConfirmBackMapping = app::setMapping,
+                                    onSetButtonLayout = app::setButtonLayout,
                                     artwork = ArtworkSettingsCallbacks(
                                         onSetPaused = { artworkAction { container.artworkRepository.setPaused(it) } },
                                         onRetry = { artworkAction { container.artworkRepository.retryMissing() } },
@@ -658,6 +661,7 @@ fun LauncherApp(
             LauncherShell(metrics, LauncherShellState(destination, focusedDock, status.toShellStatus(), footer,
                 dockFocusEnabled = controllerInput && dockFocusAllowed && !modalVisible),
                 actionPort, mapping, LauncherShellInsets(imeBottom),
+                buttonLayout = buttonLayout,
                 modifier = Modifier.focusRequester(shellFocus).focusGroup(),
                 onDestinationSelected = ::selectDestination,
                 background = {

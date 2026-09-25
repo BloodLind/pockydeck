@@ -1,6 +1,7 @@
 package dev.handheld.launcher.core.domain.repository
 
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.ControllerButtonLayout
 import dev.handheld.launcher.core.domain.model.DestinationSnapshot
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import kotlinx.coroutines.flow.Flow
@@ -9,6 +10,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 internal class InMemoryControllerPreferenceRepository : ControllerPreferenceRepository {
     private val mutableMapping = MutableStateFlow(ConfirmBackMapping.Default)
     override val confirmBackMapping: Flow<ConfirmBackMapping> = mutableMapping
+    private val mutableLayout = MutableStateFlow(ControllerButtonLayout.Default)
+    override val buttonLayout: Flow<ControllerButtonLayout> = mutableLayout
+
+    override suspend fun setButtonLayout(layout: ControllerButtonLayout) {
+        mutableLayout.value = layout
+    }
 
     override suspend fun setConfirmBackMapping(mapping: ConfirmBackMapping) {
         mutableMapping.value = mapping

@@ -40,7 +40,9 @@ Home shows up to 20 items, prioritizing recent launches. A blue dot and matching
 | L1 / R1 | Change page |
 | L2 / R2 | Change filters or move through Home cards |
 
-**Settings → Controls** lets you swap A/B, adjust or disable sound, and disable vibration. Repeated navigation uses quieter clicks; vibration marks the first and last action in a rapid sequence. The footer shows the actions available for the current selection.
+**Settings → Controls → Button layout** selects Xbox or Nintendo/retro labels. Xbox places A at the bottom, B on the right, X on the left, and Y at the top; Nintendo/retro swaps A/B and X/Y. This changes the displayed labels only, keeping every action on the same physical button. Xbox is the default. The table above uses Xbox labels.
+
+**Confirm button** separately lets you swap Confirm and Back; its displayed button names follow your selected layout. Controls also lets you adjust or disable sound and disable vibration. Repeated navigation uses quieter clicks; vibration marks the first and last action in a rapid sequence. The footer shows the actions available for the current selection.
 
 Touch a list row to preview it, then use the footer to play or open details. In Search, A applies the query and B cancels editing.
 

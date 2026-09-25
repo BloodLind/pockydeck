@@ -44,6 +44,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import dev.handheld.launcher.MainActivity
 import dev.handheld.launcher.contract.SemanticInputAction
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.ControllerButtonLayout
 import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.core.domain.model.ControllerFaceButton
 import dev.handheld.launcher.core.domain.model.LauncherDestination
@@ -709,6 +710,76 @@ class MainActivityInputDeviceTest {
             try { choose(original.listArtworkBackground) }
             catch (restoreFailure: Throwable) {
                 runBlocking { container.displayPreferenceRepository.setListArtworkBackground(original.listArtworkBackground) }
+                throw restoreFailure
+            }
+        }
+    }
+
+    @Test fun buttonLayoutChangesHintsWhilePhysicalButtonsKeepTheirActions() {
+        val original = runBlocking { container.controllerPreferenceRepository.buttonLayout.first() }
+        fun choose(layout: ControllerButtonLayout) {
+            tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+            val section = hasContentDescription("Controls") and hasClickAction()
+            if (compose.onAllNodes(section).fetchSemanticsNodes().isNotEmpty()) {
+                compose.onNode(section).performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            }
+            compose.onNodeWithTag("controller-button-layout").performScrollTo()
+            if (app.buttonLayout.value != layout) {
+                compose.onNodeWithTag("controller-button-layout")
+                    .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            }
+            compose.waitUntil(TIMEOUT_MS) { app.buttonLayout.value == layout }
+            assertEquals(layout, runBlocking { container.controllerPreferenceRepository.buttonLayout.first() })
+            assertEquals("Changing labels must retain the physical Confirm/Back mapping", mapping,
+                runBlocking { container.controllerPreferenceRepository.confirmBackMapping.first() })
+        }
+        fun assertGlyph(action: SemanticInputAction, label: String) {
+            val node = compose.onNodeWithTag("${LauncherShellTags.footerAction(action)}-glyph", useUnmergedTree = true)
+                .assertIsDisplayed().fetchSemanticsNode()
+            assertTrue("$action must display the selected layout's $label label",
+                node.config[SemanticsProperties.ContentDescription].single().startsWith("$label: "))
+        }
+        try {
+            for (layout in listOf(ControllerButtonLayout.NINTENDO, ControllerButtonLayout.XBOX)) {
+                choose(layout)
+                if (layout == ControllerButtonLayout.NINTENDO) {
+                    compose.waitForIdle()
+                    instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                        try { java.io.File(instrumentation.context.getExternalFilesDir(null), "controller-layout-nintendo.png")
+                            .outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                        } finally { bitmap.recycle() }
+                    }
+                }
+                tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
+                press(KeyEvent.KEYCODE_DPAD_DOWN)
+                waitForFocusedCard()
+                assertGlyph(SemanticInputAction.CONFIRM, layout.labelFor(mapping.confirm))
+                assertGlyph(SemanticInputAction.BACK, layout.labelFor(mapping.back))
+                assertGlyph(SemanticInputAction.SECONDARY, layout.leftLabel)
+                assertGlyph(SemanticInputAction.TERTIARY, layout.topLabel)
+                val selected = requireNotNull(library.state.value.selectedItemId)
+                val wasFavorite = selected in library.state.value.favorites
+                try {
+                    press(KeyEvent.KEYCODE_BUTTON_Y)
+                    compose.waitUntil(TIMEOUT_MS) { (selected in library.state.value.favorites) != wasFavorite }
+                    press(KeyEvent.KEYCODE_BUTTON_Y)
+                    compose.waitUntil(TIMEOUT_MS) { (selected in library.state.value.favorites) == wasFavorite }
+                } finally { runBlocking { container.favoriteRepository.setFavorite(selected, wasFavorite) } }
+                press(KeyEvent.KEYCODE_BUTTON_X)
+                waitForEditor()
+                assertGlyph(SemanticInputAction.CONFIRM, layout.labelFor(mapping.confirm))
+                assertGlyph(SemanticInputAction.BACK, layout.labelFor(mapping.back))
+                press(faceKey(mapping.confirm))
+                waitForClosedEditor()
+                press(faceKey(mapping.back))
+                compose.waitUntil(TIMEOUT_MS) {
+                    app.navigation.location.value == LauncherLocation.Destination(LauncherDestination.LIBRARY)
+                }
+            }
+        } finally {
+            try { choose(original) }
+            catch (restoreFailure: Throwable) {
+                runBlocking { container.controllerPreferenceRepository.setButtonLayout(original) }
                 throw restoreFailure
             }
         }

@@ -33,6 +33,7 @@ class LauncherAppViewModel(
         else -> LauncherLocation.Destination(initialDestination)
     })
     val mapping = preferences.confirmBackMapping.stateIn(viewModelScope, SharingStarted.Eagerly, ConfirmBackMapping.Default)
+    val buttonLayout = preferences.buttonLayout.stateIn(viewModelScope, SharingStarted.Eagerly, ControllerButtonLayout.Default)
     private val savedDisplay = (displayPreferences?.preferences ?: kotlinx.coroutines.flow.flowOf(DisplayPreferences()))
         .stateIn(viewModelScope, SharingStarted.Eagerly, DisplayPreferences())
     private data class BackgroundChoice(val preset: BackgroundTint? = null, val rgb: Int? = null)
@@ -91,6 +92,14 @@ class LauncherAppViewModel(
             try { preferences.setConfirmBackMapping(value) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { error.value = "Could not save controller mapping. Try again." }
+        }
+    }
+
+    fun setButtonLayout(value: ControllerButtonLayout) {
+        viewModelScope.launch {
+            try { preferences.setButtonLayout(value) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { error.value = "Could not save button layout. Try again." }
         }
     }
 

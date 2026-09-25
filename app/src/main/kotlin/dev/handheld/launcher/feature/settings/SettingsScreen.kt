@@ -45,6 +45,7 @@ import dev.handheld.launcher.core.designsystem.controls.FilterChip
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
+import dev.handheld.launcher.core.domain.model.ControllerButtonLayout
 import dev.handheld.launcher.core.domain.model.DisplayPreferences
 import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.ui.presentation.label
@@ -89,6 +90,7 @@ data class SettingsScreenState(
     val backgroundTintPercent: Int = 40,
     val backgroundGrainPercent: Int = 30,
     val backgroundCustomColorRgb: Int? = null,
+    val buttonLayout: ControllerButtonLayout = ControllerButtonLayout.Default,
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -112,6 +114,7 @@ data class SettingsCallbacks(
     val onSetBackgroundTintPercent: (Int) -> Unit = {},
     val onSetBackgroundGrainPercent: (Int) -> Unit = {},
     val onSetBackgroundCustomColorRgb: (Int) -> Unit = {},
+    val onSetButtonLayout: (ControllerButtonLayout) -> Unit = {},
 )
 
 private val settingsSections = listOf("Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
@@ -216,10 +219,19 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
         if (section == "All") item("settings-heading") { PageHeading("Settings") }
         if (section == "All" || section == "Controls") settingsSection("controls") {
             if (section != "All") PageHeading("Controls")
-            ChoiceRow("Confirm button", state.confirmBackMapping.confirm.name,
+            ChoiceRow("Confirm button", state.buttonLayout.labelFor(state.confirmBackMapping.confirm),
                 modifier = if (section == "All" || section == "Controls") Modifier.focusRequester(initial) else Modifier,
-                onSelect = swapConfirmBack, supportingText = "Back uses ${state.confirmBackMapping.back.name}",
+                onSelect = swapConfirmBack, supportingText = "Back uses ${state.buttonLayout.labelFor(state.confirmBackMapping.back)}",
                 onFocusChanged = settingsFocus("Swap Confirm and Back", LauncherActionMeaning.CHANGE_FILTER, swapConfirmBack, callbacks.onFocusedAction))
+            val changeLayout = {
+                latestCallbacks.onSetButtonLayout(if (latestState.buttonLayout == ControllerButtonLayout.XBOX)
+                    ControllerButtonLayout.NINTENDO else ControllerButtonLayout.XBOX)
+            }
+            ChoiceRow("Button layout", if (state.buttonLayout == ControllerButtonLayout.XBOX) "Xbox" else "Nintendo / retro",
+                modifier = Modifier.testTag("controller-button-layout"), onSelect = changeLayout,
+                supportingText = "Only labels change; controls stay the same.",
+                onFocusChanged = settingsFocus("Change button layout", LauncherActionMeaning.CHANGE_FILTER,
+                    changeLayout, callbacks.onFocusedAction))
             val toggleSounds = { latestCallbacks.onSetControllerSoundsEnabled(!latestState.controllerSoundsEnabled) }
             ToggleRow("Sound effects", state.controllerSoundsEnabled, callbacks.onSetControllerSoundsEnabled,
                 supportingText = "Short, soft clicks. Also follows Android media volume.",

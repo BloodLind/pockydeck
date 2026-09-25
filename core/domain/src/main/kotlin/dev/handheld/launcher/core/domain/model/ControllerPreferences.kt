@@ -5,6 +5,29 @@ enum class ControllerFaceButton {
     B,
 }
 
+/** Printed labels for Android's standard face-button positions; input bindings stay unchanged. */
+enum class ControllerButtonLayout(
+    val persistedKey: String,
+    val bottomLabel: String,
+    val rightLabel: String,
+    val leftLabel: String,
+    val topLabel: String,
+) {
+    XBOX("xbox", "A", "B", "X", "Y"),
+    NINTENDO("nintendo", "B", "A", "Y", "X");
+
+    fun labelFor(button: ControllerFaceButton): String = when (button) {
+        ControllerFaceButton.A -> bottomLabel
+        ControllerFaceButton.B -> rightLabel
+    }
+
+    companion object {
+        val Default = XBOX
+        fun fromPersistedKey(value: String?): ControllerButtonLayout =
+            entries.firstOrNull { it.persistedKey == value } ?: Default
+    }
+}
+
 enum class ControllerButtonRole {
     CONFIRM,
     BACK,

@@ -1,6 +1,6 @@
 # Architecture and shared contracts
 
-Current implementation contracts for PockyDeck 0.10.3. Kotlin symbols live under `dev.handheld.launcher.core.domain` unless stated otherwise. See [development](development.md) for module boundaries and verification.
+Current implementation contracts for PockyDeck 0.10.4. Kotlin symbols live under `dev.handheld.launcher.core.domain` unless stated otherwise. See [development](development.md) for module boundaries and verification.
 
 ## Catalog identity and item model
 
@@ -113,7 +113,7 @@ Emulator resolution validates package/activity eligibility, console, format, and
 
 ## Artwork and process lifetime
 
-Visible cards request artwork sized for their actual rendered bounds; Home strips of up to 12 items also warm offscreen cards. Detached cards release painter references. Foreground lifecycle owns decoding, while bounded caches survive normal backgrounding and respond to Android memory pressure. Cached images are available synchronously even during navigation, and PackageManager icons bypass cover loading delays. Scanning, decoding, and remote lookup must not run on the UI thread. Stable item identity does not depend on image paths or cache keys.
+Visible cards request artwork sized for their actual rendered bounds; Home strips of up to 20 items also warm offscreen cards. Detached cards release painter references. Foreground lifecycle owns decoding, while bounded caches survive normal backgrounding and respond to Android memory pressure. Cached images are available synchronously even during navigation, and PackageManager icons bypass cover loading delays. Scanning, decoding, and remote lookup must not run on the UI thread. Stable item identity does not depend on image paths or cache keys.
 
 ROM last-played markers are derived from the greatest successful-open order per known console across the catalog. The existing history stores one persistent record per item without a Home-sized retention limit, so no new schema or migration is needed. The Home route alone provides this state to its cards. Selected or hovered Home metadata explains the badge; collections, Search and details omit it. Failed and cancelled dispatches never update history. The marker records an accepted launch, not emulator process liveness or proof of gameplay. Shizuku and process sampling have been removed.
 

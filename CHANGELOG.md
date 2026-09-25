@@ -1,6 +1,32 @@
 # Changelog
 
-## Unreleased
+## 0.10.4 — 2026-09-25
+
+- Reduce ordered image-loading delay by advancing waiting workers directly, removing the extra per-decode timer, and displaying ready ROM artwork while request bookkeeping continues. Reveal each cover as it becomes available in display order; retain single-cover decoding, instant cache hits, full Home preloading and scroll/lifecycle protections.
+
+- Remove the dock button's separate press fill so an incoming tab cannot flash ahead of the moving white selection. Preserve the droplet/tail animation, icon contrast, controller focus, click feedback and reduced motion.
+
+- Isolate the visible-cover queue from collection page composition and read card-focus animation during placement/drawing. Add a viewport recomposition regression check and a repeatable on-device frame measurement script.
+
+- Smooth Apps scrolling by preloading small catalogs into the existing icon cache, retaining nearby icons, and removing per-card subcomposition and unused artwork animation layers. Large app catalogs use a bounded prefetch window; backgrounding cancels warming.
+
+- Move the white navigation selection like a water droplet: a 160 ms ease-in-out leading circle with a short tapered tail that settles by 224 ms. Keep icons and targets stationary, match icon contrast to the entire droplet, redirect interrupted motion, and switch instantly with Reduce motion.
+
+- Replace the cycling background-color button with a full hue/saturation/brightness palette and five preset swatches. Preview and save custom colors, support touch and D-pad adjustment with Back to finish, and keep the latest color during rapid dragging. Preserve the dark background finish, tint strength and grain controls.
+
+- Hide the catalog position rail when every row is on screen, including small scroll ranges caused by padding or slightly clipped edge rows.
+
+- Load fresh artwork in display order, with a quick left-to-right or row-by-row reveal. Preserve instant cache hits and full Home preloading; skip missing covers, bound slow-provider waits, and restart ordering after cache reclamation or viewport changes.
+
+- Lighten all six navigation icons with finer rounded outlines and no interior wash. Simplify Search to a clean lens and a slim handle.
+
+- Add a small scaled gap between navigation dock buttons while retaining their existing size and touch targets.
+
+- Remove the enclosing list-preview card and cover frame. Enlarge its platform/format tags, show the configured emulator instead of repeated platform facts, and use a filled favorite star or an outline. Move the catalog position rail to the left edge and slightly dim the optional list artwork background.
+
+- Restore the original rounded navigation ticks and pops byte-for-byte. Retain fixed peak/RMS headroom and play navigation repeats about 7 dB quieter than the first click, without progressive gain changes; preserve volume, mute, and first/last haptics. Keep the restored 48 ms selection sound in step with 55 ms held navigation.
+
+- Give the navigation dock original rounded console-style icons, including a game cartridge for Library, soft app tiles and star, a rounded gear and a simple search lens. Preserve button sizes, spacing, selection contrast and accessible destination labels.
 
 - Add a mapped Back/Controls shortcut from any Library, Apps or Favorites grid/list item to the filter and sort controls. Return with Down or Back to the same selected item and scroll position; cancel pending scrolling so it cannot steal header focus.
 
@@ -8,11 +34,10 @@
 
 - Add Purple, Graphite, Blue, Green, and Warm background colors with saved tint-strength and grain-intensity controls in Display settings. Default to a subtle purple-gray at 40% tint and 30% grain. Smooth the stationary matte texture with a cached periodic filter; 0% grain removes it entirely.
 
-- Redesign list previews as a framed cover showcase with subtle platform color, clearer title/availability, favorite status, and platform/format details. Add a slim, read-only catalog-position rail to lists and grids; it follows the viewport through acceleration and filtering without taking controller focus.
+- Add a slim, read-only catalog-position rail to lists and grids; it follows the viewport through acceleration and filtering without taking controller focus.
 
 - Replace the wide SELECT legend with a compact circular overlapping-panel symbol matching the face-button hints. Retain the adjacent action label, accessible Select description, and full footer touch target.
 
-- Replace the falling navigation tone with identical 18 ms dry clicks for control and card focus. Let those short clicks follow the full 55 ms accelerated D-pad cadence, avoiding the former 80 ms gate's sudden half-rate rhythm. Retain single-voice playback, energy limiting, and mute/volume safeguards.
 
 - Improve footer readability with larger semibold action text and clearer button legends. Replace the full-width footer divider with a content-sized pill while retaining full touch targets, and increase navigation button/icon artwork by about 10%. Change the default background to charcoal gray with a cached, stationary matte-plastic grain.
 
@@ -34,7 +59,6 @@
 
 - Vibrate only at the beginning and end of a repeated input burst. Single actions get one pulse; held navigation, trigger reports and rapid taps no longer buzz on every step. Cancel pending ending pulses on disable, keyboard entry or leaving the app.
 
-- Keep held-navigation and rapid-tap sounds from building in loudness: normalize cue energy, attenuate dense repeats, and prevent gain from rising within a burst. Retain the chosen volume and independent haptics.
 
 - Prevent very fast taps after controller input from launching list rows; preserve the touched row when Y returns to controller input. Keep grid artwork and captions inside the visible content at enlarged UI scales.
 - Make list mode a PSP-inspired library with selection confined to the left list and read-only cover art/game information on the right. Move quick actions to Y (favorite), Select (details/extra actions), and the touch footer.

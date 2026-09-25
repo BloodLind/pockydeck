@@ -1,6 +1,6 @@
 # ROM folders, consoles and emulators
 
-This guide covers the 0.10.3 preview. Library contains ROMs and Android games, Apps contains other Android apps, and Favorites includes any available item you have marked. Home shows up to 20 items, prioritizing successful recent launches and then representatives from consoles not already covered by recency.
+This guide covers the 0.10.4 preview. Library contains ROMs and Android games, Apps contains other Android apps, and Favorites includes any available item you have marked. Home shows up to 20 items, prioritizing successful recent launches and then representatives from consoles not already covered by recency.
 
 ## Automatic discovery
 

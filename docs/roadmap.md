@@ -1,6 +1,6 @@
 # Roadmap
 
-The current 0.10.3 preview provides a usable Android handheld launcher. This is a direction of travel, not a release-date commitment.
+The current 0.10.4 preview provides a usable Android handheld launcher. This is a direction of travel, not a release-date commitment.
 
 ## Next priorities
 

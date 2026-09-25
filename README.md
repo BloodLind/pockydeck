@@ -1,39 +1,36 @@
 # PockyDeck
 
-**Your games. One pocket-sized home.**
+A free, open-source launcher for Android handhelds, focused on a familiar console-style experience. Browse your games with a controller or touch and spend less time navigating Android.
 
-An open-source Android launcher for handheld gaming devices, built with Kotlin and Jetpack Compose. Browse Android games, ROMs, and supported PC-game exports with a controller or touch.
+[Download 0.10.4 preview](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.4) · [Quick setup](docs/getting-started.md) · [Report an issue](https://github.com/BloodLind/pockydeck/issues)
 
-[Download public preview 0.10.3](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.3) · [Getting started](docs/getting-started.md) · [ROM setup](docs/rom-setup-guide.md) · [Changelog](CHANGELOG.md)
+## What it supports
 
-## Play from one place
+- Home, Library, Apps, Favorites, and Search for Android games, ROMs, and supported PC-game exports.
+- Controller navigation with accelerated scrolling, touch controls, and configurable sound and vibration feedback.
+- ROM-folder scanning, supported emulator selection, and RetroArch core preferences.
+- Grid and list views with game previews, sorting, filters, and last-played markers on Home.
+- Local ES-DE artwork and optional online covers, with cached images for quick browsing.
+- Custom background colors, optional blurred game artwork, UI/card sizing, and reduced motion.
 
-- Home with recent games, plus Library, Apps, Favorites, and Search.
-- ROM-folder discovery, emulator preferences, and RetroArch core selection.
-- Grid and list views, controller-friendly UI/card-size sliders, and reduced motion.
-- Local ES-DE covers and optional Libretro artwork lookup.
-- A blue dot on Home marks each console's most recently launched ROM. Focus or hover shows a matching blue Last played on [platform] tag above the title; launch history survives restarts.
+Requires **Android 13+** and runs in landscape. Tested primarily on the Retroid Pocket Flip 2; compatibility with other devices and emulators varies. Install your emulators separately and add your own games—no games, BIOS files, emulators, or cores are bundled. Root and Shizuku are not required.
 
-Install and configure emulators separately, then add your ROM folders in **Settings → ROM folders**. See [supported emulators](docs/emulators.md) and [formats](docs/rom-formats.md). No games, BIOS files, emulators, or cores are bundled.
+## Documentation
 
-## Release status
+[Getting started](docs/getting-started.md) · [ROM setup](docs/rom-setup-guide.md) · [Emulators](docs/emulators.md) · [Supported formats](docs/rom-formats.md) · [PC-game exports](docs/pc-games.md)
 
-The latest published preview is **0.10.3**. The sliders, Home-only last-played dots and tags, PockyDeck Android label/icon, and removal of Shizuku described in the current source are **unreleased**; see the [stabilization notes](docs/releases/next.md). The published 0.10.3 APK still uses the Handheld Launcher label and its earlier status controls.
-
-Android 13+ is required. Development primarily targets the Retroid Pocket Flip 2; other devices need verification. The package remains `dev.handheld.launcher` for upgrade continuity. Updates also require a matching signing certificate; see [installation details](docs/getting-started.md#install-the-preview).
-
-## Build and contribute
-
-Use JDK 17, Android SDK Platform 34 / Build Tools 34.0.0, and the included Gradle wrapper:
+To build, use JDK 17, Android SDK Platform 34, and the included Gradle wrapper:
 
 ```sh
 ./gradlew :app:assembleDebug
 ```
 
-On Windows use `.\gradlew.bat`. Configure the SDK through `ANDROID_HOME` or an ignored `local.properties`. Read [development and testing](docs/development.md), [architecture](docs/architecture.md), and [contribution guidance](CONTRIBUTING.md).
-
-[PC-game exports](docs/pc-games.md) · [Design system](docs/design-system.md) · [Roadmap](docs/roadmap.md) · [Privacy](docs/privacy.md) · [Security](SECURITY.md)
+On Windows, use `.\gradlew.bat`. See [development](docs/development.md), [contributing](CONTRIBUTING.md), [privacy](docs/privacy.md), and [security](SECURITY.md).
 
 ## License
 
-Original code and assets are licensed under [Apache 2.0](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md). PockyDeck is independent of the device, game, emulator, and frontend projects it supports.
+PockyDeck is free to use, modify, and share under [Apache 2.0](LICENSE). Third-party components keep their own [licenses and notices](THIRD_PARTY_NOTICES.md).
+
+## Support the project
+
+PockyDeck is free for everyone. If you'd like to donate, [get in touch on GitHub](https://github.com/BloodLind/pockydeck/issues/new?title=Supporting%20PockyDeck) and I'll set up a donation jar for the project. Donations are entirely optional.

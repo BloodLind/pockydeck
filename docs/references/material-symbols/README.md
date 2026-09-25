@@ -1,8 +1,8 @@
-# Material Symbols from the HTML preview
+# Material Symbols attribution
 
-The launcher uses Material Symbols Outlined at weight 200, following the original design preview. Official static SVG exports were retrieved on 8–9 September 2026; exact URLs and SHA-256 hashes are in [sources.json](sources.json). The original design reference is retained in Git history; the current UI rules are in [the design system](../../design-system.md).
+These Material Symbols Outlined assets support launcher controls and status indicators. The navigation dock uses separate original icons. Upstream SVG URLs and SHA-256 hashes are recorded in [sources.json](sources.json); current UI rules are in [the design system](../../design-system.md).
 
-| Role | Symbol | Weight | Fill |
+| Original role | Symbol | Weight | Fill |
 | --- | --- | --- | --- |
 | Home | `cottage` | 200 | 0 |
 | Library | `grid_view` | 200 | 0 |

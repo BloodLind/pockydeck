@@ -45,6 +45,8 @@ For UI/input changes, verify controller and touch, 90/100/110/120% launcher scal
 
 Debug-only preview Activities under `app/src/debug/` provide synthetic shell/control examples. Their cover art is original geometric vector artwork. They are excluded from release builds.
 
+For frame measurements, use the signed release build and record Android's actual compilation mode as well as its debug flag. Prefer `adb install --no-incremental -r` for device performance checks. An incremental install may remain `run-from-apk` even when a compile command reports success. Verify the result in `dumpsys package`; do not infer optimized execution from the command's exit status. See the [Flip 2 frame audit](performance/2026-09-25-frames.md) and `scripts/performance/measure_frames.py` for measurements and repeatable gestures.
+
 ## Repository layout
 
 | Directory | Responsibility |
@@ -66,6 +68,6 @@ The [architecture](architecture.md) and [design system](design-system.md) define
 4. Verify the signature with `apksigner verify --verbose --print-certs`. Record the certificate SHA-256 and APK SHA-256 alongside the APK.
 5. Tag the verified commit, create a GitHub **prerelease**, and upload the APK, `SHA256SUMS.txt`, and `SIGNING_CERTIFICATE.txt`. Review download links and the published checksums.
 
-For 0.10.3, the release variant uses the same development certificate as the earlier project-device builds. This preserves updates for that certificate only. CI debug artifacts have their own runner-generated keys and are not official release replacements. See [preview signing details](getting-started.md#install-the-preview).
+For 0.10.4, the release variant uses the same development certificate as the earlier project-device builds. This preserves updates for that certificate only. CI debug artifacts have their own runner-generated keys and are not official release replacements. See [preview signing details](getting-started.md#install-the-preview).
 
 Do not commit APKs or signing keys. Do not relabel untested emulator contracts as successful game boots. Historical planning and visual evidence remain available in Git history instead of the current documentation tree.

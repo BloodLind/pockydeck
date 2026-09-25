@@ -69,6 +69,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -448,7 +449,10 @@ private fun CollectionBody(
                         artworkTargetSizePx = artworkTargetPx,
                         animateArtwork = artworkLoadingAllowed,
                         modifier = Modifier.fillMaxWidth()
-                            .focusRequester(requester),
+                            .focusRequester(requester)
+                            // Native dialog dismissal must not focus/scroll a background
+                            // card while the shell is still restoring the header opener.
+                            .focusProperties { canFocus = allowFocusRequest },
                         iconLoader = iconLoader, onActivate = {
                             // Confirm invokes rowAction directly. Native row clicks always
                             // select, even if touch-down/up arrive before input-mode recomposition.

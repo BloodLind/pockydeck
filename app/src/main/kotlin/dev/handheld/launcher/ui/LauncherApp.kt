@@ -146,6 +146,7 @@ fun LauncherApp(
     var menuItemId by remember { mutableStateOf<ItemId?>(null) }
     var modalOrigin by remember { mutableStateOf<LauncherLocation?>(null) }
     var modalOriginWasDock by remember { mutableStateOf(false) }
+    var modalOriginWasItem by remember { mutableStateOf(false) }
     var controlRestoreFocus by remember(location) { mutableStateOf<(() -> Unit)?>(null) }
     var modalRestoreFocus by remember { mutableStateOf<(() -> Unit)?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -194,7 +195,11 @@ fun LauncherApp(
         focusManager.clearFocus(force = true)
         focused = null
         focusedDock = null
-        pageActivationRequest++
+        // A touch on the current tab already retains its exact control for the next
+        // controller input. A second page restoration would race that saved target
+        // against Android's temporary fallback focus when leaving touch mode.
+        if (controllerInput || location != LauncherLocation.Destination(value) || value == LauncherDestination.HOME)
+            pageActivationRequest++
         if (value == LauncherDestination.HOME) home.returnToStart()
         app.navigation.selectDestination(value)
     }
@@ -214,6 +219,7 @@ fun LauncherApp(
             shellFocus.saveFocusedChild()
             modalRestoreFocus = controlRestoreFocus
             modalOriginWasDock = focusedDock != null
+            modalOriginWasItem = focused?.itemId != null
             modalOrigin = location
         }
         errorMessage = message
@@ -226,6 +232,7 @@ fun LauncherApp(
             shellFocus.saveFocusedChild()
             modalRestoreFocus = controlRestoreFocus
             modalOriginWasDock = focusedDock != null
+            modalOriginWasItem = focused?.itemId != null
             modalOrigin = location
         }
         keyboard?.hide()
@@ -293,6 +300,7 @@ fun LauncherApp(
         shellFocus.saveFocusedChild()
         modalRestoreFocus = controlRestoreFocus
         modalOriginWasDock = focusedDock != null
+        modalOriginWasItem = focused?.itemId != null
         menuItemId = focused?.itemId ?: (location as? LauncherLocation.ItemDetails)?.itemId
         modalOrigin = location
         menuVisible = true
@@ -603,7 +611,12 @@ fun LauncherApp(
                             else -> {
                                 val vm = pageModels.getValue(route)
                                 val current = pageStates.getValue(route).copy(emulatorLabels = romEmulators.itemEmulatorLabels)
-                                val callbacks = CollectionScreenCallbacks(vm::select,
+                                val callbacks = CollectionScreenCallbacks(onSelect = { id ->
+                                    // Dismissing a dialog can briefly focus a card before its
+                                    // header opener is restored. Preserve the catalog selection
+                                    // until the saved modal origin has regained focus.
+                                    if (modalOrigin == null) vm.select(id)
+                                },
                                     onOpen = { if (vm.canOpenItem(it))
                                         container.launchCoordinator.submit(it, vm.state.value.snapshot().copy(selectedItemId = it)) },
                                     onOpenDetails = ::openDetails, onFavorite = vm::setFavorite,
@@ -616,13 +629,13 @@ fun LauncherApp(
                                     onOpenFilters = { rememberModalOrigin(); filterMenuDestination = route },
                                     onOpenSort = { rememberModalOrigin(); sortMenuDestination = route })
                                 when (route) {
-                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
+                                    LauncherDestination.LIBRARY -> LibraryScreen(current, bounds, callbacks, searchableActions, container.iconLoader, pageActivationRequest, !modalVisible && (modalOrigin == null || modalOriginWasItem) && controllerInput,
                                         isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent,
                                         onArtworkLoadingAllowed = { collectionArtworkLoadingAllowed[route] = it })
-                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
+                                    LauncherDestination.APPS -> AppsScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && (modalOrigin == null || modalOriginWasItem) && controllerInput,
                                         isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent,
                                         onArtworkLoadingAllowed = { collectionArtworkLoadingAllowed[route] = it })
-                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && controllerInput,
+                                    LauncherDestination.FAVORITES -> FavoritesScreen(current, bounds, callbacks, container.iconLoader, pageActivationRequest, !modalVisible && (modalOrigin == null || modalOriginWasItem) && controllerInput,
                                         isList = route in display.listDestinations, onLayoutChange = { app.setCollectionListMode(route, it) }, gridSizePercent = display.gridSizePercent,
                                         onArtworkLoadingAllowed = { collectionArtworkLoadingAllowed[route] = it })
                                     LauncherDestination.SEARCH -> SearchScreen(current, bounds, callbacks, vm::query,

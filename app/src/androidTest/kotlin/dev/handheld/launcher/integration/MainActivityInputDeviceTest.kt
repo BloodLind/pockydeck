@@ -333,7 +333,13 @@ class MainActivityInputDeviceTest {
         compose.waitUntil(TIMEOUT_MS) { focusedGridCards().isEmpty() }
         assertEquals(selected, library.state.value.selectedItemId)
         press(KeyEvent.KEYCODE_DPAD_RIGHT)
-        waitForFocusedCard()
+        // Android can assign fallback focus before the shell's two-frame restoration.
+        // Any focused card is not evidence that the selected card has been restored.
+        waitWithDiagnostics("The first controller input must reacquire the selected card") {
+            library.state.value.selectedItemId == selected && focusedGridCards().singleOrNull()
+                ?.config?.get(SemanticsProperties.Selected) == true
+        }
+        compose.waitForIdle()
         assertEquals("The first controller input reacquires the selected card", selected, library.state.value.selectedItemId)
         assertTrue(focusedGridCards().single().config[SemanticsProperties.Selected])
     }

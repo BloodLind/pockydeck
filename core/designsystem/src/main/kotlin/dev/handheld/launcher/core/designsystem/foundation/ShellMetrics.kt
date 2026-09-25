@@ -62,7 +62,7 @@ data class ShellMetrics(
                 (pixelWidth / it).toFloat().isFinite() && (pixelHeight / it).toFloat().isFinite()
             } ?: 1f
             val safeFontScale = input.fontScale.takeIf { it.isFinite() && it > 0f } ?: 1f
-            val uiScale = input.uiScaleFactor.takeIf { it.isFinite() && it in .9f..1.2f }?.toDouble() ?: 1.0
+            val uiScale = input.uiScaleFactor.takeIf { it.isFinite() && it in .9f..1.5f }?.toDouble() ?: 1.0
             // Double intermediates avoid overflow when malformed-but-finite scales are supplied.
             val w = pixelWidth / safeDensity
             val h = pixelHeight / safeDensity
@@ -96,7 +96,7 @@ data class ShellMetrics(
             val footer = desiredFooter * bandScale
             val contentEnd = (h - dock - footer).coerceIn(status, h)
             val statusHeight = status.asDp()
-            val dockHeight = dock.asDp()
+            val footerTop = (h - footer).asDp()
             val contentTop = status.asDp()
             val contentBottom = contentEnd.asDp()
 
@@ -138,11 +138,11 @@ data class ShellMetrics(
                 gutter = gutter,
                 statusBounds = ShellBounds(0.dp, 0.dp, width, statusHeight),
                 contentBounds = ShellBounds(gutter, contentTop, width - gutter, contentBottom),
-                dockBounds = ShellBounds(0.dp, contentBottom, width, contentBottom + dockHeight),
-                footerBounds = ShellBounds(0.dp, contentBottom + dockHeight, width, height),
+                dockBounds = ShellBounds(0.dp, contentBottom, width, footerTop),
+                footerBounds = ShellBounds(0.dp, footerTop, width, height),
                 dockCenterY = (contentEnd + dock / 2.0)
                     .coerceIn(dockCenterMinimum, dockCenterMaximum).asDp(),
-                footerDividerY = (h - footer).asDp(),
+                footerDividerY = footerTop,
                 homeMetadataTop = metadataTop.asDp(),
                 homeCardArtworkSize = cardSize,
                 homeCardGap = if (hasCard) gapReference.coerceAtLeast(0.dp) else 0.dp,

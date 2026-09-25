@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -148,7 +149,7 @@ private fun CardActivation(
             ) { content() }
         }
         if (caption != null) {
-            SquareArtworkSlot(Modifier.fillMaxWidth(), maxArtworkSize) { frame(Modifier) }
+            SquareArtworkSlot(Modifier.fillMaxWidth().semantics { testTag = "collection-card-artwork" }, maxArtworkSize) { frame(Modifier) }
         } else frame(Modifier)
         caption?.invoke()
     }

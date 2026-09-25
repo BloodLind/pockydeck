@@ -98,13 +98,14 @@ class DataStorePreferencesInstrumentedTest {
         controllerPreferences.setConfirmBackMapping(mapping)
         navigationSnapshots.save(snapshot)
 
-        displayPreferences.setUiScalePercent(120)
         displayPreferences.setReduceMotion(true)
-        reopenStore()
-
-        assertEquals(DisplayPreferences(uiScalePercent = 120, reduceMotion = true), displayPreferences.preferences.first())
-        assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
-        assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.SETTINGS).first())
+        for (percent in listOf(90, 100, 110, 120, 130, 140, 150)) {
+            displayPreferences.setUiScalePercent(percent)
+            reopenStore()
+            assertEquals(DisplayPreferences(uiScalePercent = percent, reduceMotion = true), displayPreferences.preferences.first())
+            assertEquals(mapping, controllerPreferences.confirmBackMapping.first())
+            assertEquals(snapshot, navigationSnapshots.observe(LauncherDestination.SETTINGS).first())
+        }
     }
 
     @Test fun backgroundAppearancePersistsAcrossReopenWithoutChangingArtworkChoices() = runBlocking {
@@ -212,7 +213,7 @@ class DataStorePreferencesInstrumentedTest {
         navigationSnapshots.save(snapshot)
         displayPreferences.setReduceMotion(true)
 
-        for (invalidScale in listOf(0, 89, 95, 121, Int.MAX_VALUE)) {
+        for (invalidScale in listOf(0, 89, 95, 121, 151, 160, Int.MAX_VALUE)) {
             store.dataStore.edit { it[LauncherPreferenceKeys.uiScalePercent] = invalidScale }
             assertEquals(DisplayPreferences(uiScalePercent = 100, reduceMotion = true), displayPreferences.preferences.first())
         }
@@ -240,7 +241,7 @@ class DataStorePreferencesInstrumentedTest {
         navigationSnapshots.save(snapshot)
         val before = store.dataStore.data.first().asMap()
 
-        for (invalidScale in listOf(Int.MIN_VALUE, 0, 89, 95, 105, 121, Int.MAX_VALUE)) {
+        for (invalidScale in listOf(Int.MIN_VALUE, 0, 89, 95, 105, 121, 151, 160, Int.MAX_VALUE)) {
             val failure = runCatching { displayPreferences.setUiScalePercent(invalidScale) }.exceptionOrNull()
             assertTrue("Unsupported scale $invalidScale must be rejected", failure is IllegalArgumentException)
             assertEquals("Rejected writes must preserve every stored preference", before, store.dataStore.data.first().asMap())

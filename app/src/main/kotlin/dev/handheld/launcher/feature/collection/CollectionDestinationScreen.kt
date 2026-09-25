@@ -360,6 +360,9 @@ private fun CollectionBody(
                     LauncherText(title, style = LauncherTheme.typography.pageTitle,
                         modifier = (if (compactHeader) Modifier.weight(1f) else Modifier).testTag("collection-title"),
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (compactHeader) LauncherText(countLabel(state.items.size, visibleSystemActions.size),
+                        style = LauncherTheme.typography.tileSubtitle, color = LauncherTheme.colors.textSecondary,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (!compactHeader) CollectionFilters(state, headerCallbacks, Modifier.weight(1f), allFilterFocus, allFiltersFocus,
                         filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it }, controls = controls, options = filterOptions)
                     val switchLayout = { onLayoutChange(!isList) }
@@ -376,7 +379,7 @@ private fun CollectionBody(
                         })
                     sortControl()
                 }
-                LauncherText(countLabel(state.items.size, visibleSystemActions.size),
+                if (!compactHeader) LauncherText(countLabel(state.items.size, visibleSystemActions.size),
                     style = LauncherTheme.typography.tileSubtitle, color = LauncherTheme.colors.textSecondary)
                 if (compactHeader) CollectionFilters(state, headerCallbacks, Modifier.fillMaxWidth(), allFilterFocus, allFiltersFocus,
                     filterRow, categoryRequesters, headerFocus, onStripFocused = { filterStripFocused = it }, controls = controls, options = filterOptions)
@@ -399,8 +402,12 @@ private fun CollectionBody(
             val splitPreview = isList && maxWidth >= 600.dp && maxHeight >= 160.dp
             val compactPreview = isList && !splitPreview && maxHeight >= 160.dp
             val selectedItem = state.items.firstOrNull { it.id == state.selectedItemId } ?: state.items.firstOrNull()
+            // Short viewports still need cover art below the enlarged header. Keep
+            // focus-lift clearance, but reclaim the decorative inset on either side.
+            val cardVerticalPadding = LauncherTheme.depth.focusLift +
+                if (maxHeight < 120.dp) 0.dp else LauncherTheme.spacing.xs
             val availableCardHeight = (maxHeight - (if (compactPreview) 48.dp + LauncherTheme.spacing.xs else 0.dp) -
-                (LauncherTheme.depth.focusLift + LauncherTheme.spacing.xs) * 2f).coerceAtLeast(0.dp)
+                cardVerticalPadding * 2f).coerceAtLeast(0.dp)
             val listWidth = if (splitPreview) (maxWidth - LauncherTheme.spacing.md) * .45f else maxWidth
             val columnWidth = (listWidth - 14.dp - LauncherTheme.spacing.xs * (columns - 1)) / columns
             val artSize = if (isList) 56.dp * LauncherTheme.referenceScale
@@ -418,7 +425,7 @@ private fun CollectionBody(
                 columns = GridCells.Fixed(columns), state = grid,
                 modifier = Modifier.weight(1f).fillMaxSize()
                     .then(dev.handheld.launcher.core.designsystem.foundation.contentEntrance(state.filter to isList)).testTag("collection-grid"),
-                contentPadding = PaddingValues(vertical = LauncherTheme.depth.focusLift + LauncherTheme.spacing.xs),
+                contentPadding = PaddingValues(vertical = cardVerticalPadding),
                 horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
             ) {

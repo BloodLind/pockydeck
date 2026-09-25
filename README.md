@@ -2,7 +2,7 @@
 
 A free, open-source launcher for Android handhelds, focused on a familiar console-style experience. Browse your games with a controller or touch and spend less time navigating Android.
 
-[Download 0.10.4 preview](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.4) · [Quick setup](docs/getting-started.md) · [Report an issue](https://github.com/BloodLind/pockydeck/issues)
+[Download 0.10.5 preview](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.5) · [Quick setup](docs/getting-started.md) · [Report an issue](https://github.com/BloodLind/pockydeck/issues)
 
 ## What it supports
 

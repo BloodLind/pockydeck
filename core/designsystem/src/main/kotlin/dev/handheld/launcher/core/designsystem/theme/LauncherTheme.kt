@@ -216,7 +216,7 @@ object LauncherTheme {
         content: @Composable () -> Unit,
     ) {
         val reference = referenceScale.takeIf { it.isFinite() && it > 0f } ?: 1f
-        val uiScale = uiScaleFactor.takeIf { it.isFinite() && it > 0f }?.coerceIn(.9f, 1.2f) ?: 1f
+        val uiScale = uiScaleFactor.takeIf { it.isFinite() && it > 0f }?.coerceIn(.9f, 1.5f) ?: 1f
         val scale = (reference * uiScale).coerceIn(.5f, 1.5f)
         val spacing = LauncherSpacing()
         val shapes = LauncherShapes()

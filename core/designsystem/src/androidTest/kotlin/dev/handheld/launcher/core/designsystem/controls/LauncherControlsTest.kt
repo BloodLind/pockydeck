@@ -304,7 +304,7 @@ class LauncherControlsTest {
                 }
             }
         }
-        for (percent in listOf(100, 110, 120)) {
+        for (percent in listOf(100, 110, 120, 130, 140, 150)) {
             compose.runOnIdle { scale = percent / 100f }
             for (label in labels) {
                 val chip = compose.onNodeWithTag("fit-$label").fetchSemanticsNode().boundsInRoot

@@ -177,7 +177,7 @@ class CollectionLayoutPresentationTest {
                 }
             }
         }
-        for (percent in listOf(100, 110, 120)) {
+        for (percent in listOf(100, 110, 120, 130, 140, 150)) {
             compose.runOnIdle { scale = percent / 100f }
             compose.waitForIdle()
             val page = actualBounds("collection-fixture")
@@ -213,7 +213,8 @@ class CollectionLayoutPresentationTest {
                     Rect(node.positionInRoot.x, node.positionInRoot.y,
                         node.positionInRoot.x + node.size.width, node.positionInRoot.y + node.size.height)
                 }.filter { fits(it, strip) }
-            assertEquals("$percent% shows three whole console categories", 3, visibleChips.size)
+            if (percent <= 120) assertEquals("$percent% shows three whole console categories", 3, visibleChips.size)
+            else assertTrue("$percent% retains whole console choices within the narrower strip", visibleChips.size in 1..3)
             visibleChips.forEach {
                 assertEquals("$percent% fixed All and category centers align", actualBounds("collection-filter-all").center.y, it.center.y, 1f)
             }

@@ -151,7 +151,10 @@ fun SettingsScreen(
         mutableStateOf(initialSection.takeIf { it in settingsSections } ?: "Launcher")
     }
     val sectionRequesters = remember { settingsSections.associateWith { FocusRequester() } }
-    if (maxWidth > 600.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.lg)) {
+    // Keep the navigation layout stable while adjusting UI scale. Replacing the
+    // section body mid-adjustment would discard its scroll position and slider focus.
+    val unscaledWidth = maxWidth * (state.uiScalePercent / 100f)
+    if (unscaledWidth > 600.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.lg)) {
         Column(Modifier.width(176.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
             PageHeading("Settings")
             settingsSections.forEach { label ->

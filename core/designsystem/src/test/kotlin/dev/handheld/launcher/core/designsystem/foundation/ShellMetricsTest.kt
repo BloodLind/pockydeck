@@ -125,9 +125,10 @@ class ShellMetricsTest {
 
     @Test
     fun userUiScalesPreserveTouchTargetsAndSeparateShellBands() {
-        listOf(.9f, 1f, 1.1f, 1.2f).forEach { scale ->
+        listOf(.9f, 1f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f).forEach { scale ->
             val metrics = ShellMetrics.calculate(ShellMetricsInput(1920, 1080, 2.25f * scale, 1.3f, scale))
-            assertTrue(metrics.controlsCanReachMinimumTouchTarget)
+            assertTrue("At $scale, dock ${metrics.dockBounds} and footer ${metrics.footerBounds} retain touch targets",
+                metrics.controlsCanReachMinimumTouchTarget)
             assertTrue(metrics.statusBounds.bottom <= metrics.contentBounds.top)
             assertTrue(metrics.contentBounds.bottom <= metrics.dockBounds.top)
             assertTrue(metrics.dockBounds.bottom <= metrics.footerBounds.top)
@@ -139,7 +140,9 @@ class ShellMetricsTest {
     @Test
     fun compactWindowReferenceScalingDoesNotAmplifyTheUiSettingTwice() {
         val base = ShellMetrics.calculate(ShellMetricsInput(1440, 810, 2.25f))
-        val enlarged = ShellMetrics.calculate(ShellMetricsInput(1440, 810, 2.25f * 1.2f, uiScaleFactor = 1.2f))
-        assertEquals(base.referenceScale, enlarged.referenceScale * 1.2f, .001f)
+        listOf(1.2f, 1.3f, 1.4f, 1.5f).forEach { scale ->
+            val enlarged = ShellMetrics.calculate(ShellMetricsInput(1440, 810, 2.25f * scale, uiScaleFactor = scale))
+            assertEquals(base.referenceScale, enlarged.referenceScale * scale, .001f)
+        }
     }
 }

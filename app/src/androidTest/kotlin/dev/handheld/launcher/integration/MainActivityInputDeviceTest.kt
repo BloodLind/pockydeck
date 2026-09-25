@@ -732,12 +732,24 @@ class MainActivityInputDeviceTest {
                 runBlocking { container.displayPreferenceRepository.preferences.first().uiScalePercent })
         }
 
+        fun capturePreview(page: String) {
+            if (InstrumentationRegistry.getArguments().getString("captureScalePreviews") != "true") return
+            compose.waitForIdle()
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                try {
+                    java.io.File(instrumentation.context.getExternalFilesDir(null), "scale-150-$page.png")
+                        .outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                } finally { bitmap.recycle() }
+            }
+        }
+
         var testFailure: Throwable? = null
         try {
-            for (percent in listOf(90, 110, 120, 100)) {
+            for (percent in listOf(90, 110, 120, 130, 140, 150, 100)) {
                 chooseScale(percent)
                 compose.waitForIdle()
                 assertChromeInsideNativeWindow(percent)
+                if (percent == 150) capturePreview("settings")
                 tapTag(LauncherShellTags.destination(LauncherDestination.LIBRARY))
                 compose.onNodeWithTag(GRID).performScrollToIndex(0)
                 compose.waitForIdle()
@@ -746,6 +758,25 @@ class MainActivityInputDeviceTest {
                 val cardBottom = firstCard.positionInRoot.y + firstCard.size.height
                 assertTrue("At $percent%, the full first card and both caption lines must fit above the dock: $cardBottom > ${viewport.bottom}",
                     cardBottom <= viewport.bottom + 1f)
+                val artwork = compose.onAllNodes(hasTestTag("collection-card-artwork"), useUnmergedTree = true)
+                    .fetchSemanticsNodes().filter { it.boundsInRoot.overlaps(viewport) }
+                    .minWith(compareBy({ it.positionInRoot.y }, { it.positionInRoot.x }))
+                val minimumThumbnailPx = 48f * compose.activity.resources.displayMetrics.density
+                assertTrue("At $percent%, grid covers must remain recognizable, not collapse to a sliver: ${artwork.size.height}px",
+                    artwork.size.height >= minimumThumbnailPx)
+                if (percent == 150) {
+                    assertChromeInsideNativeWindow(percent)
+                    capturePreview("grid")
+                    tapTag("collection-layout")
+                    compose.waitUntil(TIMEOUT_MS) { LauncherDestination.LIBRARY in app.display.value.listDestinations }
+                    assertChromeInsideNativeWindow(percent)
+                    capturePreview("list")
+                    tapTag("collection-layout")
+                    compose.waitUntil(TIMEOUT_MS) { LauncherDestination.LIBRARY !in app.display.value.listDestinations }
+                    tapTag(LauncherShellTags.destination(LauncherDestination.HOME))
+                    assertChromeInsideNativeWindow(percent)
+                    capturePreview("home")
+                }
                 tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
             }
         } catch (failure: Throwable) {

@@ -100,6 +100,9 @@ fun LibraryItemCard(
     val maxArtworkSize = if (variant == LibraryItemCardVariant.Collection && maxCollectionCardHeight.value.isFinite()) {
         (maxCollectionCardHeight - captionHeight).coerceAtLeast(0.dp)
     } else Dp.Infinity
+    // A large-text, short-window thumbnail cannot contain a readable platform pill.
+    // Leave the cover visible instead of squeezing a clipped badge over its center.
+    val artworkBadge = badge.takeIf { maxArtworkSize >= 64.dp }
 
     if (model.artwork is TileArtwork.AndroidIcon && variant != LibraryItemCardVariant.SearchResult && variant != LibraryItemCardVariant.List) {
         AppIconTile(
@@ -116,7 +119,7 @@ fun LibraryItemCard(
             focusFrameWidth = focusFrameWidth,
             focusLift = focusLift,
             showCaption = variant == LibraryItemCardVariant.Collection,
-            badge = badge,
+            badge = artworkBadge,
             status = status,
             maxArtworkSize = maxArtworkSize,
         )
@@ -150,7 +153,7 @@ fun LibraryItemCard(
             modifier = cardModifier,
             artwork = artwork,
             subtitle = contextualSubtitle,
-            badge = badge,
+            badge = artworkBadge,
             status = status,
             selected = selected,
             unavailable = unavailable,

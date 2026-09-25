@@ -36,7 +36,7 @@ data class DisplayPreferences(
     val gridSizeFactor: Float get() = gridSizePercent / 100f
 
     companion object {
-        val supportedScales = listOf(90, 100, 110, 120)
+        val supportedScales = (90..150 step 10).toList()
         val supportedGridSizes = (70..140 step 10).toList()
         val supportedBackgroundLevels = (0..100 step 10).toList()
         val collectionDestinations = setOf(LauncherDestination.LIBRARY, LauncherDestination.APPS, LauncherDestination.FAVORITES)

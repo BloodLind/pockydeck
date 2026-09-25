@@ -2,12 +2,12 @@
 
 A free, open-source launcher for Android handhelds, focused on a familiar console-style experience. Browse your games with a controller or touch and spend less time navigating Android.
 
-[Download 0.10.5 preview](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.5) · [Quick setup](docs/getting-started.md) · [Report an issue](https://github.com/BloodLind/pockydeck/issues)
+[Download 0.10.6 preview](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.6) · [Quick setup](docs/getting-started.md) · [Report an issue](https://github.com/BloodLind/pockydeck/issues)
 
 ## What it supports
 
 - Home, Library, Apps, Favorites, and Search for Android games, ROMs, and supported PC-game exports.
-- Controller navigation with accelerated scrolling, touch controls, and configurable sound and vibration feedback.
+- Controller navigation with Xbox or Nintendo/retro button labels, accelerated scrolling, touch controls, and configurable sound and vibration feedback.
 - ROM-folder scanning, supported emulator selection, and RetroArch core preferences.
 - Grid and list views with game previews, sorting, filters, and last-played markers on Home.
 - Local ES-DE artwork and optional online covers, with cached images for quick browsing.

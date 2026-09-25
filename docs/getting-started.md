@@ -4,7 +4,7 @@ PockyDeck requires Android 13 or later and runs in landscape.
 
 ## Install the preview
 
-1. Download `pockydeck-0.10.5-preview.apk` from the [release page](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.5).
+1. Download `pockydeck-0.10.6-preview.apk` from the [release page](https://github.com/BloodLind/pockydeck/releases/tag/v0.10.6).
 2. Open the APK on your device. Allow installation from your browser or file manager if Android asks.
 3. Open **PockyDeck**. Making it your default Home app is optional.
 
@@ -13,7 +13,7 @@ The release includes `SHA256SUMS.txt` and `SIGNING_CERTIFICATE.txt`. You can che
 For USB installation:
 
 ```sh
-adb -s SERIAL install --no-incremental -r pockydeck-0.10.5-preview.apk
+adb -s SERIAL install --no-incremental -r pockydeck-0.10.6-preview.apk
 ```
 
 The preview uses the same development signing certificate as the official 0.10.3 preview, so it can update that build while keeping settings, favorites, and history. Locally built APKs may use a different key. If Android reports a signature mismatch, do not uninstall your existing copy without considering its saved data. Official previews are release builds with debugging disabled; a long-term production signing policy is still pending.

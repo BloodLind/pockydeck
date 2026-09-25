@@ -194,6 +194,9 @@ fun LibraryItemArtwork(
 ) {
     val visible = active && (LocalEnrichedArtworkLoader.current?.foreground ?: true) &&
         (iconLoader?.foreground ?: true)
+    val order = dev.handheld.launcher.ui.artwork.LocalArtworkLoadOrder.current
+    if (visible && iconLoader == null && model.artwork is TileArtwork.AndroidIcon)
+        androidx.compose.runtime.SideEffect { order?.complete(model.itemId) }
     val iconPainter = when (val artwork = model.artwork) {
         is TileArtwork.AndroidIcon -> iconLoader?.let {
             rememberAndroidIconPainter(it, artwork.componentId, visible, targetSizePx)
@@ -214,6 +217,13 @@ private fun TileArtwork(
 ) {
     if (!active) {
         ArtworkFallback(label = model.typeLabel)
+        return
+    }
+    // Native icons never crossfade or slide. Avoid allocating animation state,
+    // fallback layers and ROM observers for every app entering the viewport.
+    if (model.artwork is TileArtwork.AndroidIcon) {
+        if (iconPainter == null) ArtworkFallback(label = model.typeLabel)
+        else AppIconArtwork(iconPainter)
         return
     }
     val enriched = rememberEnrichedArtwork(model, active, targetSizePx)

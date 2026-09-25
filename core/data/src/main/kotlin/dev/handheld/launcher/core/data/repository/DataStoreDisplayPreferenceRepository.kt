@@ -21,6 +21,8 @@ class DataStoreDisplayPreferenceRepository(store: LauncherPreferencesStore) : Di
             homeArtworkBackground = values[LauncherPreferenceKeys.homeArtworkBackground] as? Boolean ?: false,
             listArtworkBackground = values[LauncherPreferenceKeys.listArtworkBackground] as? Boolean ?: false,
             backgroundTint = BackgroundTint.fromPersistedKey(values[LauncherPreferenceKeys.backgroundTint] as? String),
+            backgroundCustomColorRgb = (values[LauncherPreferenceKeys.backgroundCustomColorRgb] as? Int)
+                ?.takeIf { it in 0..0xFFFFFF },
             backgroundTintPercent = (values[LauncherPreferenceKeys.backgroundTintPercent] as? Int)
                 ?.takeIf { it in DisplayPreferences.supportedBackgroundLevels } ?: 40,
             backgroundGrainPercent = (values[LauncherPreferenceKeys.backgroundGrainPercent] as? Int)
@@ -54,7 +56,15 @@ class DataStoreDisplayPreferenceRepository(store: LauncherPreferencesStore) : Di
     }
 
     override suspend fun setBackgroundTint(tint: BackgroundTint) {
-        dataStore.edit { it[LauncherPreferenceKeys.backgroundTint] = tint.persistedKey }
+        dataStore.edit {
+            it[LauncherPreferenceKeys.backgroundTint] = tint.persistedKey
+            it.remove(LauncherPreferenceKeys.backgroundCustomColorRgb)
+        }
+    }
+
+    override suspend fun setBackgroundCustomColorRgb(rgb: Int) {
+        require(rgb in 0..0xFFFFFF)
+        dataStore.edit { it[LauncherPreferenceKeys.backgroundCustomColorRgb] = rgb }
     }
 
     override suspend fun setBackgroundTintPercent(percent: Int) {

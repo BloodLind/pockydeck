@@ -65,6 +65,7 @@ internal object LauncherPreferenceKeys {
     val homeArtworkBackground = booleanPreferencesKey("display.home_artwork_background")
     val listArtworkBackground = booleanPreferencesKey("display.list_artwork_background")
     val backgroundTint = stringPreferencesKey("display.background_tint")
+    val backgroundCustomColorRgb = intPreferencesKey("display.background_custom_color_rgb")
     val backgroundTintPercent = intPreferencesKey("display.background_tint_percent")
     val backgroundGrainPercent = intPreferencesKey("display.background_grain_percent")
     val listDestinations = stringSetPreferencesKey("display.list_destinations")

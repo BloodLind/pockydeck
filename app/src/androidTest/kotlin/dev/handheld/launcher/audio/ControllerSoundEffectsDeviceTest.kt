@@ -6,10 +6,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.handheld.launcher.R
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.DataInputStream
@@ -17,7 +15,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Isolated audio fixtures: no persistent preference, volume, or catalog changes. */
+/** Isolated native playback checks work even when the Android mixer is muted; no preference or volume changes. */
 @RunWith(AndroidJUnit4::class)
 class ControllerSoundEffectsDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
@@ -85,11 +83,10 @@ class ControllerSoundEffectsDeviceTest {
         } finally { instrumentation.runOnMainSync { sounds.release() } }
     }
 
-    @Test fun fixedVolumeRepeatsKeepNativeGainAndPackagedWaveformEnergyBounded() {
-        val audio = context.getSystemService(AudioManager::class.java)
-        assumeTrue(audio != null && !audio.isStreamMute(AudioManager.STREAM_MUSIC) &&
-            audio.getStreamVolume(AudioManager.STREAM_MUSIC) > 0)
+    @Test fun fixedVolumeRepeatsAreQuieterThanTheIsolatedClickWithoutGainPumping() {
+        val audio = requireNotNull(context.getSystemService(AudioManager::class.java))
         val systemVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val systemMuted = audio.isStreamMute(AudioManager.STREAM_MUSIC)
         val starts = java.util.concurrent.ConcurrentLinkedQueue<Pair<Long, Float>>()
         lateinit var sounds: ControllerSoundEffects
         instrumentation.runOnMainSync {
@@ -114,33 +111,45 @@ class ControllerSoundEffectsDeviceTest {
             SystemClock.sleep(100)
             val played = starts.toList()
             assertTrue("Accelerated input must not halve the audible rate", played.size >= (intervals.size + 1) * .95)
+            played.drop(1).forEach { (_, gain) ->
+                assertEquals("Every repeat stays at the same quieter level", played.first().second * .45f, gain, 0f)
+            }
             played.zipWithNext().forEach { (a, b) ->
-                assertTrue("A fixed-volume burst must not get louder", b.second <= a.second + .000001f)
-                assertTrue("Feedback must not overlap the short navigation PCM", b.first - a.first >= 18)
+                assertTrue("Feedback must not overlap the short navigation PCM", b.first - a.first >= 48)
             }
             assertTrue("Full-speed navigation keeps its click rhythm", played.takeLast(30).zipWithNext()
                 .count { (a, b) -> b.first - a.first < 90 } >= 27)
             val bytes = context.resources.openRawResource(R.raw.ui_select).use { it.readBytes() }
             val values = ByteBuffer.wrap(bytes, 44, bytes.size - 44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
             val pcm = DoubleArray(values.remaining()) { values.get() / 32768.0 }
-            val isolatedEnergy = integratedPeak(pcm, listOf(played.first()))
             val repeatedEnergy = integratedPeak(pcm, played)
-            val uncompensatedEnergy = integratedPeak(pcm, played.map { it.first to played.first().second })
-            assertTrue("The old constant-gain repeat sequence exposes the accumulation regression",
-                uncompensatedEnergy > isolatedEnergy * 1.5)
-            assertTrue("Packaged PCM plus actual native gains must stay within the isolated click level: ${repeatedEnergy / isolatedEnergy}",
-                repeatedEnergy <= isolatedEnergy * 1.01)
+            val isolatedEnergy = integratedPeak(pcm, listOf(played.first()))
+            val sustainedRepeatEnergy = integratedPeak(pcm, played.takeLast(30))
+            assertTrue("A sustained fast scroll is quieter than an isolated click in the fast RMS model",
+                sustainedRepeatEnergy < isolatedEnergy)
+            assertTrue("The burst never rises above the initial click in the fast RMS model",
+                repeatedEnergy <= isolatedEnergy * 1.001)
+            val uncompensatedEnergy = integratedPeak(pcm, played.map { it.first to .2f })
+            val rmsCeiling = Math.pow(10.0, -36.0 / 20) * .4
+            val peakCeiling = Math.pow(10.0, -24.0 / 20) * .4
+            assertTrue("The uncompensated restored burst would exceed the chosen RMS cap",
+                uncompensatedEnergy > rmsCeiling * rmsCeiling)
+            assertTrue("Reconstructed native burst stays below the digital RMS cap",
+                repeatedEnergy <= rmsCeiling * rmsCeiling)
+            assertTrue("Each native click stays below the digital peak cap",
+                pcm.maxOf { kotlin.math.abs(it) } * played.maxOf { it.second } <= peakCeiling)
             SystemClock.sleep(650)
             instrumentation.runOnMainSync { sounds.onItemSelected() }
             val resumeDeadline = SystemClock.uptimeMillis() + 2_000
             while (starts.size == played.size && SystemClock.uptimeMillis() < resumeDeadline) SystemClock.sleep(10)
-            assertEquals("Only a quiet interval restores the ordinary click gain", played.first().second, starts.last().second, .000001f)
+            assertEquals("A pause restores the isolated click level", played.first().second, starts.last().second, .000001f)
             assertEquals(systemVolume, audio.getStreamVolume(AudioManager.STREAM_MUSIC))
-            android.util.Log.i("PockyDeckSoundTest", "Fixed-volume native burst: ${played.size} cues; gain ${played.first().second} to ${played.last().second}; integrated-energy ratio ${repeatedEnergy / isolatedEnergy}; uncompensated ratio ${uncompensatedEnergy / isolatedEnergy}")
+            assertEquals(systemMuted, audio.isStreamMute(AudioManager.STREAM_MUSIC))
+            android.util.Log.i("PockyDeckSoundTest", "Quieter-repeat native burst: ${played.size} cues; gain ${played.first().second} to ${played.last().second}; reconstructed fast RMS dBFS ${10 * kotlin.math.log10(repeatedEnergy)}; sustained ${10 * kotlin.math.log10(sustainedRepeatEnergy)}; isolated ${10 * kotlin.math.log10(isolatedEnergy)}; system muted $systemMuted; uncompensated ${10 * kotlin.math.log10(uncompensatedEnergy)}")
         } finally { instrumentation.runOnMainSync { sounds.release() } }
     }
 
-    /** Integrates the actual WAV samples at the actual native start times, not just a volume counter. */
+    /** Reconstructs packaged PCM at native callback times; this does not record the speaker or mixer. */
     private fun integratedPeak(pcm: DoubleArray, starts: List<Pair<Long, Float>>): Double {
         val sampleRate = 44_100.0
         val first = starts.first().first
@@ -149,21 +158,20 @@ class ControllerSoundEffectsDeviceTest {
             val offset = ((time - first) * sampleRate / 1_000).toInt()
             pcm.forEachIndexed { index, value -> output[offset + index] += value * gain }
         }
-        val decay = kotlin.math.exp(-1.0 / (sampleRate * .2))
+        val decay = kotlin.math.exp(-1.0 / (sampleRate * .125))
         var energy = 0.0
         var peak = 0.0
         for (value in output) {
-            energy = energy * decay + value * value
+            energy = energy * decay + value * value * (1 - decay)
             peak = maxOf(peak, energy)
         }
         return peak
     }
 
     @Test fun rapidAlternatingCuesAndVolumeChangesKeepOneCadenceWithoutChangingMediaVolume() {
-        val audio = context.getSystemService(AudioManager::class.java)
-        assumeTrue(audio != null && !audio.isStreamMute(AudioManager.STREAM_MUSIC) &&
-            audio.getStreamVolume(AudioManager.STREAM_MUSIC) > 0)
+        val audio = requireNotNull(context.getSystemService(AudioManager::class.java))
         val systemVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val systemMuted = audio.isStreamMute(AudioManager.STREAM_MUSIC)
         var volume = 40
         var enabled = true
         lateinit var sounds: ControllerSoundEffects
@@ -219,15 +227,13 @@ class ControllerSoundEffectsDeviceTest {
             }
             assertEquals("Launcher feedback must never change Android media volume", systemVolume,
                 audio.getStreamVolume(AudioManager.STREAM_MUSIC))
+            assertEquals("Launcher feedback must preserve Android media mute", systemMuted,
+                audio.isStreamMute(AudioManager.STREAM_MUSIC))
             android.util.Log.i("PockyDeckSoundTest", "400 rapid input/volume changes; ${starts.size} accepted cues; p95 ${p95}ms; max call ${callDurations.maxOrNull()}ms; media volume unchanged")
         } finally { instrumentation.runOnMainSync { sounds.release() } }
     }
 
     @Test fun loadedSelectionSkipsBusyPlaybackAndRespectsEnableLifecycleAndRelease() {
-        val audio = context.getSystemService(AudioManager::class.java)
-        assumeTrue("Keep the user's media mute/volume unchanged",
-            audio != null && !audio.isStreamMute(AudioManager.STREAM_MUSIC) &&
-                audio.getStreamVolume(AudioManager.STREAM_MUSIC) > 0)
         var enabled = false // In-memory toggle only; the user's preference is untouched.
         lateinit var sounds: ControllerSoundEffects
         instrumentation.runOnMainSync {
@@ -279,18 +285,17 @@ class ControllerSoundEffectsDeviceTest {
         } finally { instrumentation.runOnMainSync { sounds.release() } }
     }
 
-    @Test fun navigationUsesOneDryTransientWithoutAnOscillatingTone() {
-        val move = context.resources.openRawResource(R.raw.ui_move).use { it.readBytes() }
-        val select = context.resources.openRawResource(R.raw.ui_select).use { it.readBytes() }
-        assertArrayEquals("Control focus and card focus must not alternate timbre", move, select)
-        val samples = ByteBuffer.wrap(select, 44, select.size - 44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
-        val pcm = DoubleArray(samples.remaining()) { samples.get() / 32768.0 }
-        assertTrue("Navigation ends before the next full-speed selection", pcm.size <= 44_100 * .020)
-        val energy = pcm.sumOf { it * it }
-        val periodicity = (14..110).maxOf { lag ->
-            (lag until pcm.size).sumOf { pcm[it] * pcm[it - lag] } / energy
+    @Test fun navigationRestoresTheOriginalRoundedSamplesExactly() {
+        val originals = mapOf(
+            R.raw.ui_move to "9ee8b50af1f4b9a855b190e9923046e80af43232afddb0a850ef32bbebe84c02",
+            R.raw.ui_select to "90fb97f7045198d3c1dbad64a6dedbedc58cad6c5050e630489378278c9c6273",
+        )
+        for ((resource, originalHash) in originals) {
+            val bytes = context.resources.openRawResource(resource).use { it.readBytes() }
+            val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            assertEquals("Restore the pre-fix waveform, not a new replacement sound", originalHash, hash)
         }
-        assertTrue("No sustained 400–3150Hz resonator or pitch sweep: $periodicity", periodicity < .55)
     }
 
     @Test fun packagedPcmHeadersAndDurationsMatchEveryBusyWindow() {

@@ -1,6 +1,6 @@
 package dev.handheld.launcher.ui
 
-import dev.handheld.launcher.ui.presentation.color
+import dev.handheld.launcher.ui.presentation.backgroundColor
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.focusGroup
@@ -304,7 +304,9 @@ fun LauncherApp(
         (selectedItem == null || searchEditorActions != null)
     val primary = if (modalVisible) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select")
         else if (searchEditorActions != null) LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Apply")
-        else if (focused?.onAdjust != null) LauncherActionDescriptor(SemanticInputAction.NAVIGATE_RIGHT, LauncherActionMeaning.CHANGE_FILTER, "Adjust")
+        else if (focused?.onAdjust != null) LauncherActionDescriptor(
+            if (focused?.onAdjustVertical != null) SemanticInputAction.NAVIGATE_UP else SemanticInputAction.NAVIGATE_RIGHT,
+            LauncherActionMeaning.CHANGE_FILTER, "Adjust")
         else focused?.descriptor?.let { it.copy(input = SemanticInputAction.CONFIRM, enabled = it.enabled && !collectionUpdating) }
             ?: LauncherActionDescriptor(SemanticInputAction.CONFIRM, LauncherActionMeaning.ACTIVATE, "Select", false)
     val footer = ControllerActionFooter(buildList {
@@ -411,6 +413,10 @@ fun LauncherApp(
                     (direction == FocusDirection.Left || direction == FocusDirection.Right) -> {
                     focused?.onAdjust?.invoke(if (direction == FocusDirection.Right) 1 else -1); true
                 }
+                !modalVisible && focused?.onAdjustVertical != null &&
+                    (direction == FocusDirection.Up || direction == FocusDirection.Down) -> {
+                    focused?.onAdjustVertical?.invoke(if (direction == FocusDirection.Down) 1 else -1); true
+                }
                 direction != null -> if (!modalVisible && pageNavigation?.move(direction) == true) true else focusManager.moveFocus(direction)
                 action == SemanticInputAction.CONFIRM && !modalVisible && focused?.onAdjust != null -> { focused?.onActivate?.invoke(); true }
                 action == SemanticInputAction.BACK -> { if (!modalVisible && focused?.onBack != null) focused?.onBack?.invoke() else goBack(); true }
@@ -493,7 +499,7 @@ fun LauncherApp(
         }
         val imeBottom = with(density) { WindowInsets.ime.getBottom(this).toDp() }
         LauncherTheme(reducedMotion || display.reduceMotion, metrics.referenceScale, uiScaleFactor = display.uiScaleFactor,
-            backgroundTint = display.backgroundTint.color, backgroundTintPercent = display.backgroundTintPercent,
+            backgroundTint = display.backgroundColor, backgroundTintPercent = display.backgroundTintPercent,
             backgroundGrainPercent = display.backgroundGrainPercent) {
             val pageMotion = pageTransition(location, reducedMotion || display.reduceMotion)
             val registry = LauncherRouteRegistry(LauncherDestination.dockOrder.map { route ->
@@ -534,6 +540,7 @@ fun LauncherApp(
                                     homeArtworkBackground = display.homeArtworkBackground,
                                     listArtworkBackground = display.listArtworkBackground,
                                     backgroundTint = display.backgroundTint,
+                                    backgroundCustomColorRgb = display.backgroundCustomColorRgb,
                                     backgroundTintPercent = display.backgroundTintPercent,
                                     backgroundGrainPercent = display.backgroundGrainPercent,
                                     gridSizePercent = display.gridSizePercent,
@@ -550,6 +557,7 @@ fun LauncherApp(
                                     onSetHomeArtworkBackground = app::setHomeArtworkBackground,
                                     onSetListArtworkBackground = app::setListArtworkBackground,
                                     onSetBackgroundTint = app::setBackgroundTint,
+                                    onSetBackgroundCustomColorRgb = app::setBackgroundCustomColorRgb,
                                     onSetBackgroundTintPercent = app::setBackgroundTintPercent,
                                     onSetBackgroundGrainPercent = app::setBackgroundGrainPercent,
                                     onSetConfirmBackMapping = app::setMapping,
@@ -594,7 +602,7 @@ fun LauncherApp(
                                     restoreFocusRequest = pageActivationRequest)
                             else -> {
                                 val vm = pageModels.getValue(route)
-                                val current = pageStates.getValue(route)
+                                val current = pageStates.getValue(route).copy(emulatorLabels = romEmulators.itemEmulatorLabels)
                                 val callbacks = CollectionScreenCallbacks(vm::select,
                                     onOpen = { if (vm.canOpenItem(it))
                                         container.launchCoordinator.submit(it, vm.state.value.snapshot().copy(selectedItemId = it)) },
@@ -651,6 +659,7 @@ fun LauncherApp(
                             enabled = display.listArtworkBackground,
                             loadingAllowed = collectionArtworkLoadingAllowed[destination] == true,
                             testTag = "list-rom-backdrop",
+                            dimAmount = .16f,
                         )
                     }
                 },

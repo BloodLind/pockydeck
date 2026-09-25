@@ -141,6 +141,7 @@ fun HomeScreen(
     SideEffect { publishLoadingAllowed(loadingAllowed) }
     DisposableEffect(Unit) { onDispose { publishLoadingAllowed(false) } }
     val itemIds = state.items.map { it.itemId }
+    val artworkOrder = dev.handheld.launcher.ui.artwork.rememberArtworkLoadOrder(itemIds)
     val requesters = remember(itemIds) { itemIds.associateWith { FocusRequester() } }
     val libraryRequester = remember { FocusRequester() }
     val recoveryRequester = remember { FocusRequester() }
@@ -161,7 +162,10 @@ fun HomeScreen(
     val currentViewportChanged by rememberUpdatedState(onViewportChanged)
     val density = LocalDensity.current
     val artworkTargetSizePx = homeArtworkTargetSizePx(with(density) { metrics.homeCardAllocatedSize.roundToPx() })
-    if (metrics.hasUsableHomeCard) HomeArtworkBuffer(state.items, iconLoader, artworkTargetSizePx)
+    if (metrics.hasUsableHomeCard) CompositionLocalProvider(
+        dev.handheld.launcher.ui.artwork.LocalArtworkLoadOrder provides artworkOrder) {
+        HomeArtworkBuffer(state.items, iconLoader, artworkTargetSizePx)
+    }
     val shadowOffset = with(density) { (2.dp * metrics.referenceScale).toPx() }
     val shadowBlur = with(density) { (3.dp * metrics.referenceScale).toPx() }
 
@@ -217,7 +221,8 @@ fun HomeScreen(
                     )
                     .wrapContentSize(Alignment.TopStart, unbounded = true),
             ) {
-                CompositionLocalProvider(LocalArtworkLoadingAllowed provides true) {
+                CompositionLocalProvider(LocalArtworkLoadingAllowed provides true,
+                    dev.handheld.launcher.ui.artwork.LocalArtworkLoadOrder provides artworkOrder) {
                 LazyRow(
                     modifier = Modifier
                         .testTag("home-row")

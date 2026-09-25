@@ -1,44 +1,32 @@
 package dev.handheld.launcher.audio
 
 import kotlin.math.exp
+import kotlin.math.pow
 import kotlin.math.sqrt
 
-/** Worker-owned energy budget for click bursts, separate from the user's volume setting. */
+/** Fixed headroom for the fastest possible burst; no attack/release gain pumping. */
 internal class ControllerSoundLoudness {
-    private var lastStart: Long? = null
-    private var recentEnergy = 0.0
-    private var burstGain = 1f
-
-    fun gain(cue: ControllerSoundCue, now: Long): Float {
-        val inBurst = lastStart != null && elapsed(now) < BURST_IDLE_MILLIS
-        // The budget treats a cue as an impulse; its real PCM occupies 18–72ms.
-        // Leave headroom for that envelope and native start-time rounding.
-        val budget = if (inBurst) .95 else 1.0
-        val remaining = (budget - decayedEnergy(now)).coerceAtLeast(0.0)
-        val energyGain = sqrt(remaining / cue.energy).toFloat().coerceIn(0f, 1f)
-        // Timing jitter, a different cue or a missed repeat must not pump the level up.
-        val ceiling = if (inBurst) burstGain else 1f
-        return minOf(ceiling, energyGain)
+    private val gains = ControllerSoundCue.entries.associateWith { cue ->
+        // Assets are normalized to .044 RMS and <= .20 peak. Include quantization
+        // and one frame of duration rounding; packaged-PCM tests enforce these bounds.
+        val duration = cue.durationMillis + 1_000.0 / 44_100
+        val weightedEnergy = .0441.pow(2) * duration / RMS_WINDOW_MILLIS * exp(duration / RMS_WINDOW_MILLIS)
+        // Treat each entire clip as a conservative energy impulse at its start.
+        // The exponential weight covers its later samples. With starts >= 40 ms
+        // apart, the geometric sum remains below the RMS ceiling indefinitely.
+        val budget = RMS_CEILING.pow(2) * (1 - exp(-MINIMUM_START_INTERVAL_MILLIS / RMS_WINDOW_MILLIS))
+        minOf(.5, PEAK_CEILING / .201, sqrt(budget / weightedEnergy)).toFloat()
     }
 
-    /** Only successfully started audio spends the budget; dropped/unloaded requests do not. */
-    fun started(cue: ControllerSoundCue, gain: Float, now: Long) {
-        recentEnergy = decayedEnergy(now) + cue.energy * gain.toDouble() * gain
-        burstGain = gain
-        lastStart = now
-    }
+    fun gain(cue: ControllerSoundCue, volumePercent: Int): Float =
+        gains.getValue(cue) * volumePercent.coerceIn(0, 100) / 100f
 
-    private fun elapsed(now: Long): Long = lastStart?.let { (now - it).coerceAtLeast(0) } ?: 0
-    private fun decayedEnergy(now: Long): Double =
-        if (lastStart == null || elapsed(now) >= BURST_IDLE_MILLIS) 0.0
-        else recentEnergy * exp(-elapsed(now) / ENERGY_DECAY_MILLIS)
-
-    // Packaged cues have matched PCM RMS. Duration therefore measures their relative energy.
-    private val ControllerSoundCue.energy: Double get() = durationMillis / REFERENCE_DURATION_MILLIS
-
-    private companion object {
-        const val ENERGY_DECAY_MILLIS = 200.0
-        const val BURST_IDLE_MILLIS = 600L
-        val REFERENCE_DURATION_MILLIS = ControllerSoundCue.entries.minOf { it.durationMillis }.toDouble()
+    companion object {
+        const val MINIMUM_START_INTERVAL_MILLIS = 40L
+        const val RMS_WINDOW_MILLIS = 125.0
+        // Digital app-signal limits at 100% launcher volume, before Android's mixer.
+        // These are dBFS, not acoustic dB at the handheld's speakers.
+        val PEAK_CEILING = 10.0.pow(-24.0 / 20)
+        val RMS_CEILING = 10.0.pow(-36.0 / 20)
     }
 }

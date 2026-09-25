@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original PockyDeck navigation artwork: rounded roof and a recessed doorway. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
+    <path android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="1.5"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M4.5,14.5L13.9,6.2Q16,4.4 18.1,6.2L27.5,14.5M7,13L7,24Q7,27 10,27L22,27Q25,27 25,24L25,13M12.5,27L12.5,21Q12.5,18.5 15,18.5L17,18.5Q19.5,18.5 19.5,21L19.5,27" />
+</vector>

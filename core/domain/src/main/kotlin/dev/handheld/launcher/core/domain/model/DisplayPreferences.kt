@@ -20,6 +20,8 @@ data class DisplayPreferences(
     val backgroundTint: BackgroundTint = BackgroundTint.PURPLE,
     val backgroundTintPercent: Int = 40,
     val backgroundGrainPercent: Int = 30,
+    /** An opaque RGB custom tint; null uses the existing named preset. */
+    val backgroundCustomColorRgb: Int? = null,
 ) {
     init {
         require(uiScalePercent in supportedScales)
@@ -27,6 +29,7 @@ data class DisplayPreferences(
         require(gridSizePercent in supportedGridSizes)
         require(backgroundTintPercent in supportedBackgroundLevels)
         require(backgroundGrainPercent in supportedBackgroundLevels)
+        require(backgroundCustomColorRgb == null || backgroundCustomColorRgb in 0..0xFFFFFF)
     }
 
     val uiScaleFactor: Float get() = uiScalePercent / 100f

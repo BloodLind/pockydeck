@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -16,6 +17,8 @@ import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
@@ -24,6 +27,8 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.handheld.launcher.contract.ControllerActionFooter
 import dev.handheld.launcher.contract.LauncherActionDescriptor
@@ -34,6 +39,8 @@ import dev.handheld.launcher.core.designsystem.foundation.ShellMetrics
 import dev.handheld.launcher.core.designsystem.foundation.ShellMetricsInput
 import dev.handheld.launcher.core.designsystem.controls.LauncherButton
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
+import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
+import dev.handheld.launcher.core.domain.model.LauncherDestination
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -44,6 +51,52 @@ import org.junit.runner.RunWith
 @OptIn(ExperimentalComposeUiApi::class)
 class LauncherShellPresentationTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun dockTargetStaysNeutralUntilTheMovingSelectionArrives() {
+        var destination by mutableStateOf(LauncherDestination.HOME)
+        var reducedMotion by mutableStateOf(false)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalControllerInput provides false) {
+                ShellFixture(LauncherShellState(selectedDestination = destination,
+                    status = LauncherShellStatus(clock = "10:42")), SemanticActionPort { false },
+                    reducedMotion = reducedMotion,
+                    onDestinationSelected = { destination = it })
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        fun surface(route: LauncherDestination): Color {
+            val pixels = compose.onNodeWithTag(LauncherShellTags.destination(route)).captureToImage().toPixelMap()
+            // Inside the circle, above the icon and away from the focus border.
+            return pixels[pixels.width / 2, pixels.height / 8]
+        }
+        fun sameColor(message: String, expected: Color, actual: Color) {
+            assertEquals(message, expected.red, actual.red, .01f)
+            assertEquals(message, expected.green, actual.green, .01f)
+            assertEquals(message, expected.blue, actual.blue, .01f)
+        }
+        val white = surface(LauncherDestination.HOME)
+        val neutral = surface(LauncherDestination.SETTINGS)
+        val settings = compose.onNodeWithTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+        settings.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(32)
+        sameColor("Press must not light the destination ahead of the droplet", neutral, surface(LauncherDestination.SETTINGS))
+        settings.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnIdle { assertEquals(LauncherDestination.SETTINGS, destination) }
+        sameColor("Selection semantics must not paint a second target fill", neutral, surface(LauncherDestination.SETTINGS))
+
+        compose.runOnIdle { destination = LauncherDestination.APPS }
+        compose.mainClock.advanceTimeBy(256)
+        sameColor("The interrupted transition must settle at its latest destination", white, surface(LauncherDestination.APPS))
+        sameColor("An abandoned destination must never flash or retain a highlight", neutral, surface(LauncherDestination.SETTINGS))
+
+        compose.runOnIdle { destination = LauncherDestination.SETTINGS }
+        compose.mainClock.advanceTimeBy(32)
+        compose.runOnIdle { reducedMotion = true }
+        compose.mainClock.advanceTimeByFrame()
+        sameColor("Reduced motion snaps the same selection to the destination", white, surface(LauncherDestination.SETTINGS))
+    }
 
     @Test
     fun footerReplacementKeepsOnlyCurrentActionsDuringTransition() {
@@ -143,6 +196,7 @@ class LauncherShellPresentationTest {
         actions: SemanticActionPort,
         reducedMotion: Boolean = false,
         pageContent: @Composable (Modifier) -> Unit = { Box(it) },
+        onDestinationSelected: (LauncherDestination) -> Unit = {},
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val density = LocalDensity.current
@@ -150,7 +204,7 @@ class LauncherShellPresentationTest {
                 ShellMetrics.calculate(ShellMetricsInput(maxWidth.roundToPx(), maxHeight.roundToPx(), this.density, fontScale))
             }
             LauncherTheme(reducedMotion = reducedMotion, referenceScale = metrics.referenceScale) {
-                LauncherShell(metrics, state, actions, onDestinationSelected = {}, content = pageContent)
+                LauncherShell(metrics, state, actions, onDestinationSelected = onDestinationSelected, content = pageContent)
             }
         }
     }

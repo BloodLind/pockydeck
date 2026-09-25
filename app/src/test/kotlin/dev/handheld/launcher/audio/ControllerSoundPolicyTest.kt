@@ -48,7 +48,8 @@ class ControllerSoundPolicyTest {
             assertEquals(115L, intervals.first())
             assertEquals(55L, intervals.last())
             assertTrue("No sudden doubling of gaps as navigation speeds up", intervals.zipWithNext().all { (a, b) -> b <= a })
-            assertTrue("No gain pumping within a hold", gains.zipWithNext().all { (a, b) -> b <= a })
+            assertEquals("The first held repeat is already quieter", gains.first() * .45f, gains[1], 0f)
+            assertTrue("No gain pumping within the repeating part of a hold", gains.drop(1).distinct().size == 1)
             advanceTimeBy(1_000); runCurrent()
             assertEquals("Release leaves no delayed audio", actionTimes.size, soundTimes.size)
         }
@@ -65,10 +66,10 @@ class ControllerSoundPolicyTest {
         feedback.setActive(true)
         assertTrue(feedback.onItemSelected())
         assertFalse(feedback.onItemSelected())
-        now = 159
+        now = 169
         assertFalse(feedback.onTouchActivation())
         assertEquals(1, starts)
-        now = 160
+        now = 170
         assertTrue(feedback.onItemSelected())
         assertEquals(2, starts)
     }

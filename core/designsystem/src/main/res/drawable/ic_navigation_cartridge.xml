@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original PockyDeck game cartridge with a stepped shoulder and inset game label. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
+    <path android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="1.5"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M8,5L21.5,5Q24,5 24,7.5L24,8L25,8Q27,8 27,10L27,24.5Q27,27 24.5,27L7.5,27Q5,27 5,24.5L5,8Q5,5 8,5ZM11,11.5L21,11.5Q23,11.5 23,13.5L23,20Q23,22 21,22L11,22Q9,22 9,20L9,13.5Q9,11.5 11,11.5ZM10,8.5L18.5,8.5M13,25L19,25" />
+</vector>

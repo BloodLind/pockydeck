@@ -21,6 +21,8 @@ enum class LauncherGlyph(val label: String, internal val resourceId: Int) {
     Library("Library", R.drawable.ic_material_grid_view),
     Apps("Apps", R.drawable.ic_material_apps),
     Favorites("Favorites", R.drawable.ic_material_grade),
+    FavoriteFilled("Favorite", R.drawable.ic_favorite_filled),
+    FavoriteOutline("Not favorite", R.drawable.ic_favorite_outline),
     Settings("Settings", R.drawable.ic_material_tune),
     Search("Search", R.drawable.ic_material_search),
     Sort("Sort", R.drawable.ic_material_sort),

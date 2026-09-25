@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original PockyDeck six-lobed gear with rounded shoulders. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
+    <path android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="1.5"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M14.5,4L17.5,4Q18.6,4 18.8,5.1L19.2,7.3L21.5,8.7L23.6,8Q24.7,7.7 25.3,8.7L26.8,11.3Q27.4,12.3 26.5,13L24.8,14.5L24.8,17.5L26.5,19Q27.4,19.7 26.8,20.7L25.3,23.3Q24.7,24.3 23.6,24L21.5,23.3L19.2,24.7L18.8,26.9Q18.6,28 17.5,28L14.5,28Q13.4,28 13.2,26.9L12.8,24.7L10.5,23.3L8.4,24Q7.3,24.3 6.7,23.3L5.2,20.7Q4.6,19.7 5.5,19L7.2,17.5L7.2,14.5L5.5,13Q4.6,12.3 5.2,11.3L6.7,8.7Q7.3,7.7 8.4,8L10.5,8.7L12.8,7.3L13.2,5.1Q13.4,4 14.5,4ZM20,16A4,4 0,1 1,12 16A4,4 0,1 1,20 16Z" />
+</vector>

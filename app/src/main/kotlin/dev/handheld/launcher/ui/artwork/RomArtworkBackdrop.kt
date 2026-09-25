@@ -28,7 +28,7 @@ internal fun romBackdropEligible(model: TileUiModel?): Boolean = model?.isRom ==
 
 /** Decorative artwork shared by Home and lists. Navigation gates image work, not the reveal. */
 @Composable
-internal fun RomArtworkBackdrop(selected: TileUiModel?, enabled: Boolean, loadingAllowed: Boolean, testTag: String) {
+internal fun RomArtworkBackdrop(selected: TileUiModel?, enabled: Boolean, loadingAllowed: Boolean, testTag: String, dimAmount: Float = 0f) {
     if (!enabled || !romBackdropEligible(selected)) return
     var settled by remember { mutableStateOf<TileUiModel?>(null) }
     LaunchedEffect(selected?.itemId, selected?.artwork, loadingAllowed) {
@@ -56,6 +56,7 @@ internal fun RomArtworkBackdrop(selected: TileUiModel?, enabled: Boolean, loadin
                     // Stronger shading beneath the title and footer keeps contrast predictable.
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(
                         Color(0xB31C1D2A), Color(0x751C1D2A), Color(0xCC1C1D2A)))))
+                    if (dimAmount > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dimAmount.coerceIn(0f, 1f))))
                 }
             }
         }

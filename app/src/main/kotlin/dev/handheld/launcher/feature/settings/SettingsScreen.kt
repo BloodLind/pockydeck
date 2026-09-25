@@ -48,6 +48,11 @@ import dev.handheld.launcher.core.domain.model.ConfirmBackMapping
 import dev.handheld.launcher.core.domain.model.DisplayPreferences
 import dev.handheld.launcher.core.domain.model.BackgroundTint
 import dev.handheld.launcher.ui.presentation.label
+import dev.handheld.launcher.ui.presentation.color
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import dev.handheld.launcher.core.designsystem.settings.ColorPalette
+import dev.handheld.launcher.core.designsystem.settings.ColorPreset
 import dev.handheld.launcher.core.domain.model.LibraryCategory
 import dev.handheld.launcher.feature.collection.FocusedControlAction
 import dev.handheld.launcher.feature.collection.OnFocusedAction
@@ -83,6 +88,7 @@ data class SettingsScreenState(
     val backgroundTint: BackgroundTint = BackgroundTint.PURPLE,
     val backgroundTintPercent: Int = 40,
     val backgroundGrainPercent: Int = 30,
+    val backgroundCustomColorRgb: Int? = null,
 )
 data class SettingsCallbacks(
     val onSetConfirmBackMapping: (ConfirmBackMapping) -> Unit,
@@ -105,6 +111,7 @@ data class SettingsCallbacks(
     val onSetBackgroundTint: (BackgroundTint) -> Unit = {},
     val onSetBackgroundTintPercent: (Int) -> Unit = {},
     val onSetBackgroundGrainPercent: (Int) -> Unit = {},
+    val onSetBackgroundCustomColorRgb: (Int) -> Unit = {},
 )
 
 private val settingsSections = listOf("Controls", "Display", "Launcher", "ROM folders", "Emulators", "Artwork", "Android")
@@ -241,15 +248,21 @@ private fun SettingsBody(state: SettingsScreenState, callbacks: SettingsCallback
                 supportingText = "Remove decorative movement and animated transitions",
                 onFocusChanged = settingsFocus("Toggle reduced motion", LauncherActionMeaning.CHANGE_FILTER, toggleReduceMotion, callbacks.onFocusedAction))
             val toggleHomeBackground = { latestCallbacks.onSetHomeArtworkBackground(!latestState.homeArtworkBackground) }
-            val cycleTint = {
-                val choices = BackgroundTint.entries
-                latestCallbacks.onSetBackgroundTint(choices[(choices.indexOf(latestState.backgroundTint) + 1) % choices.size])
-            }
-            ChoiceRow("Background color", state.backgroundTint.label, cycleTint,
+            ColorPalette(
+                color = state.backgroundCustomColorRgb?.let { Color(it or 0xFF000000.toInt()) } ?: state.backgroundTint.color,
+                presets = remember { BackgroundTint.entries.map { ColorPreset(it.persistedKey, it.label, it.color) } },
+                selectedPreset = state.backgroundTint.persistedKey.takeIf { state.backgroundCustomColorRgb == null },
+                onColorChange = { latestCallbacks.onSetBackgroundCustomColorRgb(it.toArgb() and 0xFFFFFF) },
+                onPresetSelect = { latestCallbacks.onSetBackgroundTint(BackgroundTint.fromPersistedKey(it)) },
                 modifier = Modifier.testTag("background-tint-choice"),
-                supportingText = "Cycle through Purple, Graphite, Blue, Green and Warm.",
-                onFocusChanged = settingsFocus("Change background color", LauncherActionMeaning.CHANGE_FILTER,
-                    cycleTint, callbacks.onFocusedAction))
+                onInteractionChanged = { interaction ->
+                    latestCallbacks.onFocusedAction(interaction?.let {
+                        FocusedControlAction(LauncherActionDescriptor(SemanticInputAction.CONFIRM,
+                            LauncherActionMeaning.CHANGE_FILTER, if (it.onAdjust != null) "Done" else "Select"),
+                            onActivate = it.onConfirm, onAdjust = it.onAdjust, onBack = it.onFinish,
+                            onAdjustVertical = it.onAdjustVertical)
+                    })
+                })
             ScaleSlider("Tint strength", state.backgroundTintPercent, DisplayPreferences.supportedBackgroundLevels,
                 onSelect = { latestCallbacks.onSetBackgroundTintPercent(it) },
                 modifier = Modifier.testTag("background-tint-strength"),

@@ -9,9 +9,11 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
@@ -21,6 +23,9 @@ import dev.handheld.launcher.ui.artwork.ArtworkDecodePolicy
 import dev.handheld.launcher.ui.artwork.ArtworkMemoryCache
 import dev.handheld.launcher.ui.artwork.ArtworkMemoryOwner
 import dev.handheld.launcher.ui.artwork.ReleasableArtworkPainter
+import dev.handheld.launcher.ui.artwork.LocalArtworkLoadOrder
+import dev.handheld.launcher.ui.artwork.LocalArtworkLoadingAllowed
+import dev.handheld.launcher.ui.artwork.artworkTurnAllowed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -148,23 +153,30 @@ fun rememberAndroidIconPainter(
 ): Painter? {
     val artworkActive = active && loader.foreground
     val target = ArtworkDecodePolicy.target(targetSizePx)
+    val order = LocalArtworkLoadOrder.current
+    val currentOrder by rememberUpdatedState(order)
+    // Installed app icons still load during scrolling, independently of the ROM idle gate.
+    val turnAllowed = artworkTurnAllowed(order, componentId.itemId) || !LocalArtworkLoadingAllowed.current
     // Do not remember a Loaded(ImageBitmap) as a key: stopped compositions would retain
     // that key even after their observable result and painter delegate have been cleared.
     val painter = remember(loader, componentId, artworkActive, target, loader.generation, loader.memoryOwner.generation) {
         mutableStateOf(if (artworkActive) loader.cached(componentId, target)?.let(loader.memoryOwner::painter) else null)
     }
+    if (painter.value != null) SideEffect { order?.complete(componentId.itemId) }
     DisposableEffect(painter) {
         val unregister = if (artworkActive) loader.memoryOwner.onBackground { painter.value = null } else ({})
         onDispose { unregister(); painter.value?.release(); painter.value = null }
     }
-    LaunchedEffect(painter) {
-        if (!artworkActive || painter.value != null) return@LaunchedEffect
+    LaunchedEffect(painter, turnAllowed) {
+        if (!artworkActive || painter.value != null || !turnAllowed) return@LaunchedEffect
+        currentOrder?.started(componentId.itemId)
         val job = currentCoroutineContext().job
         val unregister = loader.memoryOwner.onBackground { painter.value = null; job.cancel() }
         try {
             val loaded = loader.load(componentId, target) as? AndroidIconResult.Loaded
             currentCoroutineContext().ensureActive()
             painter.value = loaded?.bitmap?.let(loader.memoryOwner::painter)
+            currentOrder?.complete(componentId.itemId, freshImage = loaded != null)
         } finally { unregister() }
     }
     return painter.value

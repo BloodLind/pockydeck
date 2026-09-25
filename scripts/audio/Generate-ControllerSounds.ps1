@@ -1,5 +1,5 @@
 # Original console-style ticks and pops, synthesized without sampled recordings.
-# Dry navigation transients and rounded action pops, matched RMS, no echo/reverb.
+# Rounded navigation ticks and action pops, matched RMS, no echo/reverb.
 [CmdletBinding()]
 param()
 $ErrorActionPreference = 'Stop'
@@ -9,16 +9,12 @@ $outputDirectory = Join-Path $projectRoot 'app/src/main/res/raw'
 $sampleRate = 44100
 
 function Write-Cue {
-    param([string]$Name, [int]$DurationMs, [double]$StartHz, [double]$EndHz, [double]$BodyHz, [double]$Chime = 0, [switch]$Dry)
+    param([string]$Name, [int]$DurationMs, [double]$StartHz, [double]$EndHz, [double]$BodyHz, [double]$Chime = 0)
     $sampleCount = [int]($sampleRate * $DurationMs / 1000)
     $samples = [double[]]::new($sampleCount)
     $envelopes = [double[]]::new($sampleCount)
     $sum = 0.0
     $weight = 0.0
-    # Identical, deterministic navigation clicks: focus timing must not change timbre.
-    $random = [Random]::new(173)
-    $low = 0.0
-    $bass = 0.0
     for ($index = 0; $index -lt $sampleCount; $index++) {
         $time = $index / [double]$sampleRate
         $duration = ($sampleCount - 1) / [double]$sampleRate
@@ -29,15 +25,7 @@ function Write-Cue {
         $body = [Math]::Sin(2 * [Math]::PI * $BodyHz * $time)
         $spark = [Math]::Sin(2 * [Math]::PI * $EndHz * 2.1 * $time) * [Math]::Exp(-$time / 0.004)
         $chimeTone = $Chime * [Math]::Sin(2 * [Math]::PI * $EndHz * 1.5 * $time)
-        if ($Dry) {
-            # Broad filtered noise, no oscillator, beating partials or pitch sweep.
-            $low += 0.30 * (($random.NextDouble() * 2 - 1) - $low)
-            $bass += 0.045 * ($low - $bass)
-            $envelope = $attack * $tail * [Math]::Exp(-2.0 * $time / $duration)
-            $value = $envelope * ($low - $bass)
-        } else {
-            $value = $envelope * (0.74 * [Math]::Sin($phase) + 0.18 * $body + 0.08 * $spark + $chimeTone)
-        }
+        $value = $envelope * (0.74 * [Math]::Sin($phase) + 0.18 * $body + 0.08 * $spark + $chimeTone)
         $samples[$index] = $value
         $envelopes[$index] = $envelope
         $sum += $value
@@ -72,8 +60,8 @@ function Write-Cue {
     Write-Output "$Name.wav: $DurationMs ms, RMS $([Math]::Round($rms * $gain, 4)), peak $([Math]::Round($peak * $gain, 4))"
 }
 
-Write-Cue 'ui_move' 18 -Dry
-Write-Cue 'ui_select' 18 -Dry
+Write-Cue 'ui_move' 38 1250 780 350
+Write-Cue 'ui_select' 48 920 680 310
 Write-Cue 'ui_confirm' 72 1040 880 440 0.12
 Write-Cue 'ui_back' 60 680 490 260
 Write-Cue 'ui_page' 56 880 720 360 0.06

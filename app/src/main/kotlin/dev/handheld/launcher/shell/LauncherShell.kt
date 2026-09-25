@@ -3,6 +3,7 @@ package dev.handheld.launcher.shell
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,6 +40,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -46,6 +50,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
@@ -59,6 +64,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.contract.ControllerActionFooter
 import dev.handheld.launcher.contract.LauncherActionDescriptor
@@ -70,8 +76,8 @@ import dev.handheld.launcher.core.designsystem.contract.LocalControllerInput
 import dev.handheld.launcher.core.designsystem.foundation.LauncherText
 import dev.handheld.launcher.core.designsystem.foundation.ShellBounds
 import dev.handheld.launcher.core.designsystem.foundation.ShellMetrics
-import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyph
-import dev.handheld.launcher.core.designsystem.glyphs.LauncherGlyphIcon
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherNavigationGlyph
+import dev.handheld.launcher.core.designsystem.glyphs.LauncherNavigationGlyphIcon
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyph
 import dev.handheld.launcher.core.designsystem.glyphs.LauncherStatusGlyphIcon
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
@@ -84,6 +90,8 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /** The stable, visual role of a status source. The caller never needs label parsing. */
 enum class ShellStatusGlyph {
@@ -366,7 +374,43 @@ private fun NavigationDock(
 ) {
     var locallyFocusedDestination by remember { mutableStateOf<LauncherDestination?>(null) }
     val renderedFocus = (locallyFocusedDestination ?: focusedDestination).takeIf { focusEnabled }
-    val slotSize = (58.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale).coerceAtLeast(48.dp)
+    val visualSize = 58.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale
+    val slotSize = visualSize.coerceAtLeast(48.dp)
+    val destinations = LauncherDestination.dockOrder
+    val target = destinations.indexOf(selectedDestination).coerceAtLeast(0).toFloat()
+    val selection = remember { Animatable(target) }
+    val trailingSelection = remember { Animatable(target) }
+    val easing = remember { CubicBezierEasing(.42f, 0f, .58f, 1f) }
+    val duration = LauncherTheme.motion.transitionDurationMillis
+    LaunchedEffect(target, duration) {
+        if (duration == 0) {
+            selection.snapTo(target)
+            trailingSelection.snapTo(target)
+        } else coroutineScope {
+            // Both anchors retarget from their current positions. No queued motion,
+            // spring overshoot or abrupt tail reset on a rapid direction change.
+            launch { selection.animateTo(target, tween(duration, easing = easing)) }
+            launch { trailingSelection.animateTo(target, tween(duration + 64, easing = easing)) }
+        }
+    }
+    val gap = LauncherTheme.spacing.xxs
+    val divider = 1.dp * LauncherTheme.referenceScale
+    val density = LocalDensity.current
+    // Use the same rounded widths as the Row, including Search's separator.
+    val slotPx = with(density) { slotSize.roundToPx().toFloat() }
+    val gapPx = with(density) { gap.roundToPx().toFloat() }
+    val separatorPx = gapPx * 2 + with(density) { divider.roundToPx() }
+    val radius = with(density) { visualSize.roundToPx() / 2f }
+    val searchIndex = destinations.indexOf(LauncherDestination.SEARCH)
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val rowWidth = destinations.size * slotPx + (destinations.size - 1) * gapPx + separatorPx
+    fun centerX(index: Float): Float {
+        val x = slotPx / 2f + index * (slotPx + gapPx) +
+            (index - (searchIndex - 1)).coerceIn(0f, 1f) * separatorPx
+        return if (rtl) rowWidth - x else x
+    }
+    val inactiveColor = LauncherTheme.colors.dockInactive
+    val selectionColor = LauncherTheme.colors.destinationSelected
     val verticalInset = LauncherTheme.spacing.xs * .75f
     val capsuleHeight = slotSize + verticalInset * 2
     Box(
@@ -384,10 +428,22 @@ private fun NavigationDock(
             Row(
                 Modifier.background(LauncherTheme.colors.surfaceDock, CircleShape)
                     .border(1.dp * LauncherTheme.referenceScale, LauncherTheme.colors.borderEmphasis, CircleShape)
-                    .padding(horizontal = LauncherTheme.spacing.xs, vertical = verticalInset),
+                    .padding(horizontal = LauncherTheme.spacing.xs, vertical = verticalInset)
+                    .drawWithCache {
+                        val droplet = Path()
+                        onDrawBehind {
+                            destinations.indices.forEach { index ->
+                                drawCircle(inactiveColor, radius, Offset(centerX(index.toFloat()), center.y))
+                            }
+                            // Animation is read only while drawing; buttons never move.
+                            droplet.setDockSelectionShape(centerX(selection.value), centerX(trailingSelection.value), center.y, radius)
+                            drawPath(droplet, selectionColor)
+                        }
+                    },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-              LauncherDestination.dockOrder.forEach { destination ->
+              destinations.forEachIndexed { index, destination ->
+                if (index > 0) Spacer(Modifier.width(LauncherTheme.spacing.xxs))
                 if (destination == LauncherDestination.SEARCH) {
                     Spacer(Modifier.width(LauncherTheme.spacing.xxs))
                     Spacer(
@@ -401,6 +457,10 @@ private fun NavigationDock(
                 DockDestination(
                     destination = destination,
                     selected = destination == selectedDestination,
+                    selectionShape = { path, center ->
+                        val origin = center.x - centerX(index.toFloat())
+                        path.setDockSelectionShape(origin + centerX(selection.value), origin + centerX(trailingSelection.value), center.y, radius)
+                    },
                     focused = destination == renderedFocus,
                     onSelected = { onDestinationSelected(destination) },
                     onFocused = { hasFocus ->
@@ -423,6 +483,7 @@ private fun NavigationDock(
 private fun DockDestination(
     destination: LauncherDestination,
     selected: Boolean,
+    selectionShape: (Path, Offset) -> Unit,
     focused: Boolean,
     onSelected: () -> Unit,
     onFocused: (Boolean) -> Unit,
@@ -431,12 +492,6 @@ private fun DockDestination(
     val touchFeedback = dev.handheld.launcher.core.designsystem.contract.LocalTouchFeedback.current
     val controllerInput = LocalControllerInput.current
     val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val base = if (selected) LauncherTheme.colors.destinationSelected else LauncherTheme.colors.dockInactive
-    val fill by animateColorAsState(
-        if (pressed) LauncherTheme.colors.borderEmphasis.compositeOver(base) else base,
-        tween(if (pressed) 0 else LauncherTheme.motion.pressedDurationMillis / 2), label = "dock press",
-    )
     Box(
         modifier = Modifier
             .size(visualSize.coerceAtLeast(48.dp))
@@ -450,21 +505,34 @@ private fun DockDestination(
         Box(
             modifier = Modifier
                 .size(visualSize)
-                .background(
-                    color = fill,
-                    shape = CircleShape,
-                )
+                // The moving droplet owns the fill. A separate press overlay
+                // flashes the destination before the selection reaches it.
                 .then(
                     if (focused && LocalControllerInput.current) Modifier.border(2.dp * LauncherTheme.referenceScale, LauncherTheme.colors.focus, CircleShape)
                     else Modifier,
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            LauncherGlyphIcon(
+            LauncherNavigationGlyphIcon(
                 glyph = destination.glyph(),
                 modifier = Modifier.size(31.5.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale),
                 contentDescription = destination.label(),
-                tint = if (selected) LauncherTheme.colors.destinationSelectedContent else LauncherTheme.colors.textPrimary,
+                tint = LauncherTheme.colors.textPrimary,
+            )
+            // Only the part under the moving white droplet uses dark ink. This
+            // keeps every icon readable, including tabs passed on a long jump.
+            LauncherNavigationGlyphIcon(
+                glyph = destination.glyph(),
+                modifier = Modifier.size(31.5.dp * LauncherTheme.referenceScale * LauncherTheme.smallControlScale)
+                    .drawWithCache {
+                        val clip = Path()
+                        onDrawWithContent {
+                            selectionShape(clip, center)
+                            clipPath(clip) { this@onDrawWithContent.drawContent() }
+                        }
+                    },
+                contentDescription = null,
+                tint = LauncherTheme.colors.destinationSelectedContent,
             )
         }
     }
@@ -526,7 +594,8 @@ private fun FooterAction(
 ) {
     val touchFeedback = dev.handheld.launcher.core.designsystem.contract.LocalTouchFeedback.current
     val controllerInput = LocalControllerInput.current
-    val directionHint = descriptor.input == SemanticInputAction.NAVIGATE_RIGHT || descriptor.input == SemanticInputAction.NAVIGATE_LEFT
+    val directionHint = descriptor.input in setOf(SemanticInputAction.NAVIGATE_RIGHT, SemanticInputAction.NAVIGATE_LEFT,
+        SemanticInputAction.NAVIGATE_UP, SemanticInputAction.NAVIGATE_DOWN)
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val fill by animateColorAsState(
@@ -551,8 +620,9 @@ private fun FooterAction(
         horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (descriptor.input == SemanticInputAction.NAVIGATE_RIGHT || descriptor.input == SemanticInputAction.NAVIGATE_LEFT)
-            dev.handheld.launcher.core.designsystem.controls.HorizontalDpadGlyph()
+        if (directionHint)
+            dev.handheld.launcher.core.designsystem.controls.HorizontalDpadGlyph(
+                allDirections = descriptor.input == SemanticInputAction.NAVIGATE_UP || descriptor.input == SemanticInputAction.NAVIGATE_DOWN)
         else ControllerGlyph(
             glyph = descriptor.input.footerLegend(confirmBackMapping),
             semanticLabel = descriptor.label,
@@ -582,13 +652,13 @@ private fun Modifier.footerPill(color: Color, height: Dp): Modifier = drawBehind
         Size(size.width, paintedHeight), CornerRadius(paintedHeight / 2f))
 }
 
-private fun LauncherDestination.glyph(): LauncherGlyph = when (this) {
-    LauncherDestination.HOME -> LauncherGlyph.Home
-    LauncherDestination.LIBRARY -> LauncherGlyph.Library
-    LauncherDestination.APPS -> LauncherGlyph.Apps
-    LauncherDestination.FAVORITES -> LauncherGlyph.Favorites
-    LauncherDestination.SETTINGS -> LauncherGlyph.Settings
-    LauncherDestination.SEARCH -> LauncherGlyph.Search
+private fun LauncherDestination.glyph(): LauncherNavigationGlyph = when (this) {
+    LauncherDestination.HOME -> LauncherNavigationGlyph.Home
+    LauncherDestination.LIBRARY -> LauncherNavigationGlyph.Library
+    LauncherDestination.APPS -> LauncherNavigationGlyph.Apps
+    LauncherDestination.FAVORITES -> LauncherNavigationGlyph.Favorites
+    LauncherDestination.SETTINGS -> LauncherNavigationGlyph.Settings
+    LauncherDestination.SEARCH -> LauncherNavigationGlyph.Search
 }
 
 private fun LauncherDestination.label(): String = when (this) {

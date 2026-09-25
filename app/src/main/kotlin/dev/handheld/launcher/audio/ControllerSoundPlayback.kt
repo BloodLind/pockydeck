@@ -9,25 +9,41 @@ internal class ControllerSoundPlayback(
 ) {
     private var stream = 0
     private var playingGain = 0f
+    private var playingCue: ControllerSoundCue? = null
     private var playingRepeatGain = 1f
+    private var nextStart = Long.MIN_VALUE
+    private var lastNavigationCue: ControllerSoundCue? = null
+    private var lastNavigationStart = 0L
     private val loudness = ControllerSoundLoudness()
 
     fun play(cue: ControllerSoundCue, volumePercent: Int): Boolean {
-        val volumeGain = gain(volumePercent)
-        if (volumeGain == 0f) return false
+        val now = monotonicTimeMillis()
+        val baseGain = loudness.gain(cue, volumePercent)
+        if (baseGain == 0f || now < nextStart) return false
+        val navigation = cue != ControllerSoundCue.CONFIRM && cue != ControllerSoundCue.BACK
+        // Keep one quiet level across direction changes and MOVE/SELECT callbacks.
+        // Triggers have a longer initial hold delay (650 ms, versus 360 ms for D-pad).
+        val repeatWindow = if (cue == ControllerSoundCue.FILTER && lastNavigationCue == cue) 750L else 500L
+        val repeating = navigation && lastNavigationCue != null && now - lastNavigationStart <= repeatWindow
+        val repeatGain = if (repeating) REPEAT_GAIN else 1f
+        val gain = baseGain * repeatGain
         stop() // Also retires a late native tail; two voices can never add together.
-        val repeatGain = loudness.gain(cue, monotonicTimeMillis())
-        val gain = volumeGain * repeatGain
-        if (gain == 0f) return false
         stream = start(cue, gain)
         playingGain = if (stream != 0) gain else 0f
+        playingCue = if (stream != 0) cue else null
         playingRepeatGain = repeatGain
-        if (stream != 0) loudness.started(cue, repeatGain, monotonicTimeMillis())
+        // Stop/mute/resume cannot bypass the separation used by the level ceiling.
+        if (stream != 0) {
+            val startedAt = monotonicTimeMillis()
+            nextStart = startedAt + cue.minimumIntervalMillis
+            lastNavigationCue = if (navigation) cue else null
+            lastNavigationStart = startedAt
+        }
         return stream != 0
     }
 
     fun updateVolume(volumePercent: Int) {
-        val gain = gain(volumePercent) * playingRepeatGain
+        val gain = playingCue?.let { loudness.gain(it, volumePercent) * playingRepeatGain } ?: return
         if (gain == 0f) stop()
         else if (stream != 0 && gain < playingGain) {
             playingGain = gain
@@ -39,9 +55,13 @@ internal class ControllerSoundPlayback(
         val previous = stream
         stream = 0
         playingGain = 0f
+        playingCue = null
         playingRepeatGain = 1f
         if (previous != 0) try { stopStream(previous) } catch (_: RuntimeException) { }
     }
 
-    private fun gain(percent: Int): Float = .5f * percent.coerceIn(0, 100) / 100f
+    companion object {
+        // About -7 dB keeps fast RMS below the isolated click, even at the 40 ms minimum.
+        const val REPEAT_GAIN = .45f
+    }
 }

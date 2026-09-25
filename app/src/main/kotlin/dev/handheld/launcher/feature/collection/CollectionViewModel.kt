@@ -36,6 +36,8 @@ data class CollectionUiState(
     val searching: Boolean = false,
     /** Computed with the catalog index, never rebuilt on the controller input path. */
     val filterKeys: List<String> = listOf("all"),
+    /** Prepared with the emulator inventory, never resolved while scrolling. */
+    val emulatorLabels: Map<ItemId, String> = emptyMap(),
 ) {
     val selectedItem: LibraryItem? get() = items.find { it.id == selectedItemId }
     fun snapshot() = DestinationSnapshot(destination, selectedItemId, firstVisibleItemId,

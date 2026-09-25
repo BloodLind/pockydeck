@@ -15,14 +15,16 @@ import dev.handheld.launcher.ui.artwork.ArtworkMemoryCache
 import dev.handheld.launcher.ui.artwork.ArtworkMemoryOwner
 import dev.handheld.launcher.ui.artwork.ReleasableArtworkPainter
 import dev.handheld.launcher.ui.artwork.LocalArtworkLoadingAllowed
+import dev.handheld.launcher.ui.artwork.LocalArtworkLoadOrder
 import dev.handheld.launcher.ui.artwork.blurredBackdrop
 import dev.handheld.launcher.ui.artwork.BACKDROP_SIZE_PX
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.SharingStarted
@@ -122,8 +124,8 @@ class EnrichedArtworkLoader(context: Context, val repository: ArtworkRepository)
         sameSource[(sizedKey.hashCode() and Int.MAX_VALUE) % sameSource.size].withLock {
           cache.get(sizedKey)?.let { return@withLock it }
           decoding.withPermit {
-            // Let settled layout/focus draw before uploading another previously unseen cover.
-            delay(16)
+            // The scroll gate and ordered reveal already pace work. Do not add
+            // another timer to every file while holding the single decode slot.
             currentCoroutineContext().ensureActive()
             try {
                 val decoded = decoder.decode(reference, target) ?: return@withPermit null
@@ -144,12 +146,20 @@ class EnrichedArtworkLoader(context: Context, val repository: ArtworkRepository)
 @Composable
 fun rememberEnrichedArtwork(model: TileUiModel, active: Boolean = true,
     targetSizePx: Int = ArtworkDecodePolicy.DEFAULT_TARGET_PX, blurred: Boolean = false): EnrichedArtwork {
-    val loader = LocalEnrichedArtworkLoader.current ?: return EnrichedArtwork()
+    val order = if (blurred) null else LocalArtworkLoadOrder.current
+    val loader = LocalEnrichedArtworkLoader.current
+    if (loader == null) {
+        if (model.artwork !is TileArtwork.AndroidIcon) SideEffect { order?.complete(model.itemId) }
+        return EnrichedArtwork()
+    }
     val artworkActive = active && loader.foreground
     val loadAllowed = LocalArtworkLoadingAllowed.current
     val target = ArtworkDecodePolicy.target(targetSizePx)
     val eligible = model.artwork is TileArtwork.Rom || model.artwork is TileArtwork.LocalReference
-    if (!eligible || !artworkActive) return EnrichedArtwork()
+    if (!eligible || !artworkActive) {
+        if (artworkActive && model.artwork is TileArtwork.Fallback) SideEffect { order?.complete(model.itemId) }
+        return EnrichedArtwork()
+    }
     val generation = loader.memoryOwner.generation
     val state = remember(loader, model.itemId, model.artwork, artworkActive, target, generation, blurred) {
         val cached = loader.cached(model, target, blurred)
@@ -157,6 +167,9 @@ fun rememberEnrichedArtwork(model: TileUiModel, active: Boolean = true,
             pending = cached == null, fromMemory = cached != null))
     }
     val loadedSource = remember(state) { arrayOfNulls<String>(1) }
+    // Retained painters also skip their slots when scrolling establishes a new
+    // viewport order. complete() preserves a fresh reveal's existing head start.
+    if (state.value.painter != null) SideEffect { order?.complete(model.itemId) }
     DisposableEffect(state) {
         val unregister = loader.memoryOwner.onBackground { state.value = EnrichedArtwork() }
         onDispose {
@@ -165,12 +178,14 @@ fun rememberEnrichedArtwork(model: TileUiModel, active: Boolean = true,
             state.value = EnrichedArtwork()
         }
     }
-    LaunchedEffect(state, loadAllowed) {
+    LaunchedEffect(state, loadAllowed, order) {
         // Cancel decoding/Room observations while moving, but keep the displayed painter.
         if (!artworkActive || !loadAllowed) return@LaunchedEffect
         val requestJob = currentCoroutineContext().job
         val unregister = loader.memoryOwner.onBackground { state.value = EnrichedArtwork(); requestJob.cancel() }
         try {
+        if (state.value.painter == null && order?.awaitTurn(model.itemId) == false) return@LaunchedEffect
+        order?.started(model.itemId)
         if (blurred && state.value.painter == null) {
             loader.backdropFromMemory(model)?.let { bitmap ->
                 state.value = EnrichedArtwork(loader.memoryOwner.painter(bitmap), fromMemory = true)
@@ -181,10 +196,19 @@ fun rememberEnrichedArtwork(model: TileUiModel, active: Boolean = true,
                 if (state.value.painter != null) return@LaunchedEffect
                 val cached = loader.cached(art.reference.value, target, blurred)
                 val bitmap = cached ?: loader.load(art.reference.value, art.reference.value, target, blurred)
-                state.value = EnrichedArtwork(bitmap?.let(loader.memoryOwner::painter), fromMemory = cached != null)
+                // A preloader may have just populated the cache while this card
+                // was waiting. Only a hit on entry bypasses its fresh reveal.
+                state.value = EnrichedArtwork(bitmap?.let(loader.memoryOwner::painter), fromMemory = false)
+                order?.complete(model.itemId, freshImage = bitmap != null)
             }
-            is TileArtwork.Rom -> {
-                loader.repository.request(model.itemId)
+            is TileArtwork.Rom -> coroutineScope {
+                // Read an already-ready record immediately. Prioritizing a
+                // request/local discovery must not hold its cover off screen.
+                launch {
+                    try { loader.repository.request(model.itemId) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { /* The observer can still supply existing artwork. */ }
+                }
                 // Priority/access-time writes do not change what the card displays.
                 val visualRecord = loader.repository.observe(model.itemId).map { record ->
                     record?.copy(priority = 0, lastAccessAt = 0, attempts = 0, nextAttemptAt = 0, message = null)
@@ -204,7 +228,10 @@ fun rememberEnrichedArtwork(model: TileUiModel, active: Boolean = true,
                         val bitmap = cached ?: source?.let { loader.load(it.first, it.second, target, blurred) }
                         currentCoroutineContext().ensureActive()
                         (state.value.painter as? ReleasableArtworkPainter)?.release()
-                        state.value = EnrichedArtwork(bitmap?.let(loader.memoryOwner::painter), pending, fromMemory = cached != null)
+                        val fromMemory = cached != null && state.value.fromMemory
+                        state.value = EnrichedArtwork(bitmap?.let(loader.memoryOwner::painter), pending, fromMemory = fromMemory)
+                        // Queued/missing network artwork does not block the next local image.
+                        order?.complete(model.itemId, freshImage = bitmap != null && !fromMemory)
                         loadedSource[0] = key
                         if (record?.state == ArtworkRecord.READY && bitmap == null) loader.repository.invalidFile(model.itemId, record.fileReference)
                     }
@@ -212,7 +239,7 @@ fun rememberEnrichedArtwork(model: TileUiModel, active: Boolean = true,
             else -> state.value = EnrichedArtwork()
         }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (_: Exception) { state.value = EnrichedArtwork() }
+        catch (_: Exception) { state.value = EnrichedArtwork(); order?.complete(model.itemId) }
         finally { unregister() }
     }
     return state.value

@@ -95,6 +95,7 @@ import dev.handheld.launcher.core.designsystem.layout.InlineNotice
 import dev.handheld.launcher.core.designsystem.layout.PageHeading
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 import dev.handheld.launcher.core.domain.model.ItemId
+import dev.handheld.launcher.core.domain.model.LibraryItem
 import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.platform.system.SupportedSystemAction
 import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
@@ -404,10 +405,14 @@ private fun CollectionBody(
             val artSize = if (isList) 56.dp * LauncherTheme.referenceScale
                 else columnWidth
             val artworkTargetPx = with(LocalDensity.current) { artSize.roundToPx().coerceAtLeast(1) }
+            if (state.destination == LauncherDestination.APPS && iconLoader != null)
+                AppsIconBuffer(state.items, iconLoader, grid, artworkTargetPx)
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.xs)) {
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(LauncherTheme.spacing.md)) {
             Row(Modifier.weight(if (splitPreview) .45f else 1f).fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Box(Modifier.width(10.dp).fillMaxSize()) { CatalogScrollIndicator(grid, columns) }
+            CollectionArtworkOrder(grid, enabled = state.destination != LauncherDestination.APPS) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns), state = grid,
                 modifier = Modifier.weight(1f).fillMaxSize()
@@ -438,7 +443,8 @@ private fun CollectionBody(
                         // synchronous launch guard rejects activation until criteria settle.
                         activationEnabled = model.canOpen || isList,
                         maxCollectionCardHeight = availableCardHeight,
-                        artworkActive = item.id.value in visibleArtworkKeys,
+                        // Keep the lazy grid's nearby app icons ready, including prefetched rows.
+                        artworkActive = item is LibraryItem.AndroidApp || item.id.value in visibleArtworkKeys,
                         artworkTargetSizePx = artworkTargetPx,
                         animateArtwork = artworkLoadingAllowed,
                         modifier = Modifier.fillMaxWidth()
@@ -472,17 +478,19 @@ private fun CollectionBody(
                         onFocusChanged = { focused -> callbacks.focused(action.title, LauncherActionMeaning.ACTIVATE, { callbacks.onOpenSystemAction(action.key) }, focused) })
                 }
             }
-            Box(Modifier.width(10.dp).fillMaxSize()) { CatalogScrollIndicator(grid, columns) }
+            }
             }
             if (splitPreview && selectedItem != null) CollectionListPreview(
                 item = selectedItem, model = selectedItem.toTileUiModel(state.overrides[selectedItem.id], selectedItem.id in state.recentIds),
                 favorite = selectedItem.id in state.favorites, iconLoader = iconLoader,
+                emulatorLabel = state.emulatorLabels[selectedItem.id],
                 modifier = Modifier.weight(.55f).fillMaxSize(),
             )
             }
             if (compactPreview && selectedItem != null) CollectionListPreview(
                 item = selectedItem, model = selectedItem.toTileUiModel(state.overrides[selectedItem.id], selectedItem.id in state.recentIds),
                 favorite = selectedItem.id in state.favorites, iconLoader = iconLoader,
+                emulatorLabel = state.emulatorLabels[selectedItem.id],
                 modifier = Modifier.fillMaxWidth(), compact = true,
             )
             }

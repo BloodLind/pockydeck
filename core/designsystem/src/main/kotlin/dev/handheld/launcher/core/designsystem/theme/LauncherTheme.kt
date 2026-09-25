@@ -222,11 +222,17 @@ object LauncherTheme {
         val shapes = LauncherShapes()
         val depth = LauncherDepth()
         val colors = remember(backgroundTint, backgroundTintPercent, backgroundGrainPercent) {
+            // Full-spectrum custom colors retain the launcher's dark finish.
+            // Existing muted presets are below this limit and remain unchanged.
+            val peak = maxOf(backgroundTint.red, backgroundTint.green, backgroundTint.blue)
+            val pigmentScale = if (peak > .44f) .44f / peak else 1f
+            val pigment = Color(backgroundTint.red * pigmentScale, backgroundTint.green * pigmentScale,
+                backgroundTint.blue * pigmentScale)
             val amount = if (backgroundTint == Color(0xFF35373B)) 0f else backgroundTintPercent.coerceIn(0, 100) / 100f
             LauncherColors(
-                backgroundTop = lerp(Color(0xFF35373B), backgroundTint, amount),
-                backgroundMiddle = lerp(Color(0xFF2B2D31), lerp(backgroundTint, Color.Black, .18f), amount),
-                backgroundBottom = lerp(Color(0xFF222429), lerp(backgroundTint, Color.Black, .34f), amount),
+                backgroundTop = lerp(Color(0xFF35373B), pigment, amount),
+                backgroundMiddle = lerp(Color(0xFF2B2D31), lerp(pigment, Color.Black, .18f), amount),
+                backgroundBottom = lerp(Color(0xFF222429), lerp(pigment, Color.Black, .34f), amount),
                 backgroundGrainPercent = backgroundGrainPercent.coerceIn(0, 100),
             )
         }

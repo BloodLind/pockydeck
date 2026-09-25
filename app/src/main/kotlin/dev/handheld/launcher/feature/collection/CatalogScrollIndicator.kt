@@ -48,8 +48,17 @@ internal fun catalogScrollPosition(
 /** Read-only rail. Scroll offsets are read during drawing, not in catalog composition. */
 @Composable
 internal fun CatalogScrollIndicator(state: LazyGridState, columns: Int, modifier: Modifier = Modifier) {
-    val scrollable by remember(state) { derivedStateOf { state.canScrollBackward || state.canScrollForward } }
-    if (!scrollable) return
+    val showIndicator by remember(state) { derivedStateOf {
+        val layout = state.layoutInfo
+        // Padding and slightly clipped edge rows can leave a small scroll range
+        // even when every catalog row is already represented on screen.
+        val visibleCount = layout.visibleItemsInfo.count {
+            it.offset.y + it.size.height > layout.viewportStartOffset && it.offset.y < layout.viewportEndOffset
+        }
+        visibleCount > 0 && visibleCount < layout.totalItemsCount &&
+            (state.canScrollBackward || state.canScrollForward)
+    } }
+    if (!showIndicator) return
     val trackColor = LauncherTheme.colors.textPrimary.copy(alpha = .12f)
     val thumbColor = LauncherTheme.colors.textSecondary.copy(alpha = .85f)
     fun position(): CatalogScrollPosition {

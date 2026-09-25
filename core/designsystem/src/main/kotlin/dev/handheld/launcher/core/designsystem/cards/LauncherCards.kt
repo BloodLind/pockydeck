@@ -33,6 +33,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -144,12 +148,25 @@ private fun CardActivation(
             ) { content() }
         }
         if (caption != null) {
-            BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                // Density is owned by the grid; artwork fills its actual cell allocation.
-                frame(Modifier.size(minOf(maxWidth, maxArtworkSize.coerceAtLeast(0.dp))))
-            }
+            SquareArtworkSlot(Modifier.fillMaxWidth(), maxArtworkSize) { frame(Modifier) }
         } else frame(Modifier)
         caption?.invoke()
+    }
+}
+
+/** Resolve square geometry during measurement, without subcomposing each scrolling card. */
+@Composable
+private fun SquareArtworkSlot(
+    modifier: Modifier, maxSize: Dp, fraction: Float = 1f, content: @Composable () -> Unit,
+) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val available = minOf(constraints.maxWidth, constraints.maxHeight)
+        val cap = if (maxSize.value.isFinite()) maxSize.roundToPx().coerceAtLeast(0) else available
+        val side = minOf((available * fraction).toInt(), cap).coerceAtLeast(0)
+        val children = measurables.map { it.measure(Constraints.fixed(side, side)) }
+        val width = constraints.constrainWidth(side)
+        val height = constraints.constrainHeight(side)
+        layout(width, height) { children.forEach { it.placeRelative((width - side) / 2, (height - side) / 2) } }
     }
 }
 
@@ -241,13 +258,13 @@ fun AppIconTile(
             reserveSubtitle = false, textAlign = TextAlign.Center) }) else null,
     ) {
       Box(Modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(LauncherTheme.spacing.sm), contentAlignment = Alignment.Center) {
-            if (showCaption) {
-                Box(Modifier.size(minOf(56.dp, maxWidth * .4f, maxHeight * .4f))
+        if (showCaption) {
+            SquareArtworkSlot(Modifier.fillMaxSize().padding(LauncherTheme.spacing.sm), 56.dp, .4f) {
+                Box(Modifier.fillMaxSize()
                     .clip(RoundedCornerShape(LauncherTheme.shapes.smallControl))
                     .background(LauncherTheme.colors.surfaceArtwork), contentAlignment = Alignment.Center) { icon() }
-                return@BoxWithConstraints
             }
+        } else BoxWithConstraints(Modifier.fillMaxSize().padding(LauncherTheme.spacing.sm), contentAlignment = Alignment.Center) {
             val textHeight = titleHeight + LauncherTheme.spacing.sm +
                 if (subtitle != null) subtitleHeight + LauncherTheme.spacing.xxs else 0.dp
             val iconSize = minOf(80.dp * scale, maxWidth, (maxHeight - textHeight).coerceAtLeast(0.dp))

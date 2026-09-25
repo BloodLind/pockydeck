@@ -1,5 +1,7 @@
 package dev.handheld.launcher.feature.search
 
+import dev.handheld.launcher.core.domain.model.ItemId
+
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -110,6 +112,13 @@ fun SearchScreen(
     val visibleArtworkKeys by remember { derivedStateOf {
         list.layoutInfo.visibleItemsInfo.map { it.key }.toSet()
     } }
+    val visibleArtworkOrder by remember { derivedStateOf {
+        list.layoutInfo.visibleItemsInfo.sortedBy { it.index }.mapNotNull {
+            (it.key as? String)?.takeIf { key -> key.startsWith("item:") }
+                ?.removePrefix("item:")?.let(::ItemId)
+        }
+    } }
+    val artworkOrder = dev.handheld.launcher.ui.artwork.rememberArtworkLoadOrder(visibleArtworkOrder)
     val artworkTargetPx = with(LocalDensity.current) { (72.dp * LauncherTheme.referenceScale).roundToPx() }
     val queryRequester = remember { FocusRequester() }
     val inputMode = LocalInputModeManager.current
@@ -478,6 +487,8 @@ fun SearchScreen(
                     color = LauncherTheme.colors.textSecondary)
             }
         } else {
+            androidx.compose.runtime.CompositionLocalProvider(
+                dev.handheld.launcher.ui.artwork.LocalArtworkLoadOrder provides artworkOrder) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(resultColumns),
                 state = list,
@@ -557,6 +568,7 @@ fun SearchScreen(
                         }
                     }
                 }
+            }
             }
         }
     }

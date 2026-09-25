@@ -63,22 +63,27 @@ class RomFeatureController(
             busy=state.busy || discovery.busy,message=state.message ?: discovery.error)
     }.stateIn(scope,SharingStarted.Eagerly,RomSourcesScreenState())
 
-    private data class ConsoleInputs(val entries:List<RomEntry>,val sources:List<RomSource>,val defaults:Map<String,String>,val cores:Map<String,String>)
+    private data class ConsoleInputs(val entries:List<RomEntry>,val sources:List<RomSource>,val defaults:Map<String,String>,val cores:Map<String,String>,val itemDefaults:Map<ItemId,String>)
     @OptIn(ExperimentalCoroutinesApi::class)
-    val emulatorsState:StateFlow<EmulatorSettingsScreenState> = combine(entryList,sourceList,defaults,cores) { entries,sources,defaults,cores -> ConsoleInputs(entries,sources,defaults,cores) }
+    val emulatorsState:StateFlow<EmulatorSettingsScreenState> = combine(entryList,sourceList,defaults,cores,itemDefaults) { entries,sources,defaults,cores,items -> ConsoleInputs(entries,sources,defaults,cores,items) }
         .combine(refresh) { input,_ -> input }.mapLatest { input ->
             val enabled=input.sources.filter { it.enabled && it.status!=RomSourceStatus.UNAVAILABLE }.map { it.id }.toSet()
             val consoles=input.entries.filter { it.present && it.sourceId in enabled && it.platformId!=null }.groupBy { it.platformId!! }
-            EmulatorSettingsScreenState(consoles.map { (platform,entries) ->
+            val itemLabels = mutableMapOf<ItemId, String>()
+            val rows = consoles.map { (platform,entries) ->
                 val installed=resolver.installedForPlatform(platform)
                 val candidates=installed.filter { it.launchSupport!=EmulatorLaunchSupport.UNSUPPORTED }
                 val preferred=input.defaults[platform]
                 val selected=installed.find { it.id==preferred }
+                entries.forEach { entry ->
+                    itemLabels[entry.itemId] = collectionEmulatorLabel(installed, input.itemDefaults[entry.itemId], preferred)
+                }
                 ConsoleEmulatorRow(platform,consoleName(platform),entries.size,
                     if(preferred!=null) selected?.displayName ?: "Saved app unavailable" else when(candidates.size) { 0 -> "No compatible app"; 1 -> "Automatic · ${candidates.single().displayName}"; else -> "Ask when opening" },
                     candidates.size,
                     consoleCoreLabel(installed,preferred,input.cores[platform]))
-            }.sortedBy { it.consoleName })
+            }.sortedBy { it.consoleName }
+            EmulatorSettingsScreenState(rows, itemEmulatorLabels = itemLabels)
         }.stateIn(scope,SharingStarted.Eagerly,EmulatorSettingsScreenState())
 
     init { scope.launch { cacheUsage.value=cache.usageBytes() } }

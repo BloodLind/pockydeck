@@ -30,6 +30,7 @@ data class ConsoleEmulatorRow(
 data class EmulatorSettingsScreenState(
     val consoles: List<ConsoleEmulatorRow> = emptyList(),
     val message: String? = null,
+    val itemEmulatorLabels: Map<dev.handheld.launcher.core.domain.model.ItemId, String> = emptyMap(),
 )
 
 data class EmulatorSettingsCallbacks(

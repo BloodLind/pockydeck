@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original PockyDeck soft tile cluster. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp" android:height="32dp" android:viewportWidth="32" android:viewportHeight="32">
+    <path android:fillColor="#00000000" android:strokeColor="#FF000000" android:strokeWidth="1.5"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M8,5L11,5Q14,5 14,8L14,11Q14,14 11,14L8,14Q5,14 5,11L5,8Q5,5 8,5ZM21,5L24,5Q27,5 27,8L27,11Q27,14 24,14L21,14Q18,14 18,11L18,8Q18,5 21,5ZM8,18L11,18Q14,18 14,21L14,24Q14,27 11,27L8,27Q5,27 5,24L5,21Q5,18 8,18ZM21,18L24,18Q27,18 27,21L27,24Q27,27 24,27L21,27Q18,27 18,24L18,21Q18,18 21,18Z" />
+</vector>

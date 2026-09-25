@@ -11,6 +11,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
 /** Small process-restorable navigation keys and launcher preferences; no UI focus objects. */
@@ -30,11 +33,34 @@ class LauncherAppViewModel(
         else -> LauncherLocation.Destination(initialDestination)
     })
     val mapping = preferences.confirmBackMapping.stateIn(viewModelScope, SharingStarted.Eagerly, ConfirmBackMapping.Default)
-    val display = (displayPreferences?.preferences ?: kotlinx.coroutines.flow.flowOf(DisplayPreferences()))
+    private val savedDisplay = (displayPreferences?.preferences ?: kotlinx.coroutines.flow.flowOf(DisplayPreferences()))
         .stateIn(viewModelScope, SharingStarted.Eagerly, DisplayPreferences())
+    private data class BackgroundChoice(val preset: BackgroundTint? = null, val rgb: Int? = null)
+    private val pendingBackground = MutableStateFlow<BackgroundChoice?>(null)
+    private val backgroundWrites = Channel<BackgroundChoice>(Channel.CONFLATED)
+    val display = combine(savedDisplay, pendingBackground) { saved, pending ->
+        if (pending == null) saved else saved.copy(backgroundTint = pending.preset ?: saved.backgroundTint,
+            backgroundCustomColorRgb = pending.rgb)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, DisplayPreferences())
     val error = MutableStateFlow<String?>(null)
 
     init {
+        // Immediate preview with one ordered writer. Drag events replace queued
+        // colors, and stale disk emissions cannot roll the preview backward.
+        viewModelScope.launch {
+            for (choice in backgroundWrites) {
+                try {
+                    if (choice.preset != null) displayPreferences?.setBackgroundTint(choice.preset)
+                    else choice.rgb?.let { displayPreferences?.setBackgroundCustomColorRgb(it) }
+                    if (displayPreferences != null) savedDisplay.first {
+                        it.backgroundCustomColorRgb == choice.rgb &&
+                            (choice.preset == null || it.backgroundTint == choice.preset)
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { error.value = "Could not save background color. Try again." }
+                finally { pendingBackground.compareAndSet(choice, null) }
+            }
+        }
         viewModelScope.launch {
             navigation.location.collect { location ->
                 when (location) {
@@ -73,7 +99,15 @@ class LauncherAppViewModel(
     fun setReduceMotion(value: Boolean) = saveDisplay { displayPreferences?.setReduceMotion(value) }
     fun setHomeArtworkBackground(value: Boolean) = saveDisplay { displayPreferences?.setHomeArtworkBackground(value) }
     fun setListArtworkBackground(value: Boolean) = saveDisplay { displayPreferences?.setListArtworkBackground(value) }
-    fun setBackgroundTint(value: BackgroundTint) = saveDisplay { displayPreferences?.setBackgroundTint(value) }
+    fun setBackgroundTint(value: BackgroundTint) = selectBackground(BackgroundChoice(preset = value))
+    fun setBackgroundCustomColorRgb(value: Int) {
+        require(value in 0..0xFFFFFF)
+        selectBackground(BackgroundChoice(rgb = value))
+    }
+    private fun selectBackground(choice: BackgroundChoice) {
+        pendingBackground.value = choice
+        backgroundWrites.trySend(choice)
+    }
     fun setBackgroundTintPercent(value: Int) = saveDisplay { displayPreferences?.setBackgroundTintPercent(value) }
     fun setBackgroundGrainPercent(value: Int) = saveDisplay { displayPreferences?.setBackgroundGrainPercent(value) }
     fun setCollectionListMode(destination: LauncherDestination, isList: Boolean) =

@@ -1,8 +1,17 @@
 package dev.handheld.launcher.integration
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -55,6 +64,7 @@ import dev.handheld.launcher.core.domain.model.LauncherDestination
 import dev.handheld.launcher.core.domain.model.LibraryItem
 import dev.handheld.launcher.core.domain.model.SupportedItemAction
 import dev.handheld.launcher.feature.collection.CollectionDestinationScreen
+import dev.handheld.launcher.feature.collection.CatalogScrollIndicator
 import dev.handheld.launcher.feature.collection.CollectionScreenCallbacks
 import dev.handheld.launcher.feature.collection.CollectionUiState
 import dev.handheld.launcher.feature.collection.FocusedControlAction
@@ -66,10 +76,51 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlinx.coroutines.runBlocking
 
 @RunWith(AndroidJUnit4::class)
 class CollectionLayoutPresentationTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun catalogRailStaysHiddenWhenAllRowsAreVisibleDespiteSmallScrollRange() {
+        var columns by mutableIntStateOf(1)
+        var count by mutableIntStateOf(2)
+        lateinit var grid: LazyGridState
+        var density = 1f
+        compose.setContent {
+            grid = rememberLazyGridState()
+            density = LocalDensity.current.density
+            LauncherTheme(reducedMotion = true) {
+                Row(Modifier.size(340.dp, 206.dp)) {
+                    CatalogScrollIndicator(grid, columns)
+                    LazyVerticalGrid(GridCells.Fixed(columns), state = grid,
+                        modifier = Modifier.weight(1f).fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(count) { Box(Modifier.height(96.dp)) }
+                    }
+                }
+            }
+        }
+        // Native list/grid measurements, including an incomplete final grid row.
+        for ((columnCount, itemCount) in listOf(1 to 2, 3 to 5, 3 to 6)) {
+            compose.runOnIdle { columns = columnCount; count = itemCount }
+            compose.runOnIdle { runBlocking { grid.scrollToItem(0) } }
+            compose.runOnIdle { assertTrue("Fixture must really have residual scrolling", grid.canScrollForward) }
+            compose.onNodeWithTag("catalog-scroll-indicator").assertDoesNotExist()
+            compose.runOnIdle { runBlocking { grid.scrollBy(8f * density) } }
+            compose.runOnIdle {
+                assertTrue(grid.canScrollBackward)
+                assertTrue(grid.canScrollForward)
+            }
+            compose.onNodeWithTag("catalog-scroll-indicator").assertDoesNotExist()
+            compose.runOnIdle { runBlocking { grid.scrollToItem(itemCount - 1) } }
+            compose.onNodeWithTag("catalog-scroll-indicator").assertDoesNotExist()
+            // A genuinely offscreen row brings the indicator back.
+            compose.runOnIdle { count = itemCount + columnCount * 2 }
+            compose.onNodeWithTag("catalog-scroll-indicator").assertIsDisplayed()
+        }
+    }
 
     @Test fun catalogPositionRailTracksListAndGridAndHidesForShortFilteredCatalogs() {
         val games = (0..1002).map { game(it, "gba") }
@@ -90,6 +141,8 @@ class CollectionLayoutPresentationTest {
             fun position() = compose.onNodeWithTag("catalog-scroll-indicator").fetchSemanticsNode()
                 .config[SemanticsProperties.ProgressBarRangeInfo].current
             compose.onNodeWithTag("catalog-scroll-indicator").assertIsDisplayed()
+            assertTrue("The position rail sits at the left edge in both layouts",
+                actualBounds("catalog-scroll-indicator").right < actualBounds("collection-grid").left)
             assertEquals(0f, position(), .001f)
             compose.onNodeWithTag("collection-grid").performScrollToIndex(500)
             assertTrue("The rail locates the middle in either layout", position() in .45f.. .6f)
@@ -246,7 +299,8 @@ class CollectionLayoutPresentationTest {
     @Test fun listTouchSelectsReadOnlyPreviewAndPublishesFooterActionsAtLargeUiScales() {
         val games = (0..3).map { game(it, "gba") }
         var state by mutableStateOf(CollectionUiState(LauncherDestination.LIBRARY, items = games, allItems = games,
-            selectedItemId = games.first().id, favorites = setOf(games[1].id), loading = false))
+            selectedItemId = games.first().id, favorites = setOf(games[1].id), loading = false,
+            emulatorLabels = games.associate { it.id to "RetroArch" }))
         var scale by mutableFloatStateOf(1.1f)
         var selectedAction: FocusedControlAction? = null
         val opened = mutableListOf<ItemId>()
@@ -265,10 +319,15 @@ class CollectionLayoutPresentationTest {
         }
         for (percent in listOf(110, 120)) {
             compose.runOnIdle { scale = percent / 100f }
+            compose.onNodeWithContentDescription(games.first().title).performTouchInput { click() }
+            compose.onNodeWithContentDescription("Not favorite").assertIsDisplayed()
             compose.onNodeWithContentDescription(games[1].title).performTouchInput { click() }
             compose.onNodeWithContentDescription(games[1].title).assertIsNotFocused().assertIsSelected()
             compose.onNode(hasText(games[1].title) and hasAnyAncestor(hasTestTag("collection-preview")), useUnmergedTree = true).assertIsDisplayed()
-            compose.onNode(hasText("Favorite") and hasAnyAncestor(hasTestTag("collection-preview"))).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Favorite").assertIsDisplayed()
+            compose.onNodeWithTag("collection-preview-emulator").assertIsDisplayed()
+            compose.onNode(hasText("RetroArch") and hasAnyAncestor(hasTestTag("collection-preview"))).assertIsDisplayed()
+            compose.onNode(hasText("Platform") and hasAnyAncestor(hasTestTag("collection-preview"))).assertDoesNotExist()
             val preview = actualBounds("collection-preview")
             assertTrue("$percent% list and preview are separate panes", actualBounds("collection-grid").right < preview.left)
             assertTrue("$percent% preview fits", fits(preview, actualBounds("collection-fixture")))

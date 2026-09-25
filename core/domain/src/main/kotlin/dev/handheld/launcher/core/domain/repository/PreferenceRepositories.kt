@@ -22,6 +22,7 @@ interface DisplayPreferenceRepository {
     suspend fun setHomeArtworkBackground(enabled: Boolean)
     suspend fun setListArtworkBackground(enabled: Boolean)
     suspend fun setBackgroundTint(tint: BackgroundTint)
+    suspend fun setBackgroundCustomColorRgb(rgb: Int)
     suspend fun setBackgroundTintPercent(percent: Int)
     suspend fun setBackgroundGrainPercent(percent: Int)
     suspend fun setCollectionListMode(destination: LauncherDestination, isList: Boolean)

@@ -135,6 +135,10 @@ class DataStorePreferencesInstrumentedTest {
         displayPreferences.setBackgroundTintPercent(80)
         displayPreferences.setBackgroundGrainPercent(60)
         val before = store.dataStore.data.first().asMap()
+        for (invalid in listOf(-1, 0x1000000)) {
+            assertTrue(runCatching { displayPreferences.setBackgroundCustomColorRgb(invalid) }.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(before, store.dataStore.data.first().asMap())
+        }
         for (invalid in listOf(-1, 35, 101)) {
             assertTrue(runCatching { displayPreferences.setBackgroundTintPercent(invalid) }.exceptionOrNull() is IllegalArgumentException)
             assertTrue(runCatching { displayPreferences.setBackgroundGrainPercent(invalid) }.exceptionOrNull() is IllegalArgumentException)
@@ -142,11 +146,28 @@ class DataStorePreferencesInstrumentedTest {
         }
         store.dataStore.edit {
             it[LauncherPreferenceKeys.backgroundTint] = "unsupported"
+            it[LauncherPreferenceKeys.backgroundCustomColorRgb] = -1
             it[LauncherPreferenceKeys.backgroundTintPercent] = 101
             it[stringPreferencesKey("display.background_grain_percent")] = "50"
         }
         reopenStore()
         assertEquals(DisplayPreferences(uiScalePercent = 120, listArtworkBackground = true), displayPreferences.preferences.first())
+    }
+
+    @Test fun customBackgroundSurvivesReopenAndPresetSelectionClearsItAtomically() = runBlocking {
+        displayPreferences.setUiScalePercent(110)
+        displayPreferences.setHomeArtworkBackground(true)
+        displayPreferences.setBackgroundTintPercent(70)
+        displayPreferences.setBackgroundTint(BackgroundTint.GREEN)
+        val original = displayPreferences.preferences.first()
+        for (rgb in listOf(0, 0x19C2E8, 0xFFFFFF)) {
+            displayPreferences.setBackgroundCustomColorRgb(rgb)
+            reopenStore()
+            assertEquals(original.copy(backgroundCustomColorRgb = rgb), displayPreferences.preferences.first())
+        }
+        displayPreferences.setBackgroundTint(BackgroundTint.BLUE)
+        reopenStore()
+        assertEquals(original.copy(backgroundTint = BackgroundTint.BLUE), displayPreferences.preferences.first())
     }
 
     @Test fun optionalHomeBackdropDefaultsOffAndCanBeDisabledAfterReopeningWithoutChangingOtherSettings() = runBlocking {

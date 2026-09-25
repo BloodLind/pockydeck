@@ -113,7 +113,9 @@ class HomeArtworkBufferTest {
                     }, icons, 384)
                 }
             }
-            compose.waitUntil(5_000) { loader.cachedBytes > 0 }
+            // Await the complete preload pass: queued workers also register lifecycle
+            // cancellation until their turn finishes, in addition to retained painters.
+            compose.waitUntil(5_000) { loader.cachedBytes > 0 && loader.memoryOwner.activeRequestCount == 20 }
             compose.runOnIdle { assertEquals(20, loader.memoryOwner.activeRequestCount) }
         } finally { compose.runOnUiThread { loader.setForeground(false); loader.trimMemory(true) }; file.delete() }
     }

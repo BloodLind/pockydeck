@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.handheld.launcher.core.designsystem.theme.LauncherTheme
 
@@ -203,7 +204,6 @@ fun FocusFrame(
         if (pressed && !motion.reducedMotion) .985f else 1f,
         tween(motion.pressedDurationMillis), label = "card press",
     )
-    val lowerEdge = if (focused) minOf(focusFrameWidth, focusLift + lift) else focusLift
     val edgeColor = if (focused) colors.focusLowerEdge else colors.surfaceArtwork
     val highlight = Color.White.copy(alpha = if (focused) .24f else .08f)
     val elevation = LauncherTheme.depth.cardElevation
@@ -219,12 +219,15 @@ fun FocusFrame(
         Box(
             modifier = Modifier
                 .padding(focusLift)
-                .offset(y = -lift)
+                // Focus motion changes placement/drawing only. Reading lift here
+                // avoids recomposing the card on every animation frame.
+                .offset { IntOffset(0, -lift.roundToPx()) }
                 .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
                 .shadow(elevation, shape, clip = false)
                 .drawWithCache {
                     val outline = shape.createOutline(size, layoutDirection, this)
                     onDrawBehind {
+                        val lowerEdge = if (focused) minOf(focusFrameWidth, focusLift + lift) else focusLift
                         translate(top = lowerEdge.toPx()) { drawOutline(outline, edgeColor) }
                     }
                 }

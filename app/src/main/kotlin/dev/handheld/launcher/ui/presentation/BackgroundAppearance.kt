@@ -2,6 +2,10 @@ package dev.handheld.launcher.ui.presentation
 
 import androidx.compose.ui.graphics.Color
 import dev.handheld.launcher.core.domain.model.BackgroundTint
+import dev.handheld.launcher.core.domain.model.DisplayPreferences
+
+internal val DisplayPreferences.backgroundColor: Color get() =
+    backgroundCustomColorRgb?.let { Color(it or 0xFF000000.toInt()) } ?: backgroundTint.color
 
 internal val BackgroundTint.label: String get() = when (this) {
     BackgroundTint.PURPLE -> "Purple"

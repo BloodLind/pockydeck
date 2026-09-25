@@ -11,6 +11,7 @@ data class FocusedControlAction(
     val onAdjust: ((Int) -> Unit)? = null,
     val onBack: (() -> Unit)? = null,
     val backLabel: String = "Done",
+    val onAdjustVertical: ((Int) -> Unit)? = null,
 )
 
 typealias OnFocusedAction = (FocusedControlAction?) -> Unit

@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Window
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -33,6 +34,8 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.lifecycle.ViewModelProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -431,6 +434,81 @@ class MainActivityInputDeviceTest {
         assertEquals("Dock Search Back goes Home", LauncherLocation.Destination(LauncherDestination.HOME), app.navigation.location.value)
     }
 
+    @Test fun customBackgroundPaletteSupportsTouchControllerExitAndSavedSelection() {
+        val original = runBlocking { container.displayPreferenceRepository.preferences.first() }
+        fun rgb() = requireNotNull(app.display.value.backgroundCustomColorRgb)
+        fun hsv() = FloatArray(3).also { android.graphics.Color.colorToHSV(rgb() or 0xFF000000.toInt(), it) }
+        try {
+            tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+            val section = hasContentDescription("Display") and hasClickAction()
+            if (compose.onAllNodes(section).fetchSemanticsNodes().isNotEmpty())
+                compose.onNode(section).performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            compose.onNodeWithTag("background-color-hue").performScrollTo()
+            tapTag("background-color-hue")
+            compose.onNodeWithTag("background-color-field").performScrollTo()
+            tapTag("background-color-field")
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundCustomColorRgb != null }
+            val touched = rgb()
+            press(KeyEvent.KEYCODE_DPAD_RIGHT) // First input restores the precise touched control.
+            compose.onNodeWithTag("background-color-field").assertIsFocused()
+            press(faceKey(mapping.confirm))
+            compose.onNodeWithTag(LauncherShellTags.footerAction(SemanticInputAction.NAVIGATE_UP)).assertIsDisplayed()
+            val before = hsv()
+            press(KeyEvent.KEYCODE_DPAD_RIGHT)
+            press(KeyEvent.KEYCODE_DPAD_UP)
+            val after = hsv()
+            assertTrue(after[1] > before[1] && after[2] > before[2])
+            assertTrue(rgb() != touched)
+            press(faceKey(mapping.back))
+            compose.onNodeWithTag("background-color-field").assertIsFocused()
+            press(KeyEvent.KEYCODE_DPAD_DOWN)
+            compose.onNodeWithTag("background-color-hue").assertIsFocused()
+            press(faceKey(mapping.confirm))
+            compose.onNodeWithTag(LauncherShellTags.footerAction(SemanticInputAction.NAVIGATE_RIGHT)).assertIsDisplayed()
+            press(KeyEvent.KEYCODE_DPAD_LEFT)
+            assertTrue(hsv()[0] < after[0])
+            press(faceKey(mapping.back))
+            // A fast drag must settle on its final point without an older save snapping it back.
+            compose.onNodeWithTag("background-color-field").performScrollTo().performTouchInput {
+                swipe(Offset(width * .2f, height * .2f), Offset(width * .8f, height * .7f), 300)
+            }
+            compose.waitForIdle()
+            val dragged = hsv()
+            assertEquals(.8f, dragged[1], .04f)
+            assertEquals(.3f, dragged[2], .04f)
+            val selected = rgb()
+            val saved = runBlocking { kotlinx.coroutines.withTimeout(TIMEOUT_MS) {
+                container.displayPreferenceRepository.preferences.first { it.backgroundCustomColorRgb == selected }
+            } }
+            assertEquals(original.uiScalePercent, saved.uiScalePercent)
+            assertEquals(original.backgroundGrainPercent, saved.backgroundGrainPercent)
+            tapTag(LauncherShellTags.destination(LauncherDestination.HOME))
+            tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
+            compose.onNodeWithTag("background-tint-choice").performScrollTo()
+            assertEquals(selected, rgb())
+            val bitmap = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+            try { java.io.File(compose.activity.cacheDir, "background-color-palette.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            } } finally { bitmap.recycle() }
+            compose.onNodeWithTag("background-preset-purple").performScrollTo()
+            tapTag("background-preset-purple")
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundCustomColorRgb == null && app.display.value.backgroundTint == BackgroundTint.PURPLE }
+            compose.onNodeWithTag("background-preset-purple").assertIsSelected()
+        } finally {
+            // Let the ordered writer finish before restoring the user's preference.
+            val selected = app.display.value
+            runBlocking {
+                kotlinx.coroutines.withTimeout(TIMEOUT_MS) { container.displayPreferenceRepository.preferences.first {
+                    it.backgroundCustomColorRgb == selected.backgroundCustomColorRgb && it.backgroundTint == selected.backgroundTint
+                } }
+                container.displayPreferenceRepository.setBackgroundTint(original.backgroundTint)
+                original.backgroundCustomColorRgb?.let { container.displayPreferenceRepository.setBackgroundCustomColorRgb(it) }
+            }
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundCustomColorRgb == original.backgroundCustomColorRgb &&
+                app.display.value.backgroundTint == original.backgroundTint }
+        }
+    }
+
     @Test fun backgroundColorAndGrainSettingsRenderLiveAndPreserveOtherPreferences() {
         val original = runBlocking { container.displayPreferenceRepository.preferences.first() }
         tapTag(LauncherShellTags.destination(LauncherDestination.SETTINGS))
@@ -438,14 +516,9 @@ class MainActivityInputDeviceTest {
         if (compose.onAllNodes(section).fetchSemanticsNodes().isNotEmpty())
             compose.onNode(section).performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
         fun tint(value: BackgroundTint) {
-            repeat(BackgroundTint.entries.size) {
-                if (app.display.value.backgroundTint != value) {
-                    val previous = app.display.value.backgroundTint
-                    compose.onNodeWithTag("background-tint-choice").performScrollTo()
-                        .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
-                    compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundTint != previous }
-                }
-            }
+            compose.onNodeWithTag("background-preset-${value.persistedKey}").performScrollTo()
+                .performSemanticsAction(SemanticsActions.OnClick) { assertTrue(it()) }
+            compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundTint == value && app.display.value.backgroundCustomColorRgb == null }
             assertEquals(value, app.display.value.backgroundTint)
         }
         fun level(tag: String, value: Int) {
@@ -507,10 +580,12 @@ class MainActivityInputDeviceTest {
         } finally {
             runBlocking {
                 container.displayPreferenceRepository.setBackgroundTint(original.backgroundTint)
+                original.backgroundCustomColorRgb?.let { container.displayPreferenceRepository.setBackgroundCustomColorRgb(it) }
                 container.displayPreferenceRepository.setBackgroundTintPercent(original.backgroundTintPercent)
                 container.displayPreferenceRepository.setBackgroundGrainPercent(original.backgroundGrainPercent)
             }
             compose.waitUntil(TIMEOUT_MS) { app.display.value.backgroundTint == original.backgroundTint &&
+                app.display.value.backgroundCustomColorRgb == original.backgroundCustomColorRgb &&
                 app.display.value.backgroundTintPercent == original.backgroundTintPercent &&
                 app.display.value.backgroundGrainPercent == original.backgroundGrainPercent }
         }

@@ -5,6 +5,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
 import dev.handheld.launcher.ui.artwork.ArtworkDecodePolicy
 import dev.handheld.launcher.ui.artwork.LocalArtworkLoadingAllowed
+import dev.handheld.launcher.ui.artwork.LocalArtworkLoadOrder
+import dev.handheld.launcher.ui.artwork.rememberArtworkLoadOrder
 import dev.handheld.launcher.ui.artwork.enriched.rememberEnrichedArtwork
 import dev.handheld.launcher.ui.artwork.local.AndroidIconLoader
 import dev.handheld.launcher.ui.artwork.local.rememberAndroidIconPainter
@@ -22,7 +24,8 @@ internal fun homeArtworkTargetSizePx(requestedPx: Int): Int =
 @Composable
 internal fun HomeArtworkBuffer(items: List<TileUiModel>, iconLoader: AndroidIconLoader, targetSizePx: Int) {
     val target = homeArtworkTargetSizePx(targetSizePx)
-    CompositionLocalProvider(LocalArtworkLoadingAllowed provides true) {
+    val order = LocalArtworkLoadOrder.current ?: rememberArtworkLoadOrder(items.take(HOME_CARD_LIMIT).map { it.itemId })
+    CompositionLocalProvider(LocalArtworkLoadingAllowed provides true, LocalArtworkLoadOrder provides order) {
         items.take(HOME_CARD_LIMIT).forEach { item -> key(item.itemId) {
             when (val art = item.artwork) {
                 is TileArtwork.AndroidIcon -> rememberAndroidIconPainter(iconLoader, art.componentId, targetSizePx = target)

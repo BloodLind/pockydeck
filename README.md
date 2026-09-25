@@ -15,6 +15,8 @@ A free, open-source launcher for Android handhelds, focused on a familiar consol
 
 Requires **Android 13+** and runs in landscape. Tested primarily on the Retroid Pocket Flip 2; compatibility with other devices and emulators varies. Install your emulators separately and add your own games—no games, BIOS files, emulators, or cores are bundled. Root and Shizuku are not required.
 
+**Display compatibility:** 4:3 screens currently do not work well and are not properly supported. Widescreen formats work well, though minor, non-critical alignment offsets may occur.
+
 ## Documentation
 
 [Getting started](docs/getting-started.md) · [ROM setup](docs/rom-setup-guide.md) · [Emulators](docs/emulators.md) · [Supported formats](docs/rom-formats.md) · [PC-game exports](docs/pc-games.md)
